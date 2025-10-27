@@ -1,0 +1,3 @@
+---
+  test-input-img-path: ../data/training_data/QRISP/FloodedGrounds/1080p/Native
+  test-output-img-path: ../data/training_data/QRISP/FloodedGrounds/1080p/Enhanced

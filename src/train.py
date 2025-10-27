@@ -1,39 +1,22 @@
 from pathlib import Path
 import torch
-from torch import nn
+from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from dataset import ImageDataset
-from model import NeuralNetwork
+from dataset import ToyDataset
+from model import QualcommNetwork
 
-batch_size = 64
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
-training_input_img_dir = Path("../data/training_data/QRISP/FloodedGrounds/1080p/Native")
-training_output_img_dir = Path("../data/training_data/QRISP/FloodedGrounds/1080p/Enhanced")
-training_data = ImageDataset(training_input_img_dir, training_output_img_dir, 21, 30)
 
-test_input_img_dir = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Native")
-test_output_img_dir = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced")
-test_data = ImageDataset(test_input_img_dir, test_output_img_dir, 1, 300)
-
-training_dataloader = DataLoader(training_data, batch_size=batch_size)
-test_dataloader = DataLoader(test_data, batch_size=batch_size)
-
-for X, y in test_dataloader:
-    print(f"Shape of X [N, C, H, W]: {X.shape}")
-    print(f"Shape of y: {y.shape} {y.dtype}")
-    break
-
-device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
-print(f"Using {device} device")
-
-model = NeuralNetwork().to(device)
-print(model)
-
-loss_fn = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
-
-def train(training_dataloader, model, loss_fn, optimizer):
+def train_epoch(
+    device: str,
+    training_dataloader: DataLoader,
+    model: nn.Module,
+    loss_fn: nn.Module,
+    optimizer: optim.Optimizer,
+) -> None:
     size = len(training_dataloader.dataset)
 
     model.train()
@@ -53,9 +36,33 @@ def train(training_dataloader, model, loss_fn, optimizer):
             loss, current = loss.item(), (batch + 1) * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
-if __name__ == "__main__":
+
+@hydra.main(version_base=None, config_path="../configs", config_name="train")
+def train(cfg: DictConfig) -> None:
+    device = (
+        torch.accelerator.current_accelerator().type
+        if torch.accelerator.is_available()
+        else "cpu"
+    )
+    print(f"Using {device} device")
+
+    training_input_img_dir = Path(cfg['dataset']['training-input-img-path'])
+    training_output_img_dir = Path(cfg['dataset']['training-output-img-path'])
+    training_data = ToyDataset(training_input_img_dir, training_output_img_dir, 21, 30)
+    training_dataloader = DataLoader(training_data, batch_size=cfg['loss']['batch_size'])
+
+    model = QualcommNetwork().to(device)
+
+    loss_fn = nn.CrossEntropyLoss()
+
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+
     epochs = 3
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
-        train(training_dataloader, model, loss_fn, optimizer)
-    print("Done!")
+        train_epoch(device, training_dataloader, model, loss_fn, optimizer)
+    print("Done.")
+
+
+if __name__ == "__main__":
+    train()

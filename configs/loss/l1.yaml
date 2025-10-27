@@ -1,0 +1,7 @@
+---
+  batch-size: 64
+  epochs: 3
+  image-width: 1920
+  image-height: 1080
+  learning-rate: 
+  momentum:

@@ -1,0 +1,4 @@
+---
+defaults:
+  - dataset: toy-train
+  - loss: l1
