@@ -2,3 +2,8 @@
 defaults:
   - dataset: toy-train
   - loss: l1
+
+batch-size: 64
+epochs: 3
+learning-rate: 1e-3
+momentum:

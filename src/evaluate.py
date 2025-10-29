@@ -3,7 +3,7 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from dataset import ToyDataset
+from datasets import ToyDataset
 from model import QualcommNetwork
 
 import hydra

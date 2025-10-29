@@ -1,3 +1,5 @@
 ---
+  image-height: 1080
+  image-width: 1920
   training-input-img-path: ../data/training_data/QRISP/FloodedGrounds/1080p/Native
   training-output-img-path: ../data/training_data/QRISP/FloodedGrounds/1080p/Enhanced

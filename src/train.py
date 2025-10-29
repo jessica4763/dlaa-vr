@@ -1,13 +1,15 @@
-from pathlib import Path
-import torch
-from torch import nn, optim
-from torch.utils.data import DataLoader
-
-from dataset import ToyDataset
-from model import QualcommNetwork
-
 import hydra
 from omegaconf import DictConfig, OmegaConf
+import os
+from pathlib import Path
+import skimage as ski
+import torch
+from torch import nn, optim
+from torchvision.transforms import v2
+from torch.utils.data import DataLoader
+
+from datasets import ToyDataset
+from model import QualcommNetwork
 
 
 def train_epoch(
@@ -17,24 +19,21 @@ def train_epoch(
     loss_fn: nn.Module,
     optimizer: optim.Optimizer,
 ) -> None:
-    size = len(training_dataloader.dataset)
+    dataset_size = len(training_dataloader.dataset)
 
     model.train()
     for batch, (X, y) in enumerate(training_dataloader):
         X, y = X.to(device), y.to(device)
 
-        # Compute prediction error
         pred = model(X)
         loss = loss_fn(pred, y)
 
-        # Backpropagation
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
 
-        if batch % 100 == 0:
-            loss, current = loss.item(), (batch + 1) * len(X)
-            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+        loss, current_img = loss.item(), (batch + 1) * len(X)
+        print(f"loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
@@ -48,17 +47,27 @@ def train(cfg: DictConfig) -> None:
 
     training_input_img_dir = Path(cfg['dataset']['training-input-img-path'])
     training_output_img_dir = Path(cfg['dataset']['training-output-img-path'])
-    training_data = ToyDataset(training_input_img_dir, training_output_img_dir, 21, 30)
-    training_dataloader = DataLoader(training_data, batch_size=cfg['loss']['batch_size'])
+    instances = os.listdir(training_input_img_dir)
+    frames = os.listdir(training_input_img_dir / instances[0])
+    num_instances = len(instances)
+    num_frames_per_instance = len(frames)
+    training_data = ToyDataset(
+        training_input_img_dir, 
+        training_output_img_dir, 
+        num_instances, 
+        num_frames_per_instance, 
+        transform=v2.ToDtype(torch.float32, scale=True),
+        target_transform=v2.ToDtype(torch.float32, scale=True)
+    )
+    training_dataloader = DataLoader(training_data, batch_size=cfg['batch-size'])
 
     model = QualcommNetwork().to(device)
 
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.L1Loss()
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.SGD(model.parameters(), lr=cfg['learning-rate'])
 
-    epochs = 3
-    for t in range(epochs):
+    for t in range(cfg['epochs']):
         print(f"Epoch {t + 1}\n-------------------------------")
         train_epoch(device, training_dataloader, model, loss_fn, optimizer)
     print("Done.")

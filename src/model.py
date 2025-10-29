@@ -5,18 +5,30 @@ from torch import nn
 
 class QualcommNetwork(nn.Module):
     def __init__(self):
+        """
+        Implementation of the Qualcomm approach to neural supersampling, 
+        but adapted for DLAA. 
+
+        Input: 
+        - Colour information for the current frame
+        - Depth for the current frame
+        - Jitter offset for the current frame
+        - Previous colour output 
+        - P
+
+        Bidirectional mechanisms or using a sliding window of input frames,
+        like those used in offline video enhancement approaches, are not 
+        suitable for gaming applications. 
+
+        """
         super().__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Conv2d(1920 * 1080, 1920 * 1080, (3, 3)),
+        self.conv2d_relu_stack = nn.Sequential(
+            nn.Conv2d(4, 4, 3, padding=1, padding_mode="reflect"),
             nn.ReLU(),
-            nn.Linear(1920 * 1080, 1920 * 1080, (3, 3)),
-            nn.ReLU(),
-            nn.Linear(1920 * 1080, 1920 * 1080, (3, 3)),
-            nn.ReLU(),
+            nn.Conv2d(4, 4, 3, padding=1, padding_mode="reflect"),
+            nn.Sigmoid()
         )
 
     def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
+        logits = self.conv2d_relu_stack(x)
         return logits
