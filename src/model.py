@@ -11,16 +11,15 @@ class QualcommNetwork(nn.Module):
         - Colour information for the current frame
         - Depth for the current frame
         - Jitter offset for the current frame
-        - Previous colour output
-        - 
-
-        Bidirectional mechanisms or using a sliding window of input frames,
-        like those used in offline video enhancement approaches, are not
-        suitable for gaming applications.
-
+        - Low resolution warped colour output from the previous frame
+        - Low resolution warped feature output from the previous frame
         """
         super().__init__()
         self.conv2d_relu_stack = nn.Sequential(
+            nn.Conv2d(4, 4, 3, padding=1, padding_mode="reflect"),
+            nn.ReLU(),
+            nn.Conv2d(4, 4, 3, padding=1, padding_mode="reflect"),
+            nn.ReLU(),
             nn.Conv2d(4, 4, 3, padding=1, padding_mode="reflect"),
             nn.ReLU(),
             nn.Conv2d(4, 4, 3, padding=1, padding_mode="reflect"),
