@@ -26,7 +26,6 @@ class ToyDataset(Dataset):
     def __getitem__(self, idx: int) -> tuple[np.ndarray, np.ndarray]:
         instance = str(idx // self.num_frames_per_instance).zfill(4)
         frame = str(idx % self.num_frames_per_instance).zfill(4) + '.png'
-        print(instance, frame)
 
         input_img_path = self.input_img_dir / instance / frame
         output_img_path = self.output_img_dir / instance / frame

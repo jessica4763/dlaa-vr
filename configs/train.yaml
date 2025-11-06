@@ -3,7 +3,16 @@ defaults:
   - dataset: toy-train
   - loss: l1
 
-batch-size: 64
-epochs: 3
-learning-rate: 1e-3
-momentum:
+training:
+  batch-size: 64
+  epochs: 3
+  learning-rate: 1e-3
+  momentum: null
+  seed: 42
+
+logging:
+  tensorboard_dir: tensorboard_logs
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

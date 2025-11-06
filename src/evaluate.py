@@ -1,13 +1,13 @@
+import hydra
+from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
 import torch
-from torch import nn, optim
+from torch import nn
 from torch.utils.data import DataLoader
 
 from datasets import ToyDataset
 from model import QualcommNetwork
 
-import hydra
-from omegaconf import DictConfig, OmegaConf
 
 
 def evaluate(device, test_dataloader, model, loss_fn):
@@ -25,9 +25,7 @@ def evaluate(device, test_dataloader, model, loss_fn):
 
     test_loss /= num_batches
     correct /= size
-    print(
-        f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n"
-    )
+    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="test")
