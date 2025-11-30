@@ -1,6 +1,10 @@
 from torch import nn
 
 
+# TODO: Read JSON files for camera jitter information
+# TODO: 
+
+
 class QualcommNetwork(nn.Module):
     def __init__(self):
         """

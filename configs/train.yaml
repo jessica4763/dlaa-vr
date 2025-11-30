@@ -9,6 +9,7 @@ training:
   learning-rate: 1e-3
   momentum: null
   seed: 42
+  shuffle: true
 
 logging:
   tensorboard_dir: tensorboard_logs

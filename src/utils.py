@@ -4,9 +4,9 @@ from pathlib import Path
 import skimage.io as io
 
 
-def downsample() -> None:
-    input_path = Path("../data/training_data/QRISP/ScifiBase/1080p/Enhanced")
-    output_path = Path("../data/training_data/QRISP/ScifiBase/540p/Enhanced")
+def downsample(input_str, output_str) -> None:
+    input_path = Path(input_str)
+    output_path = Path(output_str)
     output_resolution = (960, 540)
 
     for instance in os.listdir(input_path):
@@ -23,7 +23,3 @@ def downsample() -> None:
             )
             output_image_path = output_frames_path / frame
             cv2.imwrite(output_image_path, downsampled_image)
-
-
-if __name__ == "__main__":
-    downsample()

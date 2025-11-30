@@ -1,5 +1,5 @@
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 import os
 from pathlib import Path
 import torch
@@ -34,7 +34,11 @@ def train_epoch(
         optimizer.step()
         optimizer.zero_grad()
 
-        writer.add_scalar("loss/train", epoch + epoch * len(training_dataloader))
+        writer.add_scalar(
+            "loss/train",
+            loss.item(),
+            epoch * len(training_dataloader) + batch
+        )
 
         loss, current_img = loss.item(), (batch + 1) * len(X)
         print(f"loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
@@ -48,6 +52,12 @@ def train(cfg: DictConfig) -> None:
         else "cpu"
     )
     print(f"Using {device} device")
+
+    # ########################## For reproducibility ##########################
+    torch.manual_seed(cfg['training']['seed'])
+    torch.use_deterministic_algorithms(True)
+    # We do not use unitialised memory as an input to an operation
+    torch.utils.deterministic.fill_uninitialized_memory = False
 
     training_input_img_dir = Path(cfg['dataset']['training-input-img-path'])
     training_output_img_dir = Path(cfg['dataset']['training-output-img-path'])
@@ -63,13 +73,20 @@ def train(cfg: DictConfig) -> None:
         transform=v2.ToDtype(torch.float32, scale=True),
         target_transform=v2.ToDtype(torch.float32, scale=True)
     )
-    training_dataloader = DataLoader(training_data, batch_size=cfg['training']['batch-size'])
+    training_dataloader = DataLoader(
+        training_data,
+        batch_size=cfg['training']['batch-size'],
+        shuffle=cfg['training']['shuffle']
+    )
 
     model = QualcommNetwork().to(device)
 
     loss_function = nn.L1Loss()
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=cfg['training']['learning-rate'])
+    optimizer = torch.optim.SGD(
+        model.parameters(),
+        lr=cfg['training']['learning-rate']
+    )
 
     writer = SummaryWriter(log_dir="")
 
