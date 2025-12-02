@@ -21,6 +21,13 @@ class ToyDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
+    @staticmethod
+    def warp(input_image: torch.Tensor) -> torch.Tensor:
+        # TODO: Jitter compensation.
+        # TODO: Warp without motion vectors; choose something suitable
+        # for a forward rendering pipeline.
+        return input_image
+
     def __len__(self) -> int:
         return self.num_frames
 
