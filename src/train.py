@@ -55,10 +55,11 @@ def train(cfg: DictConfig) -> None:
     )
     print(f"Using {device} device")
 
-    # ########################## For reproducibility ##########################
+    # For reproducibility
     torch.manual_seed(cfg['training']['seed'])
     torch.use_deterministic_algorithms(True)
-    # We do not use unitialised memory as an input to an operation
+
+    # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = False
 
     training_input_img_dir = Path(cfg['dataset']['training-input-img-path'])
