@@ -4,10 +4,9 @@ import os
 from pathlib import Path
 import torch
 from torch import nn, optim
-from torchvision.transforms import v2
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.io import decode_image
+from torchvision.transforms import v2
 from torchvision.utils import save_image
 
 from datasets import ToyDataset
@@ -23,6 +22,7 @@ def train_epoch(
     writer: SummaryWriter,
     epoch: int
 ) -> None:
+
     dataset_size = len(training_dataloader.dataset)
 
     model.train()
@@ -116,7 +116,7 @@ def train(cfg: DictConfig) -> None:
             training_data,
             epoch
         )
-    
+
     saved_models_path = Path(cfg['training']['saved-models-path'])
     torch.save(model.state_dict(), saved_models_path.resolve())
 
@@ -131,7 +131,9 @@ def checkpoint(
     training_data: Dataset,
     epoch: int
 ) -> None:
-    checkpoint_img, _ = training_data.__getitem__(0)
+    checkpoint_img, _ = training_data[0]
+    print(f"{checkpoint_img.shape=}")
+    print(f"{checkpoint_img.dtype=}")
     checkpoint_img = torch.unsqueeze(checkpoint_img, 0)
     checkpoint_img = checkpoint_img.to(device)
     anti_aliased_img = model(checkpoint_img)

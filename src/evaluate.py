@@ -2,30 +2,43 @@ import hydra
 from omegaconf import DictConfig
 import os
 from pathlib import Path
+from skimage.metrics import peak_signal_noise_ratio
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from torchvision.transforms import v2
 
 from datasets import ToyDataset
 from model import QualcommNetwork
 
 
-def evaluate(device, test_dataloader, model, loss_fn):
-    size = len(test_dataloader.dataset)
+def evaluate(
+    device: str,
+    test_dataloader: DataLoader,
+    model: nn.Module,
+    loss_fn: nn.Module
+) -> None:
     num_batches = len(test_dataloader)
-    model.eval()
-    test_loss, correct = 0, 0
 
+    average_psnr = 0
+    average_test_loss = 0
+
+    model.eval()
     with torch.no_grad():
         for X, y in test_dataloader:
             X, y = X.to(device), y.to(device)
             pred = model(X)
-            test_loss += loss_fn(pred, y).item()
-            correct += (pred.argmax(1) == y).type(torch.float).sum().item()
+            loss = loss_fn(pred, y)
+            test_loss = loss.item()
+            average_test_loss += test_loss
+            y_ndarray = y.cpu().numpy()
+            pred_ndarray = pred.cpu().numpy()
+            psnr = peak_signal_noise_ratio(pred_ndarray, y_ndarray)
+            average_psnr += psnr
 
-    test_loss /= num_batches
-    correct /= size
-    print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    average_psnr /= num_batches
+    average_test_loss /= num_batches
+    print(f"Evaluation: \t {average_psnr=}, {average_test_loss=}")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="test")
@@ -50,12 +63,14 @@ def main(cfg: DictConfig) -> None:
     instances = os.listdir(test_input_img_dir)
     frames = os.listdir(test_input_img_dir / instances[0])
     num_instances = len(instances)
-    num_frames = len(frames)
+    num_frames_per_instance = len(frames)
     test_data = ToyDataset(
         test_input_img_dir,
         test_output_img_dir,
         num_instances,
-        num_frames
+        num_frames_per_instance,
+        transform=v2.ToDtype(torch.float32, scale=True),
+        target_transform=v2.ToDtype(torch.float32, scale=True)
     )
 
     test_dataloader = DataLoader(
