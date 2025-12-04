@@ -4,8 +4,8 @@ defaults:
   - loss: l1
 
 training:
-  batch-size: 64
-  epochs: 3
+  batch-size: 8
+  epochs: 30
   learning-rate: 1e-3
   momentum: null
   seed: 42
