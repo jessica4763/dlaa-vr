@@ -127,10 +127,10 @@ def checkpoint(
     epoch: int
 ) -> None:
     checkpoint_img, _ = training_data.__getitem__(0)
-    checkpoint_img.to(device)
+    checkpoint_img = torch.unsqueeze(checkpoint_img, 0)
+    checkpoint_img = checkpoint_img.to(device)
     anti_aliased_img = model(checkpoint_img)
-    print(f"{anti_aliased_img.shape=}")
-    # save_image(anti_aliased_img, f"checkpoints/{epoch}.png")
+    save_image(anti_aliased_img, f"checkpoints/{epoch}.png")
 
 
 if __name__ == "__main__":
