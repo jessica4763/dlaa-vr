@@ -1,4 +1,5 @@
 ---
   resolution: 270p
+  scenes: [CBApocalypse, FloodedGrounds]
   training-input-img-path: ../data/training_data/QRISP
   training-output-img-path: ../data/training_data/QRISP

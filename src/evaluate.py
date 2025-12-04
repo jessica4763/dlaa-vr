@@ -2,7 +2,6 @@ import hydra
 from omegaconf import DictConfig
 import os
 from pathlib import Path
-from skimage.metrics import peak_signal_noise_ratio
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -10,18 +9,18 @@ from torchvision.transforms import v2
 
 from datasets import ToyDataset
 from model import QualcommNetwork
+from metrics import Metrics
 
 
 def evaluate(
     device: str,
-    test_dataloader: DataLoader,
     model: nn.Module,
+    test_dataloader: DataLoader,
     loss_fn: nn.Module
 ) -> None:
     num_batches = len(test_dataloader)
 
-    average_psnr = 0
-    average_test_loss = 0
+    metrics = Metrics(num_batches)
 
     model.eval()
     with torch.no_grad():
@@ -30,15 +29,11 @@ def evaluate(
             pred = model(X)
             loss = loss_fn(pred, y)
             test_loss = loss.item()
-            average_test_loss += test_loss
-            y_ndarray = y.cpu().numpy()
-            pred_ndarray = pred.cpu().numpy()
-            psnr = peak_signal_noise_ratio(pred_ndarray, y_ndarray)
-            average_psnr += psnr
+            print(f"{test_loss=}")
 
-    average_psnr /= num_batches
-    average_test_loss /= num_batches
-    print(f"Evaluation: \t {average_psnr=}, {average_test_loss=}")
+            metrics.record(pred, y)
+
+    metrics.report()
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="test")
@@ -85,11 +80,17 @@ def main(cfg: DictConfig) -> None:
         num_blocks=3,
         upscale_factor=1
     ).to(device)
-    model.load_state_dict(torch.load(cfg['testing']['saved-models-path'], weights_only=True))
+    model.load_state_dict(
+        torch.load(
+            cfg['testing']['saved-models-path'],
+            weights_only=True,
+            map_location=device
+        )
+    )
 
     loss_fn = nn.L1Loss()
 
-    evaluate(device, test_dataloader, model, loss_fn)
+    evaluate(device, model, test_dataloader, loss_fn)
 
 
 if __name__ == "__main__":

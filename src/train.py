@@ -15,8 +15,8 @@ from model import QualcommNetwork
 
 def train_epoch(
     device: str,
-    training_dataloader: DataLoader,
     model: nn.Module,
+    training_dataloader: DataLoader,
     loss_fn: nn.Module,
     optimizer: optim.Optimizer,
     writer: SummaryWriter,
@@ -43,7 +43,7 @@ def train_epoch(
         )
 
         loss, current_img = loss.item(), (batch + 1) * len(X)
-        print(f"loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
+        print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
@@ -103,8 +103,8 @@ def train(cfg: DictConfig) -> None:
         print(f"Epoch {epoch + 1}\n-------------------------------")
         train_epoch(
             device,
-            training_dataloader,
             model,
+            training_dataloader,
             loss_function,
             optimizer,
             writer,
@@ -123,6 +123,7 @@ def train(cfg: DictConfig) -> None:
     print("Done.")
 
     writer.flush()
+    writer.close()
 
 
 def checkpoint(
@@ -132,8 +133,6 @@ def checkpoint(
     epoch: int
 ) -> None:
     checkpoint_img, _ = training_data[0]
-    print(f"{checkpoint_img.shape=}")
-    print(f"{checkpoint_img.dtype=}")
     checkpoint_img = torch.unsqueeze(checkpoint_img, 0)
     checkpoint_img = checkpoint_img.to(device)
     anti_aliased_img = model(checkpoint_img)

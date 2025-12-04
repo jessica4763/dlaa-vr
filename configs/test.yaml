@@ -4,6 +4,6 @@ defaults:
 
 testing:
   seed: 42
-  batch-size: 8
+  batch-size: 1
   shuffle: false
   saved-models-path: ../saved/models/toy_model.pt
