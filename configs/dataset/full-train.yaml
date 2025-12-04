@@ -1,0 +1,4 @@
+---
+  resolution: 270p
+  training-input-img-path: ../data/training_data/QRISP
+  training-output-img-path: ../data/training_data/QRISP

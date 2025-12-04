@@ -1,3 +1,9 @@
 ---
 defaults:
   - dataset: toy-test
+
+testing:
+  seed: 42
+  batch-size: 8
+  shuffle: false
+  saved-models-path: ../saved/models/toy_model.pt

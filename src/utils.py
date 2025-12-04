@@ -27,6 +27,6 @@ def downsample(input_str, output_str) -> None:
 
 if __name__ == "__main__":
     downsample(
-        "../data/training_data/QRISP/SunTempleLamps/1080p/Enhanced",
-        "../data/training_data/QRISP/SunTempleLamps/270p/Enhanced",
+        "../data/test_data/QRISP/TestSet/SpaceShipDemo/1080p/Enhanced",
+        "../data/test_data/QRISP/TestSet/SpaceShipDemo/270p/Enhanced",
     )

@@ -57,7 +57,8 @@ def train(cfg: DictConfig) -> None:
 
     # For reproducibility
     torch.manual_seed(cfg['training']['seed'])
-    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.benchmark = False  # Deterministically select an algorithm; reduces efficiency
+    torch.use_deterministic_algorithms(True)  # Use only deterministic algorithms
 
     # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = False
@@ -96,7 +97,7 @@ def train(cfg: DictConfig) -> None:
         lr=cfg['training']['learning-rate']
     )
 
-    writer = SummaryWriter(log_dir="")
+    writer = SummaryWriter(log_dir=cfg['logging']['tensorboard-dir'])
 
     for epoch in range(cfg['training']['epochs']):
         print(f"Epoch {epoch + 1}\n-------------------------------")
@@ -115,6 +116,9 @@ def train(cfg: DictConfig) -> None:
             training_data,
             epoch
         )
+    
+    saved_models_path = Path(cfg['training']['saved-models-path'])
+    torch.save(model.state_dict(), saved_models_path.resolve())
 
     print("Done.")
 

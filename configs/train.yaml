@@ -4,15 +4,17 @@ defaults:
   - loss: l1
 
 training:
+  seed: 42
   batch-size: 8
-  epochs: 30
+  shuffle: true
+  epochs: 1
   learning-rate: 1e-3
   momentum: null
-  seed: 42
-  shuffle: true
+  dropout-rate: null
+  saved-models-path: ../saved/models/toy_model.pt
 
 logging:
-  tensorboard_dir: tensorboard_logs
+  tensorboard-dir: ../saved/logs
 
 hydra:
   run:
