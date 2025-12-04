@@ -1,3 +1,4 @@
+import json
 import torch
 from torchvision.io import decode_image
 from torch.utils.data import Dataset
@@ -21,12 +22,44 @@ class ToyDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-    @staticmethod
-    def warp(input_image: torch.Tensor) -> torch.Tensor:
-        # TODO: Jitter compensation.
-        # TODO: Warp without motion vectors; choose something suitable
-        # for a forward rendering pipeline.
-        return input_image
+    def get_jitter(
+        self,
+        input_image: torch.Tensor,
+        instance: str,
+        curr_frame_num: str
+    ) -> torch.Tensor:
+        curr_frame = str(curr_frame_num).zfill(4) + '.json'
+        json_file_path = self.input_img_dir / "../CameraData" / instance / curr_frame
+        with open(json_file_path, mode="r", encoding="utf-8") as json_file:
+            camera_data = json.load(json_file)
+            curr_frame_x = camera_data["jitter_offset"]["x"]
+            curr_frame_y = camera_data["jitter_offset"]["y"]
+
+        jitter_x = torch.full(
+            (1, input_image.shape[1], input_image.shape[2]),
+            fill_value=curr_frame_x,
+            device=input_image.device,
+            dtype=input_image.dtype
+        )
+        jitter_y = torch.full(
+            (1, input_image.shape[1], input_image.shape[2]),
+            fill_value=curr_frame_y,
+            device=input_image.device,
+            dtype=input_image.dtype
+        )
+
+        return jitter_x, jitter_y
+
+    def get_depth(
+        self,
+        instance: str,
+        curr_frame_num: str
+    ) -> torch.Tensor:
+        curr_frame = str(curr_frame_num).zfill(4) + '.png'
+        depth_path = self.input_img_dir / "../DepthMipBiasMinus2Jittered" / instance / curr_frame
+        depth = decode_image(depth_path.resolve())
+        depth = depth[0:1, ...]
+        return depth
 
     def __len__(self) -> int:
         return self.num_frames
@@ -61,6 +94,47 @@ class ToyDataset(Dataset):
         if self.target_transform:
             curr_output_img = self.target_transform(curr_output_img)
 
-        input_imgs = torch.cat([prev_output_img, curr_input_img], dim=0)
+        curr_depth = self.get_depth(
+            instance,
+            curr_frame_num
+        )
+
+        curr_jitter_x, curr_jitter_y = self.get_jitter(
+            curr_input_img,
+            instance,
+            curr_frame_num
+        )
+
+        prev_depth = self.get_depth(
+            instance,
+            prev_frame_num
+        )
+
+        prev_jitter_x, prev_jitter_y = self.get_jitter(
+            prev_output_img,
+            instance,
+            prev_frame_num
+        )
+
+        prev_features = torch.cat(
+            [
+                prev_depth,
+                prev_jitter_x,
+                prev_jitter_y
+            ],
+            dim=0
+        )
+
+        input_imgs = torch.cat(
+            [
+                prev_output_img,
+                curr_input_img,
+                curr_depth,
+                curr_jitter_x,
+                curr_jitter_y,
+                prev_features
+            ],
+            dim=0
+        )
 
         return input_imgs, curr_output_img

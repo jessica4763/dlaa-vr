@@ -7,7 +7,7 @@ import skimage.io as io
 def downsample(input_str, output_str) -> None:
     input_path = Path(input_str)
     output_path = Path(output_str)
-    output_resolution = (960, 540)
+    output_resolution = (480, 270)
 
     for instance in os.listdir(input_path):
         input_frames_path = input_path / instance
@@ -23,3 +23,10 @@ def downsample(input_str, output_str) -> None:
             )
             output_image_path = output_frames_path / frame
             cv2.imwrite(output_image_path, downsampled_image)
+
+
+if __name__ == "__main__":
+    downsample(
+        "../data/training_data/QRISP/SunTempleLamps/1080p/Enhanced",
+        "../data/training_data/QRISP/SunTempleLamps/270p/Enhanced",
+    )

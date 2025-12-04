@@ -1,5 +1,6 @@
 ---
-  image-height: 1080
-  image-width: 1920
-  training-input-img-path: ../data/training_data/QRISP/FloodedGrounds/1080p/Native
-  training-output-img-path: ../data/training_data/QRISP/FloodedGrounds/1080p/Enhanced
+  image-height: 270
+  image-width: 480
+  training-input-img-path: ../data/training_data/QRISP/FloodedGrounds/270p/MipBiasMinus2Jittered
+  training-output-img-path: ../data/training_data/QRISP/FloodedGrounds/270p/Enhanced
+  checkpoint-img-path: checkpoint_img.png

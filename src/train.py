@@ -5,8 +5,10 @@ from pathlib import Path
 import torch
 from torch import nn, optim
 from torchvision.transforms import v2
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.io import decode_image
+from torchvision.utils import save_image
 
 from datasets import ToyDataset
 from model import QualcommNetwork
@@ -79,7 +81,12 @@ def train(cfg: DictConfig) -> None:
         shuffle=cfg['training']['shuffle']
     )
 
-    model = QualcommNetwork().to(device)
+    model = QualcommNetwork(
+        num_prev_feature_channels=3,
+        hidden_channels=32,
+        num_blocks=3,
+        upscale_factor=1
+    ).to(device)
 
     loss_function = nn.L1Loss()
 
@@ -98,12 +105,32 @@ def train(cfg: DictConfig) -> None:
             model,
             loss_function,
             optimizer,
-            writer
+            writer,
+            epoch
+        )
+        checkpoint(
+            device,
+            model,
+            training_data,
+            epoch
         )
 
     print("Done.")
 
     writer.flush()
+
+
+def checkpoint(
+    device: str,
+    model: nn.Module,
+    training_data: Dataset,
+    epoch: int
+) -> None:
+    checkpoint_img, _ = training_data.__getitem__(0)
+    checkpoint_img.to(device)
+    anti_aliased_img = model(checkpoint_img)
+    print(f"{anti_aliased_img.shape=}")
+    # save_image(anti_aliased_img, f"checkpoints/{epoch}.png")
 
 
 if __name__ == "__main__":

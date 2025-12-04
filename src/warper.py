@@ -1,2 +1,0 @@
-class Warper:
-    pass

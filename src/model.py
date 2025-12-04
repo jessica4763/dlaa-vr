@@ -15,7 +15,7 @@ class QualcommNetwork(nn.Module):
         """
         super().__init__()
 
-        self.num_curr_colour_channels = 3
+        self.num_curr_colour_channels = 4
         self.num_curr_depth_channels = 1
         self.num_curr_jitter_channels = 2  # 2 for displacement in both x and y
         self.num_prev_colour_channels = self.num_curr_colour_channels
@@ -68,7 +68,7 @@ class QualcommNetwork(nn.Module):
         # Colour head
         self.colour_head = nn.Conv2d(
             hidden_channels,
-            3 * (upscale_factor ** 2),
+            self.num_curr_colour_channels * (upscale_factor ** 2),
             kernel_size=3,
             padding=1,
             padding_mode="reflect",
@@ -116,7 +116,7 @@ class QualcommNetwork(nn.Module):
                 curr_depth,
                 curr_jitter,
                 prev_warped_colour,
-                prev_warped_features
+                prev_warped_features,
             ],
             dim=1,
         )
@@ -138,4 +138,4 @@ class QualcommNetwork(nn.Module):
 
         blended_color = up_out_blending_mask * up_out_colour + (1.0 - up_out_blending_mask) * prev_warped_colour
 
-        return up_out_features, blended_color
+        return blended_color
