@@ -7,14 +7,14 @@ training:
   seed: 42
   batch-size: 8
   shuffle: true
-  epochs: 100
+  epochs: 500
   learning-rate: 1e-3
   momentum: null
   dropout-rate: null
   saved-models-path: ../saved/models/toy_model.pt
 
 logging:
-  tensorboard-dir: ../saved/logs
+  tensorboard-dir: ../saved/logs/runs
 
 hydra:
   run:

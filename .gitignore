@@ -1,8 +1,6 @@
 data/
 dlaa-vr-venv/
 learning/
-outputs/
-runs/
 .vscode/
 
 # Byte-compiled / optimized / DLL files
