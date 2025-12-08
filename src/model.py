@@ -5,17 +5,17 @@ from torch import nn
 class QualcommNetwork(nn.Module):
     def __init__(
         self,
-        num_prev_feature_channels: int = 16,
-        hidden_channels: int = 32,
-        num_blocks: int = 3,
-        upscale_factor: int = 1,
+        num_prev_feature_channels,
+        hidden_channels,
+        num_blocks,
+        upscale_factor,
     ):
         """
         Simplified implementation of the Qualcomm network, adapted for DLAA.
         """
         super().__init__()
 
-        self.num_curr_colour_channels = 4
+        self.num_curr_colour_channels = 3
         self.num_curr_depth_channels = 1
         self.num_curr_jitter_channels = 2  # 2 for displacement in both x and y
         self.num_prev_colour_channels = self.num_curr_colour_channels

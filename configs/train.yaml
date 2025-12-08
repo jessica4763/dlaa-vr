@@ -7,7 +7,7 @@ training:
   seed: 42
   batch-size: 8
   shuffle: true
-  epochs: 1
+  epochs: 100
   learning-rate: 1e-3
   momentum: null
   dropout-rate: null

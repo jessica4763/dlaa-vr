@@ -71,8 +71,8 @@ class ToyDataset(Dataset):
         curr_frame = str(curr_frame_num).zfill(4) + '.png'
         curr_input_img_path = self.input_img_dir / instance / curr_frame
         curr_output_img_path = self.output_img_dir / instance / curr_frame
-        curr_input_img = decode_image(curr_input_img_path.resolve())
-        curr_output_img = decode_image(curr_output_img_path.resolve())
+        curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, :, :]
+        curr_output_img = decode_image(curr_output_img_path.resolve())[0:3, :, :]
 
         # Teacher forcing: use the gound truth as the previous frame during
         # training. Limitation is that the network never explicitly learns
@@ -86,7 +86,7 @@ class ToyDataset(Dataset):
         prev_frame_num = 0 if curr_frame_num == 0 else curr_frame_num - 1
         prev_frame = str(prev_frame_num).zfill(4) + '.png'
         prev_output_img_path = self.output_img_dir / instance / prev_frame
-        prev_output_img = decode_image(prev_output_img_path.resolve())
+        prev_output_img = decode_image(prev_output_img_path.resolve())[0:3, :, :]
 
         if self.transform:
             prev_output_img = self.transform(prev_output_img)

@@ -74,8 +74,8 @@ def train(cfg: DictConfig) -> None:
         training_output_img_dir,
         num_instances,
         num_frames_per_instance,
-        transform=v2.ToDtype(torch.float32, scale=True),
-        target_transform=v2.ToDtype(torch.float32, scale=True)
+        transform=v2.ToDtype(torch.float32, scale=True),  # Also normalises
+        target_transform=v2.ToDtype(torch.float32, scale=True)  # Also normalises
     )
     training_dataloader = DataLoader(
         training_data,
