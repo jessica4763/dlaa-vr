@@ -58,8 +58,24 @@ class ToyDataset(Dataset):
         curr_frame = str(curr_frame_num).zfill(4) + '.png'
         depth_path = self.input_img_dir / "../DepthMipBiasMinus2Jittered" / instance / curr_frame
         depth = decode_image(depth_path.resolve())
-        depth = depth[0:1, ...]
+        depth = torch.unsqueeze(
+            depth[0] / (255 ** 1) +
+            depth[1] / (255 ** 2) +
+            depth[2] / (255 ** 3) +
+            depth[3] / (255 ** 4),
+            0
+        )
         return depth
+
+    def get_motion_vectors(
+        self,
+        instance: str,
+        curr_frame_num: str
+    ) -> torch.Tensor:
+        curr_frame = str(curr_frame_num).zfill(4) + '.exr'
+        motion_vectors_path = self.input_img_dir / "../MotionVectorsMipBiasMinus2Jittered" / instance / curr_frame
+        motion_vectors = decode_image(motion_vectors_path.resolve())
+        return motion_vectors
 
     def __len__(self) -> int:
         return self.num_frames

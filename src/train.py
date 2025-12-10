@@ -114,6 +114,7 @@ def train(cfg: DictConfig) -> None:
             device,
             model,
             training_data,
+            writer,
             epoch
         )
 
@@ -139,13 +140,15 @@ def checkpoint(
     checkpoint_img, _ = training_data[0]
     checkpoint_img = torch.unsqueeze(checkpoint_img, 0)
     checkpoint_img = checkpoint_img.to(device)
-    anti_aliased_img = model(checkpoint_img)
+    anti_aliased_img = torch.squeeze(model(checkpoint_img))
     save_image(anti_aliased_img, f"checkpoints/{epoch}.png")
-    if (epoch + 1) % 100 == 0:
+    print(anti_aliased_img.min().item(), anti_aliased_img.max().item())
+    print(f"{anti_aliased_img=}")
+    if (epoch + 1) % 10 == 0:
         writer.add_image(
             "checkpoint images",
             anti_aliased_img,
-            global_step=epoch
+            global_step=(epoch + 1)
         )
 
 
