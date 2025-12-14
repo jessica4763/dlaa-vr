@@ -122,6 +122,7 @@ def train(cfg: DictConfig) -> None:
     torch.save(model.state_dict(), Path(cfg['training']['saved-models-path']))
 
     # Log the config
+    print(OmegaConf.to_yaml(cfg))
     writer.add_text("hyperparams", OmegaConf.to_yaml(cfg))
 
     writer.flush()
@@ -137,13 +138,13 @@ def checkpoint(
     writer: SummaryWriter,
     epoch: int
 ) -> None:
+    # Strictly a training diagnostic, so it's OK if the
+    # training data is used here
     checkpoint_img, _ = training_data[0]
     checkpoint_img = torch.unsqueeze(checkpoint_img, 0)
     checkpoint_img = checkpoint_img.to(device)
     anti_aliased_img = torch.squeeze(model(checkpoint_img))
     save_image(anti_aliased_img, f"checkpoints/{epoch}.png")
-    print(anti_aliased_img.min().item(), anti_aliased_img.max().item())
-    print(f"{anti_aliased_img=}")
     if (epoch + 1) % 10 == 0:
         writer.add_image(
             "checkpoint images",

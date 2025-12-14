@@ -6,6 +6,8 @@ from skimage.metrics import (
     structural_similarity,
 )
 
+# TODO: ColourVideoVDP
+
 
 class Metrics:
     def __init__(self, num_batches: int):
