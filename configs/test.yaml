@@ -7,3 +7,9 @@ testing:
   batch-size: 1
   shuffle: false
   saved-models-path: ../saved/models/toy_model.pt
+  eval-output-path: evaluation_output
+
+model:
+  hidden-channels: 32
+  num-blocks: 1
+  parameters: null

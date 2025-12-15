@@ -78,14 +78,10 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
-    scenes = Path(cfg['dataset']['scenes'])
-    training_input_img_path = Path(cfg['dataset']['training-input-img-path'])
-    training_output_img_path = Path(cfg['dataset']['training-output-img-path'])
-
     training_data = ToyDataset(
-        scenes,
-        training_input_img_path,
-        training_output_img_path,
+        cfg['dataset']['scene_names'],
+        cfg['dataset']['training-input-img-path'],
+        cfg['dataset']['training-output-img-path'],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
     )

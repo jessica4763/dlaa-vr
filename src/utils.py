@@ -1,4 +1,5 @@
 import torch
+from torchvision.utils import save_image
 
 
 def gamma_to_linear(image: torch.Tensor) -> torch.Tensor:
@@ -18,3 +19,15 @@ def linear_to_gamma(image: torch.Tensor) -> torch.Tensor:
         12.92 * image,
         1.055 * (image ** (1.0 / 2.4)) - 0.055
     )
+
+
+def cumsum(xs):
+    cumsum_xs = [0]
+    for x in xs:
+        cumsum_xs.append(cumsum_xs[-1] + x)
+
+    return cumsum_xs
+
+
+def debug_image(x):
+    save_image(x)

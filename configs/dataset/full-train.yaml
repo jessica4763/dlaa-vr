@@ -1,5 +1,4 @@
 ---
-  resolution: 270p
-  scenes: [CBApocalypse, FloodedGrounds, ScifiBase, ScifiFacility, SunTemple]
-  training-input-img-path: ../data/training_data/QRISP/*/${resolution}/MipBiasMinus2Jittered
-  training-output-img-path: ../data/training_data/QRISP/*/${resolution}/Enhanced
+scene_names: [CBApocalypse, FloodedGrounds, ScifiBase, ScifiFacility, SunTemple]
+training-input-img-path: ../data/training_data/QRISP/*/270p/MipBiasMinus2Jittered
+training-output-img-path: ../data/training_data/QRISP/*/270p/Enhanced

@@ -1,4 +1,5 @@
 ---
-  test-input-img-path: ../data/test_data/QRISP/TestSet/SeaPort/270p/MipBiasMinus2Jittered
-  test-output-img-path: ../data/test_data/QRISP/TestSet/SeaPort/270p/Enhanced
+scene_names: [SeaPort]
+test-input-img-path: ../data/test_data/QRISP/TestSet/*/270p/MipBiasMinus2Jittered
+test-output-img-path: ../data/test_data/QRISP/TestSet/*/270p/Enhanced
   

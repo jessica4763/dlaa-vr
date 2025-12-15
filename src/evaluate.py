@@ -1,37 +1,52 @@
 import hydra
 from omegaconf import DictConfig
-import os
 from pathlib import Path
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision.transforms import v2
+from torchvision.utils import save_image
 
 from datasets import ToyDataset
 from model import QualcommNetwork
 from metrics import Metrics
+from utils import gamma_to_linear
+
+
+def write_frame(
+    eval_output_path: Path,
+    frames: torch.Tensor,
+    batch: int
+) -> None:
+    for idx, frame in enumerate(frames):
+        save_image(frame, eval_output_path / f"{batch + idx}.png")
 
 
 def evaluate(
     device: str,
     model: nn.Module,
     test_dataloader: DataLoader,
-    loss_fn: nn.Module
+    loss_fn: nn.Module,
+    eval_output_path: Path
 ) -> None:
-    num_batches = len(test_dataloader)
+    dataset_size = len(test_dataloader.dataset)
 
+    num_batches = len(test_dataloader)
     metrics = Metrics(num_batches)
 
     model.eval()
     with torch.no_grad():
-        for X, y in test_dataloader:
+        for batch, (X, y) in enumerate(test_dataloader):
             X, y = X.to(device), y.to(device)
+
             pred = model(X)
             loss = loss_fn(pred, y)
-            test_loss = loss.item()
-            print(f"{test_loss=}")
+
+            loss, current_img = loss.item(), (batch + 1) * len(X)
+            print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
 
             metrics.record(pred, y)
+
+            write_frame(eval_output_path, pred, batch)
 
     metrics.report()
 
@@ -45,27 +60,29 @@ def main(cfg: DictConfig) -> None:
     )
     print(f"Using {device} device")
 
-    # For reproducibility
+    # -------------------------------------------------------------------------
+    # ---------------------------- Reproducibility ----------------------------
+    # -------------------------------------------------------------------------
     torch.manual_seed(cfg['testing']['seed'])
-    torch.backends.cudnn.benchmark = False  # Deterministically select an algorithm; reduces efficiency
-    torch.use_deterministic_algorithms(True)  # Use only deterministic algorithms
+
+    # Deterministically select an algorithm; reduces efficiency
+    torch.backends.cudnn.benchmark = False
+
+    # Use only deterministic algorithms
+    torch.use_deterministic_algorithms(True)
 
     # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = False
 
-    test_input_img_dir = Path(cfg["dataset"]["test-input-img-path"])
-    test_output_img_dir = Path(cfg["dataset"]["test-output-img-path"])
-    instances = os.listdir(test_input_img_dir)
-    frames = os.listdir(test_input_img_dir / instances[0])
-    num_instances = len(instances)
-    num_frames_per_instance = len(frames)
+    # -------------------------------------------------------------------------
+    # --------------------------------- Data ----------------------------------
+    # -------------------------------------------------------------------------
     test_data = ToyDataset(
-        test_input_img_dir,
-        test_output_img_dir,
-        num_instances,
-        num_frames_per_instance,
-        transform=v2.ToDtype(torch.float32, scale=True),
-        target_transform=v2.ToDtype(torch.float32, scale=True)
+        cfg['dataset']['scene_names'],
+        cfg["dataset"]["test-input-img-path"],
+        cfg["dataset"]["test-output-img-path"],
+        transform=gamma_to_linear,
+        target_transform=gamma_to_linear
     )
 
     test_dataloader = DataLoader(
@@ -74,12 +91,14 @@ def main(cfg: DictConfig) -> None:
         shuffle=cfg['testing']['shuffle']  # False for evaluation
     )
 
+    # -------------------------------------------------------------------------
+    # --------------------------------- Model ---------------------------------
+    # -------------------------------------------------------------------------
     model = QualcommNetwork(
-        num_prev_feature_channels=3,
-        hidden_channels=32,
-        num_blocks=3,
-        upscale_factor=1
+        hidden_channels=cfg['model']['hidden-channels'],
+        num_blocks=cfg['model']['num-blocks'],
     ).to(device)
+
     model.load_state_dict(
         torch.load(
             cfg['testing']['saved-models-path'],
@@ -88,9 +107,18 @@ def main(cfg: DictConfig) -> None:
         )
     )
 
+    # -------------------------------------------------------------------------
+    # ------------------------------ Evaluation -------------------------------
+    # -------------------------------------------------------------------------
     loss_fn = nn.L1Loss()
 
-    evaluate(device, model, test_dataloader, loss_fn)
+    evaluate(
+        device,
+        model,
+        test_dataloader,
+        loss_fn,
+        cfg['testing']['eval-output-path']
+    )
 
 
 if __name__ == "__main__":
