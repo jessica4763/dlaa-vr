@@ -1,3 +1,5 @@
 ---
-  training-input-img-path: ../data/training_data/QRISP/FloodedGrounds/270p/MipBiasMinus2Jittered
-  training-output-img-path: ../data/training_data/QRISP/FloodedGrounds/270p/Enhanced
+  resolution: 270p
+  scenes: [FloodedGrounds]
+  training-input-img-path: ../data/training_data/QRISP/*/${resolution}/MipBiasMinus2Jittered
+  training-output-img-path: ../data/training_data/QRISP/*/${resolution}/Enhanced

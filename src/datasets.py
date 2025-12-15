@@ -1,4 +1,5 @@
 import json
+import os
 import torch
 from torchvision.io import decode_image
 from torch.utils.data import Dataset
@@ -9,16 +10,20 @@ class ToyDataset(Dataset):
         self,
         input_img_dir,
         output_img_dir,
-        num_instances,
-        num_frames_per_instance,
+        scenes,
         transform=None,
         target_transform=None,
     ):
         self.input_img_dir = input_img_dir
         self.output_img_dir = output_img_dir
-        self.num_instances = num_instances
-        self.num_frames_per_instance = num_frames_per_instance
+        self.scenes = scenes
+
+        instances = os.listdir(input_img_dir)
+        frames = os.listdir(input_img_dir / instances[0])
+        self.num_instances = len(instances)
+        self.num_frames_per_instance = len(frames)
         self.num_frames = self.num_instances * self.num_frames_per_instance
+
         self.transform = transform
         self.target_transform = target_transform
 

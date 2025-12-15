@@ -9,9 +9,15 @@ training:
   shuffle: true
   epochs: 100
   learning-rate: 5e-4
+  regularisation-parameter: 1e-4
   momentum: null
   dropout-rate: null
   saved-models-path: ../saved/models/toy_model.pt
+
+model:
+  hidden-channels: 32
+  num-blocks: 1
+  parameters: null
 
 logging:
   tensorboard-dir: ../saved/logs/runs

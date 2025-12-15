@@ -3,13 +3,7 @@ from torch import nn
 
 
 class QualcommNetwork(nn.Module):
-    def __init__(
-        self,
-        num_prev_feature_channels,
-        hidden_channels,
-        num_blocks,
-        upscale_factor,
-    ):
+    def __init__(self, hidden_channels: int, num_blocks: int):
         """
         Simplified implementation of the Qualcomm network, adapted for DLAA.
         """
@@ -19,8 +13,7 @@ class QualcommNetwork(nn.Module):
         self.num_curr_depth_channels = 1
         self.num_curr_jitter_channels = 2  # 2 for displacement in both x and y
         self.num_prev_colour_channels = self.num_curr_colour_channels
-        self.num_prev_feature_channels = num_prev_feature_channels
-        self.upscale_factor = upscale_factor
+        self.num_prev_feature_channels = self.num_curr_depth_channels + self.num_curr_jitter_channels
 
         # * 2 to include the previous frame ground truth
         in_channels = (
@@ -31,7 +24,7 @@ class QualcommNetwork(nn.Module):
             self.num_prev_feature_channels
         )
 
-        # Initial 3×3 Conv + ReLU block
+        # Initial 3 × 3 Conv + ReLU block
         self.input_conv = nn.Conv2d(
             in_channels,
             hidden_channels,
@@ -39,9 +32,9 @@ class QualcommNetwork(nn.Module):
             padding=1,
             padding_mode="reflect"
         )
-        self.input_relu = nn.ReLU(inplace=True)
+        self.input_relu = nn.ReLU()
 
-        # m × (3×3 Conv + ReLU) blocks
+        # num_blocks × (3 × 3 Conv + ReLU) blocks
         body_layers = []
         for _ in range(num_blocks):
             body_layers.append(
@@ -53,13 +46,13 @@ class QualcommNetwork(nn.Module):
                     padding_mode="reflect"
                 )
             )
-            body_layers.append(nn.ReLU(inplace=True))
+            body_layers.append(nn.ReLU())
         self.body = nn.Sequential(*body_layers)
 
-        # Feature head (low-res to packed for pixel shuffle)
+        # Feature head
         self.feature_head = nn.Conv2d(
             hidden_channels,
-            num_prev_feature_channels * (upscale_factor ** 2),
+            self.num_prev_feature_channels,
             kernel_size=3,
             padding=1,
             padding_mode="reflect"
@@ -69,7 +62,7 @@ class QualcommNetwork(nn.Module):
         self.colour_head = nn.Sequential(
             nn.Conv2d(
                 hidden_channels,
-                self.num_curr_colour_channels * (upscale_factor ** 2),
+                self.num_curr_colour_channels,
                 kernel_size=3,
                 padding=1,
                 padding_mode="reflect"
@@ -81,16 +74,13 @@ class QualcommNetwork(nn.Module):
         self.blending_mask_head = nn.Sequential(
             nn.Conv2d(
                 hidden_channels,
-                1 * (upscale_factor ** 2),
+                1,
                 kernel_size=3,
                 padding=1,
                 padding_mode="reflect"
             ),
             nn.Sigmoid()
         )
-
-        # Depth-to-space operation (identity when upscale_factor == 1)
-        self.pixel_shuffle = nn.PixelShuffle(upscale_factor)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         # Split inputs (mainly to isolate prev_warped_colour for blending)
@@ -108,15 +98,11 @@ class QualcommNetwork(nn.Module):
 
         # Feature branch
         out_features = self.feature_head(h)
-        up_out_features = self.pixel_shuffle(out_features)
 
-        # Colour + mask branches
+        # Colour + blending mask branches
         out_colour = self.colour_head(h)
         out_blending_mask = self.blending_mask_head(h)
 
-        up_out_colour = self.pixel_shuffle(out_colour)
-        up_out_blending_mask = self.pixel_shuffle(out_blending_mask)
+        blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_warped_colour
 
-        blended_colour = up_out_blending_mask * up_out_colour + (1.0 - up_out_blending_mask) * prev_warped_colour
-
-        return blended_colour
+        return out_colour

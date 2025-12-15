@@ -1,16 +1,15 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-import os
 from pathlib import Path
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.transforms import v2
 from torchvision.utils import save_image
 
 from datasets import ToyDataset
 from model import QualcommNetwork
+from utils import gamma_to_linear, linear_to_gamma
 
 
 def train_epoch(
@@ -22,7 +21,6 @@ def train_epoch(
     writer: SummaryWriter,
     epoch: int
 ) -> None:
-
     dataset_size = len(training_dataloader.dataset)
 
     model.train()
@@ -55,50 +53,81 @@ def train(cfg: DictConfig) -> None:
     )
     print(f"Using {device} device")
 
-    # For reproducibility
+    # -------------------------------------------------------------------------
+    # ---------------------------- Reproducibility ----------------------------
+    # -------------------------------------------------------------------------
     torch.manual_seed(cfg['training']['seed'])
-    torch.backends.cudnn.benchmark = False  # Deterministically select an algorithm; reduces efficiency
-    torch.use_deterministic_algorithms(True)  # Use only deterministic algorithms
+
+    # Deterministcally selects an algorithm; reduces efficiency
+    torch.backends.cudnn.benchmark = False
+
+    # Use only deterministic algorithms
+    torch.use_deterministic_algorithms(True)
 
     # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = False
 
-    training_input_img_dir = Path(cfg['dataset']['training-input-img-path'])
-    training_output_img_dir = Path(cfg['dataset']['training-output-img-path'])
-    instances = os.listdir(training_input_img_dir)
-    frames = os.listdir(training_input_img_dir / instances[0])
-    num_instances = len(instances)
-    num_frames_per_instance = len(frames)
+    # -------------------------------------------------------------------------
+    # ------------------------------ Diagnostics ------------------------------
+    # -------------------------------------------------------------------------
+    writer = SummaryWriter(log_dir=cfg['logging']['tensorboard-dir'])
+
+    checkpoints_path = Path("checkpoints")
+    checkpoints_path.mkdir(parents=True, exist_ok=True)
+
+    # -------------------------------------------------------------------------
+    # --------------------------------- Data ----------------------------------
+    # -------------------------------------------------------------------------
+    scenes = Path(cfg['dataset']['scenes'])
+    training_input_img_path = Path(cfg['dataset']['training-input-img-path'])
+    training_output_img_path = Path(cfg['dataset']['training-output-img-path'])
+
     training_data = ToyDataset(
-        training_input_img_dir,
-        training_output_img_dir,
-        num_instances,
-        num_frames_per_instance,
-        transform=v2.ToDtype(torch.float32, scale=True),  # Also normalises
-        target_transform=v2.ToDtype(torch.float32, scale=True)  # Also normalises
+        scenes,
+        training_input_img_path,
+        training_output_img_path,
+        transform=gamma_to_linear,
+        target_transform=gamma_to_linear,
     )
+
     training_dataloader = DataLoader(
         training_data,
         batch_size=cfg['training']['batch-size'],
         shuffle=cfg['training']['shuffle']
     )
 
+    # -------------------------------------------------------------------------
+    # --------------------------------- Model ---------------------------------
+    # -------------------------------------------------------------------------
     model = QualcommNetwork(
-        num_prev_feature_channels=3,
-        hidden_channels=32,
-        num_blocks=3,
-        upscale_factor=1
+        hidden_channels=cfg['model']['hidden-channels'],
+        num_blocks=cfg['model']['num-blocks']
     ).to(device)
 
-    loss_function = nn.L1Loss()
+    # Initialise with parameters from a previously trained model if desired
+    parameters_path = cfg['model']['parameters']
+    if parameters_path:
+        model.load_state_dict(
+            torch.load(
+                parameters_path,
+                weights_only=True,
+                map_location=device
+            )
+        )
 
-    optimizer = torch.optim.SGD(
+    # -------------------------------------------------------------------------
+    # ----------------------------- Optimisation ------------------------------
+    # -------------------------------------------------------------------------
+    loss_function = nn.L1Loss()
+    optimiser = torch.optim.SGD(
         model.parameters(),
-        lr=cfg['training']['learning-rate']
+        lr=cfg['training']['learning-rate'],
+        weight_decay=cfg['training']['regularisation-parameter']
     )
 
-    writer = SummaryWriter(log_dir=cfg['logging']['tensorboard-dir'])
-
+    # -------------------------------------------------------------------------
+    # ----------------------------- Training loop -----------------------------
+    # -------------------------------------------------------------------------
     for epoch in range(cfg['training']['epochs']):
         print(f"Epoch {epoch + 1}\n-------------------------------")
         train_epoch(
@@ -106,7 +135,7 @@ def train(cfg: DictConfig) -> None:
             model,
             training_dataloader,
             loss_function,
-            optimizer,
+            optimiser,
             writer,
             epoch
         )
@@ -122,7 +151,6 @@ def train(cfg: DictConfig) -> None:
     torch.save(model.state_dict(), Path(cfg['training']['saved-models-path']))
 
     # Log the config
-    print(OmegaConf.to_yaml(cfg))
     writer.add_text("hyperparams", OmegaConf.to_yaml(cfg))
 
     writer.flush()
@@ -138,19 +166,22 @@ def checkpoint(
     writer: SummaryWriter,
     epoch: int
 ) -> None:
-    # Strictly a training diagnostic, so it's OK if the
+    # Strictly a training diagnostic, so it's OK if
     # training data is used here
-    checkpoint_img, _ = training_data[0]
-    checkpoint_img = torch.unsqueeze(checkpoint_img, 0)
-    checkpoint_img = checkpoint_img.to(device)
-    anti_aliased_img = torch.squeeze(model(checkpoint_img))
-    save_image(anti_aliased_img, f"checkpoints/{epoch}.png")
-    if (epoch + 1) % 10 == 0:
-        writer.add_image(
-            "checkpoint images",
-            anti_aliased_img,
-            global_step=(epoch + 1)
-        )
+    model.eval()
+    with torch.no_grad():
+        input_imgs, _ = training_data[0]
+        input_imgs = input_imgs.unsqueeze(0).to(device)
+        anti_aliased_img = model(input_imgs)
+        anti_aliased_img = anti_aliased_img.squeeze(0)
+        anti_aliased_img = linear_to_gamma(anti_aliased_img)
+        save_image(anti_aliased_img, f"checkpoints/{epoch}.png")
+        if (epoch + 1) % 10 == 0:
+            writer.add_image(
+                "checkpoint images",
+                anti_aliased_img,
+                global_step=(epoch + 1)
+            )
 
 
 if __name__ == "__main__":
