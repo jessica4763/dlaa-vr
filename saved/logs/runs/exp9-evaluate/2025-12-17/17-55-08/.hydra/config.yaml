@@ -1,0 +1,29 @@
+dataset:
+  scene_names:
+  - CBApocalypse
+  - FloodedGrounds
+  - ScifiBase
+  - ScifiFacility
+  - SunTemple
+  training-input-img-path: ../data/training_data/QRISP/*/270p/MipBiasMinus2Jittered
+  training-output-img-path: ../data/training_data/QRISP/*/270p/Enhanced
+loss: {}
+optimiser:
+  batch-size: 8
+  epochs: 100
+  learning-rate: 0.0001
+  betas:
+  - 0.9
+  - 0.999
+  epsilon: 1.0e-08
+  regularisation-parameter: 0.0001
+setup:
+  seed: 42
+  shuffle: true
+  saved-models-path: ../saved/models/full_model.pt
+model:
+  hidden-channels: 32
+  num-blocks: 3
+  parameters: null
+logging:
+  tensorboard-dir: ../saved/logs/runs

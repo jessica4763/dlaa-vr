@@ -1,6 +1,7 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
+import sys
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
@@ -9,6 +10,7 @@ from torchvision.utils import save_image
 
 from datasets import ToyDataset
 from model import QualcommNetwork
+from sanity_checks import output_input
 from utils import gamma_to_linear, linear_to_gamma
 
 
@@ -56,7 +58,7 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
     # -------------------------------------------------------------------------
-    torch.manual_seed(cfg['training']['seed'])
+    torch.manual_seed(cfg['setup']['seed'])
 
     # Deterministcally selects an algorithm; reduces efficiency
     torch.backends.cudnn.benchmark = False
@@ -88,8 +90,8 @@ def train(cfg: DictConfig) -> None:
 
     training_dataloader = DataLoader(
         training_data,
-        batch_size=cfg['training']['batch-size'],
-        shuffle=cfg['training']['shuffle']
+        batch_size=cfg['optimiser']['batch-size'],
+        shuffle=cfg['setup']['shuffle']
     )
 
     # -------------------------------------------------------------------------
@@ -115,16 +117,28 @@ def train(cfg: DictConfig) -> None:
     # ----------------------------- Optimisation ------------------------------
     # -------------------------------------------------------------------------
     loss_function = nn.L1Loss()
-    optimiser = torch.optim.SGD(
-        model.parameters(),
-        lr=cfg['training']['learning-rate'],
-        weight_decay=cfg['training']['regularisation-parameter']
-    )
+
+    if cfg['optimiser']['name'] == 'sgd':
+        optimiser = torch.optim.SGD(
+            model.parameters(),
+            lr=cfg['optimiser']['learning-rate'],
+            weight_decay=cfg['optimiser']['regularisation-parameter']
+        )
+    elif cfg['optimiser']['name'] == 'adamw':
+        optimiser = torch.optim.AdamW(
+            model.parameters(),
+            lr=cfg['optimiser']['learning-rate'],
+            betas=cfg['optimiser']['betas'],
+            eps=cfg['optimiser']['epsilon'],
+            weight_decay=cfg['optimiser']['regularisation-parameter']
+        )
+    else:
+        sys.exit("Chosen optimiser implementation does not exist.")
 
     # -------------------------------------------------------------------------
     # ----------------------------- Training loop -----------------------------
     # -------------------------------------------------------------------------
-    for epoch in range(cfg['training']['epochs']):
+    for epoch in range(cfg['optimiser']['epochs']):
         print(f"Epoch {epoch + 1}\n-------------------------------")
         train_epoch(
             device,
@@ -144,7 +158,7 @@ def train(cfg: DictConfig) -> None:
         )
 
     # Save the model
-    torch.save(model.state_dict(), Path(cfg['training']['saved-models-path']))
+    torch.save(model.state_dict(), Path(cfg['setup']['saved-models-path']))
 
     # Log the config
     writer.add_text("hyperparams", OmegaConf.to_yaml(cfg))
@@ -164,13 +178,20 @@ def checkpoint(
 ) -> None:
     # Strictly a training diagnostic, so it's OK if
     # training data is used here
+
     model.eval()
     with torch.no_grad():
         input_imgs, _ = training_data[0]
+
+        # Verify what exactly goes into the network
+        if epoch == 0:
+            output_input(input_imgs)
+
         input_imgs = input_imgs.unsqueeze(0).to(device)
         anti_aliased_img = model(input_imgs)
         anti_aliased_img = anti_aliased_img.squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
+
         save_image(anti_aliased_img, f"checkpoints/{epoch}.png")
         if (epoch + 1) % 10 == 0:
             writer.add_image(

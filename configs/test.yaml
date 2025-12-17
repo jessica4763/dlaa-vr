@@ -10,6 +10,6 @@ testing:
   eval-output-path: evaluation_output
 
 model:
-  hidden-channels: 32
+  hidden-channels: 16
   num-blocks: 1
   parameters: null

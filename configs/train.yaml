@@ -1,22 +1,17 @@
 ---
 defaults:
-  - dataset: toy-train
+  - dataset: full-train
   - loss: l1
+  - optimiser: adamw
 
-training:
+setup:
   seed: 42
-  batch-size: 8
-  shuffle: false
-  epochs: 100
-  learning-rate: 5e-4
-  regularisation-parameter: 1e-4
-  momentum: null
-  dropout-rate: null
-  saved-models-path: ../saved/models/toy_model.pt
+  shuffle: true
+  saved-models-path: ../saved/models/full_model.pt
 
 model:
   hidden-channels: 32
-  num-blocks: 1
+  num-blocks: 3
   parameters: null
 
 logging:

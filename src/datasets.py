@@ -127,7 +127,7 @@ class ToyDataset(Dataset):
         curr_frame_num = idx % scene.num_frames_per_instance
         curr_frame = str(curr_frame_num).zfill(4) + '.png'
         curr_input_img_path = scene.scene_input_imgs_path / instance / curr_frame
-        curr_output_img_path = scene.scene_input_imgs_path / instance / curr_frame
+        curr_output_img_path = scene.scene_output_imgs_path / instance / curr_frame
         curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, ...]
         curr_output_img = decode_image(curr_output_img_path.resolve())[0:3, ...]
 
@@ -189,11 +189,11 @@ class ToyDataset(Dataset):
         input_imgs = torch.cat(
             [
                 curr_input_img,
-                # curr_depth,
-                # curr_jitter_x,
-                # curr_jitter_y,
-                # prev_output_img,
-                # prev_features
+                curr_depth,
+                curr_jitter_x,
+                curr_jitter_y,
+                prev_output_img,
+                prev_features
             ],
             dim=0
         )

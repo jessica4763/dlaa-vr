@@ -83,14 +83,30 @@ class QualcommNetwork(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        # Split inputs (mainly to isolate prev_warped_colour for blending)
-        c0 = (
-            self.num_curr_colour_channels +
-            self.num_curr_depth_channels +
-            self.num_curr_jitter_channels
-        )
-        c1 = c0 + self.num_prev_colour_channels
-        prev_warped_colour = x[:, c0:c1]  # To be used in the blend block
+        # Split inputs (mainly to isolate prev_colour for blending)
+        c0 = 0
+        c1 = c0 + self.num_curr_colour_channels
+        _ = x[:, c0:c1]
+
+        c0 = c1
+        c1 = c0 + self.num_curr_depth_channels
+        _ = x[:, c0:c1]
+
+        c0 = c1
+        c1 = c0 + self.num_curr_jitter_channels
+        _ = x[:, c0:c1]
+
+        c0 = c1
+        c1 = c0 + self.num_curr_colour_channels
+        prev_colour = x[:, c0:c1]
+
+        c0 = c1
+        c1 = c0 + self.num_curr_depth_channels
+        _ = x[:, c0:c1]
+
+        c0 = c1
+        c1 = c0 + self.num_curr_jitter_channels
+        _ = x[:, c0:c1]
 
         # Main conv stack
         h = self.input_relu(self.input_conv(x))
@@ -103,6 +119,6 @@ class QualcommNetwork(nn.Module):
         out_colour = self.colour_head(h)
         out_blending_mask = self.blending_mask_head(h)
 
-        blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_warped_colour
+        blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
 
-        return out_colour
+        return blended_colour
