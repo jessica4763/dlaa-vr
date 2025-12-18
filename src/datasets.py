@@ -12,8 +12,8 @@ from utils import cumsum
 class Scene:
     def __init__(
         self,
-        scene_input_imgs_path: str,
-        scene_output_imgs_path: str
+        scene_input_imgs_path: Path,
+        scene_output_imgs_path: Path
     ):
         self.scene_input_imgs_path = scene_input_imgs_path
         self.scene_output_imgs_path = scene_output_imgs_path
@@ -26,7 +26,7 @@ class Scene:
         self.num_frames = self.num_instances * self.num_frames_per_instance
 
 
-class ToyDataset(Dataset):
+class QualcommDataset(Dataset):
     def __init__(
         self,
         scene_names: list[str],
@@ -57,8 +57,8 @@ class ToyDataset(Dataset):
         input_image: torch.Tensor,
         scene: Scene,
         instance: str,
-        curr_frame_num: str
-    ) -> torch.Tensor:
+        curr_frame_num: int
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         curr_frame = str(curr_frame_num).zfill(4) + '.json'
         json_file_path = scene.scene_input_imgs_path / "../CameraData" / instance / curr_frame
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
@@ -86,7 +86,7 @@ class ToyDataset(Dataset):
         self,
         scene: Scene,
         instance: str,
-        curr_frame_num: str
+        curr_frame_num: int
     ) -> torch.Tensor:
         curr_frame = str(curr_frame_num).zfill(4) + '.png'
         depth_path = scene.scene_input_imgs_path / "../DepthMipBiasMinus2Jittered" / instance / curr_frame
@@ -103,7 +103,7 @@ class ToyDataset(Dataset):
         self,
         scene: Scene,
         instance: str,
-        curr_frame_num: str
+        curr_frame_num: int
     ) -> torch.Tensor:
         curr_frame = str(curr_frame_num).zfill(4) + '.exr'
         motion_vectors_path = scene.scene_input_imgs_path / "../MotionVectorsMipBiasMinus2Jittered" / instance / curr_frame

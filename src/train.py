@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
 
-from datasets import ToyDataset
+from datasets import QualcommDataset
 from model import QualcommNetwork
 from sanity_checks import output_input
 from utils import gamma_to_linear, linear_to_gamma
@@ -29,8 +29,8 @@ def train_epoch(
     for batch, (X, y) in enumerate(training_dataloader):
         X, y = X.to(device), y.to(device)
 
-        pred = model(X)
-        loss = loss_fn(pred, y)
+        pred_frame, _ = model(X)
+        loss = loss_fn(pred_frame, y)
 
         loss.backward()
         optimizer.step()
@@ -55,6 +55,9 @@ def train(cfg: DictConfig) -> None:
     )
     print(f"Using {device} device")
 
+    checkpoints_path = Path("checkpoints")
+    checkpoints_path.mkdir(parents=True, exist_ok=True)
+
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
     # -------------------------------------------------------------------------
@@ -74,13 +77,10 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     writer = SummaryWriter(log_dir=cfg['logging']['tensorboard-dir'])
 
-    checkpoints_path = Path("checkpoints")
-    checkpoints_path.mkdir(parents=True, exist_ok=True)
-
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
-    training_data = ToyDataset(
+    training_data = QualcommDataset(
         cfg['dataset']['scene_names'],
         cfg['dataset']['training-input-img-path'],
         cfg['dataset']['training-output-img-path'],
@@ -185,10 +185,10 @@ def checkpoint(
 
         # Verify what exactly goes into the network
         if epoch == 0:
-            output_input(input_imgs)
+            output_input(model, input_imgs)
 
         input_imgs = input_imgs.unsqueeze(0).to(device)
-        anti_aliased_img = model(input_imgs)
+        anti_aliased_img, _ = model(input_imgs)
         anti_aliased_img = anti_aliased_img.squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
 

@@ -1,7 +1,7 @@
 ---
 name: sgd
 batch-size: 8
-epochs: 100
+epochs: 10
 learning-rate: 1e-4
 regularisation-parameter: 1e-4
 momentum: null

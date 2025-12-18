@@ -6,7 +6,7 @@ testing:
   seed: 42
   batch-size: 1
   shuffle: false
-  saved-models-path: ../saved/models/toy_model.pt
+  saved-models-path: ../saved/logs/runs/exp10-basic/toy_model.pt
   eval-output-path: evaluation_output
 
 model:

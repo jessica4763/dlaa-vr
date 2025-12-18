@@ -1,17 +1,17 @@
 ---
 defaults:
-  - dataset: full-train
+  - dataset: toy-train
   - loss: l1
-  - optimiser: adamw
+  - optimiser: sgd
 
 setup:
   seed: 42
   shuffle: true
-  saved-models-path: ../saved/models/full_model.pt
+  saved-models-path: ../saved/models/toy_model.pt
 
 model:
-  hidden-channels: 32
-  num-blocks: 3
+  hidden-channels: 16
+  num-blocks: 1
   parameters: null
 
 logging:

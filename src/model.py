@@ -16,7 +16,7 @@ class QualcommNetwork(nn.Module):
         self.num_prev_feature_channels = self.num_curr_depth_channels + self.num_curr_jitter_channels
 
         # * 2 to include the previous frame ground truth
-        in_channels = (
+        self.in_channels = (
             self.num_curr_colour_channels +
             self.num_curr_depth_channels +
             self.num_curr_jitter_channels +
@@ -26,7 +26,7 @@ class QualcommNetwork(nn.Module):
 
         # Initial 3 × 3 Conv + ReLU block
         self.input_conv = nn.Conv2d(
-            in_channels,
+            self.in_channels,
             hidden_channels,
             kernel_size=3,
             padding=1,
@@ -121,4 +121,4 @@ class QualcommNetwork(nn.Module):
 
         blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
 
-        return blended_colour
+        return blended_colour, out_features

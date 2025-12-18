@@ -1,24 +1,36 @@
 import hydra
+from moviepy import ImageSequenceClip
 from omegaconf import DictConfig
+import os
 from pathlib import Path
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 
-from datasets import ToyDataset
+from datasets import QualcommDataset
 from model import QualcommNetwork
 from metrics import Metrics
 from utils import gamma_to_linear
 
 
-def write_frame(
+def write_frames(
     eval_output_path: Path,
     frames: torch.Tensor,
     batch: int
 ) -> None:
     for idx, frame in enumerate(frames):
         save_image(frame, eval_output_path / f"{batch + idx}.png")
+
+
+def write_video(
+    path: str,
+    filename: str,
+    fps: int = 24
+) -> None:
+    imgs = [os.path.join(path, img) for img in sorted(os.listdir(path))]
+    clip = ImageSequenceClip(imgs, fps=fps)
+    clip.write_videofile(os.path.join(path, filename))
 
 
 def evaluate(
@@ -35,18 +47,31 @@ def evaluate(
 
     model.eval()
     with torch.no_grad():
+        prev_colour = None
+        prev_features = None
+
         for batch, (X, y) in enumerate(test_dataloader):
             X, y = X.to(device), y.to(device)
 
-            pred = model(X)
-            loss = loss_fn(pred, y)
+            # Use the previously predicted frame and features during test
+            if prev_colour is not None and prev_features is not None:
+                offset_0 = model.num_prev_colour_channels + model.num_prev_feature_channels
+                offset_1 = model.num_prev_feature_channels
+                X[:, model.in_channels - offset_0:model.in_channels - offset_1] = prev_colour
+                # X[:, model.in_channels - offset_1:model.in_channels] = prev_features
+
+            pred_frame, pred_features = model(X)
+            loss = loss_fn(pred_frame, y)
+
+            prev_colour = pred_frame
+            prev_features = pred_features
 
             loss, current_img = loss.item(), (batch + 1) * len(X)
             print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
 
-            metrics.record(pred, y)
+            metrics.record(pred_frame, y)
 
-            write_frame(eval_output_path, pred, batch)
+            write_frames(eval_output_path, pred_frame, batch)
 
     metrics.report()
 
@@ -59,6 +84,9 @@ def main(cfg: DictConfig) -> None:
         else "cpu"
     )
     print(f"Using {device} device")
+
+    eval_output_path = Path("evaluation_output")
+    eval_output_path.mkdir(parents=True, exist_ok=True)
 
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
@@ -77,7 +105,7 @@ def main(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
-    test_data = ToyDataset(
+    test_data = QualcommDataset(
         cfg['dataset']['scene_names'],
         cfg["dataset"]["test-input-img-path"],
         cfg["dataset"]["test-output-img-path"],
@@ -117,7 +145,13 @@ def main(cfg: DictConfig) -> None:
         model,
         test_dataloader,
         loss_fn,
-        cfg['testing']['eval-output-path']
+        Path(cfg['testing']['eval-output-path'])
+    )
+
+    write_video(
+        cfg['testing']['eval-output-path'],
+        'evaluation_output.mp4',
+        fps=24
     )
 
 
