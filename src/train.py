@@ -187,7 +187,7 @@ def checkpoint(
         if epoch == 0:
             output_input(model, input_imgs)
 
-        input_imgs = input_imgs.unsqueeze(0).to(device)
+        input_imgs = input_imgs.to(device).unsqueeze(0)
         anti_aliased_img, _ = model(input_imgs)
         anti_aliased_img = anti_aliased_img.squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)

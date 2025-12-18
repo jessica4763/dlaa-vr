@@ -55,11 +55,3 @@ def write_video(
         writer.append_data(img)
 
     writer.close()
-
-
-if __name__ == "__main__":
-    write_video(
-        Path("../data/test_data/QRISP/TestSet/SeaPort/270p/Enhanced/0000"),
-        "ground_truth_output.avi",
-        fps=24
-    )

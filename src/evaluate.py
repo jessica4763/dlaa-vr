@@ -75,6 +75,7 @@ def main(cfg: DictConfig) -> None:
 
     eval_output_pred_path = Path("evaluation_output/pred")
     eval_output_pred_path.mkdir(parents=True, exist_ok=True)
+
     eval_output_y_path = Path("evaluation_output/y")
     eval_output_y_path.mkdir(parents=True, exist_ok=True)
 
@@ -129,6 +130,10 @@ def main(cfg: DictConfig) -> None:
             map_location=device
         )
     )
+
+    example_input_imgs, _ = test_data[0]
+    example_input_imgs = example_input_imgs.to(device).unsqueeze(0)
+    writer.add_graph(model, example_input_imgs)
 
     # -------------------------------------------------------------------------
     # ------------------------------ Evaluation -------------------------------
