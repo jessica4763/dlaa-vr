@@ -2,14 +2,21 @@
 defaults:
   - dataset: toy-test
 
-testing:
+setup:
   seed: 42
   batch-size: 1
   shuffle: false
-  saved-models-path: ../saved/logs/runs/exp10-basic/toy_model.pt
+  saved-models-path: ../saved/logs/runs/exp9/full_model.pt
   eval-output-path: evaluation_output
 
 model:
-  hidden-channels: 16
-  num-blocks: 1
+  hidden-channels: 32
+  num-blocks: 3
   parameters: null
+
+logging:
+  tensorboard-dir: ../saved/logs/runs
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

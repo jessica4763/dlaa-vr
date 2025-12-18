@@ -1,16 +1,19 @@
-import torch
 import numpy as np
 from skimage.metrics import (
     normalized_root_mse,
     peak_signal_noise_ratio,
     structural_similarity,
 )
+import torch
+from torch.utils.tensorboard import SummaryWriter
 
 # TODO: ColourVideoVDP
 
 
 class Metrics:
-    def __init__(self, num_batches: int):
+    def __init__(self, writer: SummaryWriter, num_batches: int):
+        self.writer = writer
+
         self.num_batches = num_batches
 
         self.norm_rmse: np.ndarray = np.array([0.0])
@@ -18,16 +21,16 @@ class Metrics:
         self.ssim: np.ndarray = np.array([0.0])
 
     def record_rmse(self, pred_frame: np.ndarray, y: np.ndarray) -> None:
-        self.norm_rmse += normalized_root_mse(pred_frame, y)
+        self.norm_rmse += normalized_root_mse(y, pred_frame)
 
     def record_psnr(self, pred_frame: np.ndarray, y: np.ndarray) -> None:
-        self.psnr += peak_signal_noise_ratio(pred_frame, y, data_range=255)
+        self.psnr += peak_signal_noise_ratio(y, pred_frame, data_range=1.0)
 
     def record_ssim(self, pred_frame: np.ndarray, y: np.ndarray) -> None:
         self.ssim += structural_similarity(
-            pred_frame,
             y,
-            data_range=255,
+            pred_frame,
+            data_range=1.0,
             channel_axis=0,
             gaussian_weights=True,
         )
@@ -43,7 +46,9 @@ class Metrics:
         average_norm_rmse = self.norm_rmse.item() / self.num_batches
         average_psnr = self.psnr.item() / self.num_batches
         average_ssim = self.ssim.item() / self.num_batches
-        print("Reported metrics:")
-        print(f"\t {average_norm_rmse=}")
-        print(f"\t {average_psnr=}")
-        print(f"\t {average_ssim=}")
+        reported_metrics = f"\n{average_norm_rmse=}\n{average_psnr=}\n{average_ssim=}\n"
+        print(reported_metrics)
+        self.writer.add_text(
+            "reported metrics", 
+            reported_metrics
+        )
