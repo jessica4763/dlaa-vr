@@ -16,6 +16,7 @@ from utils import (
     write_frames, 
     write_video
 )
+from sanity_checks import print_parameters
 
 
 def evaluate(
@@ -135,6 +136,8 @@ def main(cfg: DictConfig) -> None:
     example_input_imgs = example_input_imgs.to(device).unsqueeze(0)
     writer.add_graph(model, example_input_imgs)
 
+    print_parameters(Path(cfg['setup']['eval-output-path']), model.state_dict())
+
     # -------------------------------------------------------------------------
     # ------------------------------ Evaluation -------------------------------
     # -------------------------------------------------------------------------
@@ -150,7 +153,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     write_video(
-        Path(cfg['setup']['eval-output-path']) / "pred",
+        Path(cfg['setup']['eval-output-path']),
         'evaluation_output.avi',
         fps=24
     )

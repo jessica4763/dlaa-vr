@@ -47,8 +47,9 @@ def write_video(
     filename: str,
     fps: int = 24
 ) -> None:
-    writer = imageio.get_writer(filename, fps=fps, codec='libx264', quality=10)
+    writer = imageio.get_writer(imgs_path / filename, fps=fps, codec='libx264', quality=10)
 
+    imgs_path = imgs_path / "pred"
     for img_name in natsorted(os.listdir(imgs_path)):
         img_path = imgs_path / img_name
         img = imageio.v3.imread(img_path)

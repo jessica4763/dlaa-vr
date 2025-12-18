@@ -1,0 +1,24 @@
+dataset:
+  scene_names:
+  - FloodedGrounds
+  training-input-img-path: ../data/training_data/QRISP/*/270p/MipBiasMinus2Jittered
+  training-output-img-path: ../data/training_data/QRISP/*/270p/Enhanced
+loss: {}
+optimiser:
+  name: sgd
+  batch-size: 8
+  epochs: 10
+  learning-rate: 0.0001
+  regularisation-parameter: 0.0001
+  momentum: null
+  dropout-rate: null
+setup:
+  seed: 42
+  shuffle: true
+  saved-models-path: ../saved/models/toy_model.pt
+model:
+  hidden-channels: 32
+  num-blocks: 3
+  parameters: null
+logging:
+  tensorboard-dir: ../saved/logs/runs
