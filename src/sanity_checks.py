@@ -41,7 +41,7 @@ def output_input(model: nn.Module, input_imgs: torch.Tensor) -> None:
 
 
 def print_parameters(eval_output_path: Path, parameters: dict[str, Any]) -> None:
-    with open(eval_output_path / "model_parameters.txt", 'a') as a_writer:
+    with open(eval_output_path / "model_parameters.txt", "a") as a_writer:
         for layer in parameters:
             a_writer.write(f"\n----------------------{layer}----------------------\n")
             a_writer.write(str(parameters[layer]))

@@ -40,8 +40,8 @@ class QualcommDataset(Dataset):
 
         self.scenes = []
         for scene_name in scene_names:
-            scene_input_imgs_path = Path(self.input_imgs_path.replace('*', scene_name))
-            scene_output_imgs_path = Path(self.output_imgs_path.replace('*', scene_name))
+            scene_input_imgs_path = Path(self.input_imgs_path.replace("*", scene_name))
+            scene_output_imgs_path = Path(self.output_imgs_path.replace("*", scene_name))
             self.scenes.append(Scene(scene_input_imgs_path, scene_output_imgs_path))
 
         scene_num_frames = [scene.num_frames for scene in self.scenes]
@@ -59,7 +59,7 @@ class QualcommDataset(Dataset):
         instance: str,
         curr_frame_num: int
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        curr_frame = str(curr_frame_num).zfill(4) + '.json'
+        curr_frame = str(curr_frame_num).zfill(4) + ".json"
         json_file_path = scene.scene_input_imgs_path / "../CameraData" / instance / curr_frame
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
             camera_data = json.load(json_file)
@@ -88,7 +88,7 @@ class QualcommDataset(Dataset):
         instance: str,
         curr_frame_num: int
     ) -> torch.Tensor:
-        curr_frame = str(curr_frame_num).zfill(4) + '.png'
+        curr_frame = str(curr_frame_num).zfill(4) + ".png"
         depth_path = scene.scene_input_imgs_path / "../DepthMipBiasMinus2Jittered" / instance / curr_frame
         depth = decode_image(depth_path.resolve())
         depth = torch.unsqueeze((
@@ -105,7 +105,7 @@ class QualcommDataset(Dataset):
         instance: str,
         curr_frame_num: int
     ) -> torch.Tensor:
-        curr_frame = str(curr_frame_num).zfill(4) + '.exr'
+        curr_frame = str(curr_frame_num).zfill(4) + ".exr"
         motion_vectors_path = scene.scene_input_imgs_path / "../MotionVectorsMipBiasMinus2Jittered" / instance / curr_frame
         motion_vectors = decode_image(motion_vectors_path.resolve())
         return motion_vectors
@@ -125,7 +125,7 @@ class QualcommDataset(Dataset):
         instance = str(idx // scene.num_frames_per_instance).zfill(4)
 
         curr_frame_num = idx % scene.num_frames_per_instance
-        curr_frame = str(curr_frame_num).zfill(4) + '.png'
+        curr_frame = str(curr_frame_num).zfill(4) + ".png"
         curr_input_img_path = scene.scene_input_imgs_path / instance / curr_frame
         curr_output_img_path = scene.scene_output_imgs_path / instance / curr_frame
         curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, ...]
@@ -141,7 +141,7 @@ class QualcommDataset(Dataset):
         # When there is no previous frame, i.e. this is the first frame,
         # duplicate the current frame and use it as the previous frame.
         prev_frame_num = 0 if curr_frame_num == 0 else curr_frame_num - 1
-        prev_frame = str(prev_frame_num).zfill(4) + '.png'
+        prev_frame = str(prev_frame_num).zfill(4) + ".png"
         prev_output_img_path = scene.scene_output_imgs_path / instance / prev_frame
         prev_output_img = decode_image(prev_output_img_path.resolve())[0:3, ...]
 

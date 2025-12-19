@@ -83,7 +83,7 @@ def main(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
     # -------------------------------------------------------------------------
-    torch.manual_seed(cfg['setup']['seed'])
+    torch.manual_seed(cfg["setup"]["seed"])
 
     # Deterministically select an algorithm; reduces efficiency
     torch.backends.cudnn.benchmark = False
@@ -97,13 +97,13 @@ def main(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ------------------------------ Diagnostics ------------------------------
     # -------------------------------------------------------------------------
-    writer = SummaryWriter(log_dir=cfg['logging']['tensorboard-dir'])
+    writer = SummaryWriter(log_dir=cfg["logging"]["tensorboard-dir"])
 
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
     test_data = QualcommDataset(
-        cfg['dataset']['scene_names'],
+        cfg["dataset"]["scene_names"],
         cfg["dataset"]["test-input-img-path"],
         cfg["dataset"]["test-output-img-path"],
         transform=gamma_to_linear,
@@ -112,21 +112,21 @@ def main(cfg: DictConfig) -> None:
 
     test_dataloader = DataLoader(
         test_data,
-        batch_size=cfg['setup']['batch-size'],
-        shuffle=cfg['setup']['shuffle']  # False for evaluation
+        batch_size=cfg["setup"]["batch-size"],
+        shuffle=cfg["setup"]["shuffle"]  # False for evaluation
     )
 
     # -------------------------------------------------------------------------
     # --------------------------------- Model ---------------------------------
     # -------------------------------------------------------------------------
     model = QualcommNetwork(
-        hidden_channels=cfg['model']['hidden-channels'],
-        num_blocks=cfg['model']['num-blocks'],
+        hidden_channels=cfg["model"]["hidden-channels"],
+        num_blocks=cfg["model"]["num-blocks"],
     ).to(device)
 
     model.load_state_dict(
         torch.load(
-            cfg['setup']['saved-models-path'],
+            cfg["setup"]["saved-models-path"],
             weights_only=True,
             map_location=device
         )
@@ -136,7 +136,7 @@ def main(cfg: DictConfig) -> None:
     example_input_imgs = example_input_imgs.to(device).unsqueeze(0)
     writer.add_graph(model, example_input_imgs)
 
-    print_parameters(Path(cfg['setup']['eval-output-path']), model.state_dict())
+    print_parameters(Path(cfg["setup"]["eval-output-path"]), model.state_dict())
 
     # -------------------------------------------------------------------------
     # ------------------------------ Evaluation -------------------------------
@@ -149,12 +149,12 @@ def main(cfg: DictConfig) -> None:
         test_dataloader,
         loss_fn,
         writer,
-        Path(cfg['setup']['eval-output-path'])
+        Path(cfg["setup"]["eval-output-path"])
     )
 
     write_video(
-        Path(cfg['setup']['eval-output-path']),
-        'evaluation_output.avi',
+        Path(cfg["setup"]["eval-output-path"]),
+        "evaluation_output.avi",
         fps=24
     )
 

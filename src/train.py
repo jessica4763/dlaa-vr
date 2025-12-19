@@ -61,7 +61,7 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
     # -------------------------------------------------------------------------
-    torch.manual_seed(cfg['setup']['seed'])
+    torch.manual_seed(cfg["setup"]["seed"])
 
     # Deterministcally selects an algorithm; reduces efficiency
     torch.backends.cudnn.benchmark = False
@@ -75,35 +75,35 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ------------------------------ Diagnostics ------------------------------
     # -------------------------------------------------------------------------
-    writer = SummaryWriter(log_dir=cfg['logging']['tensorboard-dir'])
+    writer = SummaryWriter(log_dir=cfg["logging"]["tensorboard-dir"])
 
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
     training_data = QualcommDataset(
-        cfg['dataset']['scene_names'],
-        cfg['dataset']['training-input-img-path'],
-        cfg['dataset']['training-output-img-path'],
+        cfg["dataset"]["scene_names"],
+        cfg["dataset"]["training-input-img-path"],
+        cfg["dataset"]["training-output-img-path"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
     )
 
     training_dataloader = DataLoader(
         training_data,
-        batch_size=cfg['optimiser']['batch-size'],
-        shuffle=cfg['setup']['shuffle']
+        batch_size=cfg["optimiser"]["batch-size"],
+        shuffle=cfg["setup"]["shuffle"]
     )
 
     # -------------------------------------------------------------------------
     # --------------------------------- Model ---------------------------------
     # -------------------------------------------------------------------------
     model = QualcommNetwork(
-        hidden_channels=cfg['model']['hidden-channels'],
-        num_blocks=cfg['model']['num-blocks']
+        hidden_channels=cfg["model"]["hidden-channels"],
+        num_blocks=cfg["model"]["num-blocks"]
     ).to(device)
 
     # Initialise with parameters from a previously trained model if desired
-    parameters_path = cfg['model']['parameters']
+    parameters_path = cfg["model"]["parameters"]
     if parameters_path:
         model.load_state_dict(
             torch.load(
@@ -118,19 +118,19 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     loss_function = nn.L1Loss()
 
-    if cfg['optimiser']['name'] == 'sgd':
+    if cfg["optimiser"]["name"] == "sgd":
         optimiser = torch.optim.SGD(
             model.parameters(),
-            lr=cfg['optimiser']['learning-rate'],
-            weight_decay=cfg['optimiser']['regularisation-parameter']
+            lr=cfg["optimiser"]["learning-rate"],
+            weight_decay=cfg["optimiser"]["regularisation-parameter"]
         )
-    elif cfg['optimiser']['name'] == 'adamw':
+    elif cfg["optimiser"]["name"] == "adamw":
         optimiser = torch.optim.AdamW(
             model.parameters(),
-            lr=cfg['optimiser']['learning-rate'],
-            betas=cfg['optimiser']['betas'],
-            eps=cfg['optimiser']['epsilon'],
-            weight_decay=cfg['optimiser']['regularisation-parameter']
+            lr=cfg["optimiser"]["learning-rate"],
+            betas=cfg["optimiser"]["betas"],
+            eps=cfg["optimiser"]["epsilon"],
+            weight_decay=cfg["optimiser"]["regularisation-parameter"]
         )
     else:
         sys.exit("Chosen optimiser implementation does not exist.")
@@ -138,7 +138,7 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ----------------------------- Training loop -----------------------------
     # -------------------------------------------------------------------------
-    for epoch in range(cfg['optimiser']['epochs']):
+    for epoch in range(cfg["optimiser"]["epochs"]):
         print(f"Epoch {epoch + 1}\n-------------------------------")
         train_epoch(
             device,
@@ -158,7 +158,7 @@ def train(cfg: DictConfig) -> None:
         )
 
     # Save the model
-    torch.save(model.state_dict(), Path(cfg['setup']['saved-models-path']))
+    torch.save(model.state_dict(), Path(cfg["setup"]["saved-models-path"]))
 
     # Log the config
     writer.add_text("hyperparams", OmegaConf.to_yaml(cfg))
