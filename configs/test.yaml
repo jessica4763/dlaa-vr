@@ -4,7 +4,7 @@ defaults:
 
 setup:
   seed: 42
-  saved-models-path: ../saved/logs/runs/exp14/toy_model.pt
+  saved-models-path: ../saved/logs/runs/exp14-features/toy_model.pt
   eval-output-path: evaluation_output
   tensorboard-dir: ../saved/logs/runs
 

@@ -31,26 +31,26 @@ def evaluate(
     with torch.no_grad():
         dataset_size = len(test_dataloader.dataset)
 
-        num_batches = len(test_dataloader)
-        metrics = Metrics(writer, num_batches)
+        metrics = Metrics(writer, num_batches=len(test_dataloader))
         
         prev_pred_frame = prev_features = None
-
         for batch, (X, y) in enumerate(test_dataloader):
             X, y = X.to(device), y.to(device)
+
+            X = X.unsqueeze(0)
 
             # Use the previously predicted frame and features during test
             if prev_pred_frame is not None and prev_features is not None:
                 c0 = model.in_channels - (model.num_prev_colour + model.num_prev_feature)
                 c1 = model.in_channels - model.num_prev_feature
-                X[:, c0:c1] = prev_pred_frame
-                X[:, c1:model.in_channels] = prev_features
+                X[:, :, c0:c1] = prev_pred_frame
+                X[:, :, c1:model.in_channels] = prev_features
 
             pred_frame, features = model(X)
             loss = loss_fn(pred_frame, y)
 
             prev_pred_frame = pred_frame
-            prev_features = features
+            prev_features = features.squeeze(0)
 
             loss, current_img = loss.item(), (batch + 1) * len(X)
             print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
@@ -110,8 +110,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     test_dataloader = DataLoader(
-        test_data,
-        batch_size=1,
+        test_data
     )
 
     # -------------------------------------------------------------------------
@@ -130,8 +129,8 @@ def main(cfg: DictConfig) -> None:
         )
     )
 
-    example_input_imgs, _, _= test_data[0]
-    example_input_imgs = example_input_imgs.to(device).unsqueeze(0)
+    example_input_imgs, _, = test_data[0]
+    example_input_imgs = example_input_imgs.to(device).unsqueeze(0).unsqueeze(0)
     writer.add_graph(model, example_input_imgs)
 
     print_parameters(Path(cfg["setup"]["eval-output-path"]), model.state_dict())

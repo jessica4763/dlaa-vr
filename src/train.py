@@ -1,7 +1,6 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
-from scipy import stats
 import sys
 import torch
 from torch import nn, optim
@@ -27,32 +26,31 @@ def train_epoch(
     epoch: int
 ) -> None:
     dataset_size = len(training_dataloader.dataset)
-    with torch.autograd.set_detect_anomaly(True, check_nan=True):
-        model.train()
-        for batch, (X, y) in enumerate(training_dataloader):
-            X, y = X.to(device), y.to(device)
 
-            # Sampler gives N = batch_size * clip_size
-            N, C, H, W = X.shape
+    model.train()
+    for batch, (X, y) in enumerate(training_dataloader):
+        X, y = X.to(device), y.to(device)
 
-            X = X.view(batch_size, clip_size, C, H, W)
-            pred_frame = model(X)
-            pred_frame = pred_frame.view(-1, 3, H, W)
+        # Sampler gives N = batch_size * clip_size
+        N, C, H, W = X.shape
+        X = X.view(batch_size, clip_size, C, H, W)
 
-            loss = loss_fn(pred_frame, y)
+        pred_frame, _ = model(X)
+        pred_frame = pred_frame.view(-1, 3, H, W)
 
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+        loss = loss_fn(pred_frame, y)
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
 
-            writer.add_scalar(
-                "loss/train",
-                loss.item(),
-                epoch * dataset_size + batch
-            )
+        writer.add_scalar(
+            "loss/train",
+            loss.item(),
+            epoch * len(training_dataloader.dataset) + batch
+        )
 
-            loss, current_img = loss.item(), (batch + 1) * len(X)
-            print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
+        loss, current_img = loss.item(), (batch + 1) * batch_size * clip_size
+        print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
@@ -204,15 +202,15 @@ def checkpoint(
 
     model.eval()
     with torch.no_grad():
-        input_imgs = training_data[0]
+        input_imgs, _ = training_data[0]
 
         # Verify what exactly goes into the network
         if epoch == 0:
             output_input(model, input_imgs)
 
-        input_imgs = input_imgs.to(device).unsqueeze(0)
+        input_imgs = input_imgs.to(device).unsqueeze(0).unsqueeze(0)
         anti_aliased_img, _ = model(input_imgs)
-        anti_aliased_img = anti_aliased_img.squeeze(0)
+        anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
 
         save_image(anti_aliased_img, f"checkpoints/{epoch}.png")

@@ -19,6 +19,7 @@ class Metrics:
         self.norm_rmse: np.ndarray = np.array([0.0])
         self.psnr: np.ndarray = np.array([0.0])
         self.ssim: np.ndarray = np.array([0.0])
+        self.per_pixel_variance: np.ndarray = np.array([0.0])
 
     def record_rmse(self, pred_frame: np.ndarray, y: np.ndarray) -> None:
         self.norm_rmse += normalized_root_mse(y, pred_frame)
@@ -35,12 +36,21 @@ class Metrics:
             gaussian_weights=True,
         )
 
+    def record_per_pixel_variance(
+        self, 
+        pred_frame: np.ndarray,
+        prev_frame: np.ndarray
+    ) -> None:
+        difference_frame = pred_frame - prev_frame
+
+
     def record(self, pred_frame: torch.Tensor, y: torch.Tensor) -> None:
         y_ndarray = np.squeeze(y.cpu().numpy())
         pred_frame_ndarray = np.squeeze(pred_frame.cpu().numpy())
         self.record_rmse(pred_frame_ndarray, y_ndarray)
         self.record_psnr(pred_frame_ndarray, y_ndarray)
         self.record_ssim(pred_frame_ndarray, y_ndarray)
+        self.record_per_pixel_variance(pred_frame_ndarray, y_ndarray)
 
     def report(self) -> None:
         average_norm_rmse = self.norm_rmse.item() / self.num_batches

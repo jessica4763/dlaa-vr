@@ -85,6 +85,7 @@ class QualcommNetwork(nn.Module):
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         batch_size, clip_size, C, H, W = x.shape
 
+        # To hold the recurrent colour frame and features
         prev_pred_colour = prev_pred_features = None
 
         outputs = []
@@ -96,7 +97,6 @@ class QualcommNetwork(nn.Module):
             c1 = c0 + self.num_prev_colour
             if prev_pred_colour is not None:
                 clip_frames[:, c0:c1] = prev_pred_colour
-
             prev_colour = clip_frames[:, c0:c1]
 
             # Use recurrent features
@@ -132,4 +132,4 @@ class QualcommNetwork(nn.Module):
             prev_pred_colour = blended_colour
             prev_pred_features = out_features
 
-        return torch.stack(outputs, dim=1)
+        return torch.stack(outputs, dim=1), prev_pred_features
