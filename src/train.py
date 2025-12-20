@@ -15,80 +15,31 @@ from sanity_checks import output_input
 from utils import gamma_to_linear, linear_to_gamma
 
 
-def apply_learning_curriculum(
-    learning_curriculum: str, 
-    model: nn.Module,
-    X: torch.Tensor,
-    prev_frame_num: int,
-    prev_pred_frame: torch.Tensor,
-    prev_features: torch.Tensor,
-    total_batches: int,
-    epsilon: float,
-    k: float,
-    c: float
-) -> torch.Tensor:
-    if prev_pred_frame is None or prev_features is None:
-        return X
-
-    if learning_curriculum == "teacher-forcing":
-        return X 
-    elif learning_curriculum == "scheduled-sampling":
-        p = max(epsilon, k - c * total_batches)
-        x = stats.uniform.rvs(loc=0, scale=1, size=1)
-        if x < p:
-            return X
-            
-    # Use the predicted frame
-    c0 = model.in_channels - (model.num_prev_colour + model.num_prev_feature)
-    c1 = model.in_channels - model.num_prev_feature
-    mask = prev_frame_num != 0
-    X[mask, c0:c1] = prev_pred_frame[mask, ...].detach()
-    X[mask, c1:model.in_channels] = prev_features[mask, ...].detach()
-
-    return X
-
-
 def train_epoch(
     device: str,
     model: nn.Module,
     training_dataloader: DataLoader,
+    batch_size: int,
+    clip_size: int,
     loss_fn: nn.Module,
     optimizer: optim.Optimizer,
-    learning_curriculum: str,
-    scheduled_sampling_epsilon: float,
-    scheduled_sampling_k: float,
-    scheduled_sampling_c: float,
     writer: SummaryWriter,
     epoch: int
 ) -> None:
     dataset_size = len(training_dataloader.dataset)
 
-    prev_pred_frame = prev_features = None
-
     model.train()
-    for batch, (X, y, prev_frame_num) in enumerate(training_dataloader):
+    for batch, (X, y) in enumerate(training_dataloader):
         X, y = X.to(device), y.to(device)
 
+        # Sampler gives N = batch_size * clip_size
+        N, C, H, W = X.shape
+        X = X.view(batch_size, clip_size, C, H, W)
+
         total_batches = epoch * dataset_size + batch
-
-        X = apply_learning_curriculum(
-            learning_curriculum,
-            model,
-            X,
-            prev_frame_num,
-            prev_pred_frame,
-            prev_features,
-            total_batches,
-            scheduled_sampling_epsilon,
-            scheduled_sampling_k,
-            scheduled_sampling_c
-        )
             
-        pred_frame, features = model(X)
+        pred_frame = model(X)
         loss = loss_fn(pred_frame, y)
-
-        prev_pred_frame = pred_frame
-        prev_features = features
 
         loss.backward()
         optimizer.step()
@@ -149,6 +100,7 @@ def train(cfg: DictConfig) -> None:
     training_sampler = QualcommDatasetSampler(
         training_data,
         cfg["optimiser"]["batch-size"],
+        cfg["optimiser"]["clip-size"],
     )
 
     training_dataloader = DataLoader(
@@ -212,12 +164,10 @@ def train(cfg: DictConfig) -> None:
             device,
             model,
             training_dataloader,
+            cfg["optimiser"]["batch-size"],
+            cfg["optimiser"]["clip-size"],
             loss_function,
             optimiser,
-            cfg["optimiser"]["learning-curriculum"],
-            cfg["optimiser"]["scheduled-sampling-epsilon"],
-            cfg["optimiser"]["scheduled-sampling-k"],
-            cfg["optimiser"]["scheduled-sampling-c"],
             writer,
             epoch
         )
@@ -254,7 +204,7 @@ def checkpoint(
 
     model.eval()
     with torch.no_grad():
-        input_imgs, _, _= training_data[0]
+        input_imgs = training_data[0]
 
         # Verify what exactly goes into the network
         if epoch == 0:

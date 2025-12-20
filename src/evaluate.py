@@ -36,7 +36,7 @@ def evaluate(
         
         prev_pred_frame = prev_features = None
 
-        for batch, (X, y, _) in enumerate(test_dataloader):
+        for batch, (X, y) in enumerate(test_dataloader):
             X, y = X.to(device), y.to(device)
 
             # Use the previously predicted frame and features during test

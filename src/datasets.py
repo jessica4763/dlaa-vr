@@ -11,9 +11,10 @@ from utils import Scene, cumsum
 
 
 class QualcommDatasetSampler(Sampler[list[int]]):
-    def __init__(self, data: Dataset, batch_size: int):
+    def __init__(self, data: Dataset, batch_size: int, clip_size: int):
         self.data = data
         self.batch_size = batch_size
+        self.clip_size = clip_size
 
     def __len__(self) -> int:
         return len(self.data)
@@ -29,17 +30,22 @@ class QualcommDatasetSampler(Sampler[list[int]]):
         frame_indices = list(range(len(self.data)))
         clip_indices = list(
             range(
-                random.choice(frame_indices) % self.batch_size, 
-                len(self.data) - self.batch_size, 
-                self.batch_size
+                random.choice(frame_indices) % self.clip_size, 
+                len(self.data) - self.clip_size, 
+                self.clip_size
             )
         )
         random.shuffle(clip_indices)
 
-        # Yield an 8 frame clip in the order defined by the shuffle
-        for idx in clip_indices:
-            yield [i for i in range(idx, idx + self.batch_size)]
+        for batch in clip_indices[::self.batch_size]:
+            clip_starts = clip_indices[batch:batch + self.batch_size]
 
+            frame_indices = []
+            for clip in clip_starts:
+                for frame_idx in range(clip, clip + self.clip_size):
+                    frame_indices.append(frame_idx)
+
+            yield frame_indices
 
 class QualcommDataset(Dataset):
     def __init__(

@@ -1,7 +1,7 @@
 ---
 name: sgd
-batch-size: 8
-clip-size: 16
+batch-size: 2
+clip-size: 8
 epochs: 10
 learning-rate: 1e-4
 learning-rate-gamma: 1.0

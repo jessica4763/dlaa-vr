@@ -83,38 +83,53 @@ class QualcommNetwork(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        # Split inputs (mainly to isolate prev_colour for blending)
-        c0 = 0
-        c1 = c0 + self.num_curr_colour
-        _ = x[:, c0:c1]
+        batch_size, clip_size, C, H, W = x.shape
 
-        c0 = c1
-        c1 = c0 + self.num_curr_depth
-        _ = x[:, c0:c1]
+        prev_pred_colour = prev_pred_features = None
 
-        c0 = c1
-        c1 = c0 + self.num_curr_jitter
-        _ = x[:, c0:c1]
+        outputs = []
+        for clip in clip_size:
+            clip_frames = x[:, clip]
 
-        c0 = c1
-        c1 = c0 + self.num_curr_colour
-        prev_colour = x[:, c0:c1]
+            # Use recurrent colour frame
+            c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter
+            c1 = c0 + self.num_prev_colour
+            if prev_pred_colour is not None:
+                clip_frames[:, c0:c1] = prev_pred_colour
 
-        c0 = c1
-        c1 = c0 + self.num_prev_feature
-        _ = x[:, c0:c1]
+            prev_colour = clip_frames[:, c0:c1]
 
-        # Main conv stack
-        h = self.input_relu(self.input_conv(x))
-        h = self.body(h)
+            # Use recurrent features
+            c0 = c1
+            c1 = c0 + self.num_prev_feature
+            if prev_pred_features is not None:
+                clip_frames[:, c0:c1] = prev_pred_features
 
-        # Feature branch
-        out_features = self.feature_head(h)
+            # ------------------------------------------------------------
+            # ---------------------- Main conv stack ---------------------
+            # ------------------------------------------------------------
+            h = self.input_relu(self.input_conv(clip_frames))
+            h = self.body(h)
 
-        # Colour + blending mask branches
-        out_colour = self.colour_head(h)
-        out_blending_mask = self.blending_mask_head(h)
+            # ------------------------------------------------------------
+            # ---------------------- Feature branch ----------------------
+            # ------------------------------------------------------------
+            out_features = self.feature_head(h)
 
-        blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
+            # ------------------------------------------------------------
+            # ------------ Colour and blending mask branches -------------
+            # ------------------------------------------------------------
+            out_colour = self.colour_head(h)
+            out_blending_mask = self.blending_mask_head(h)
 
-        return blended_colour, out_features
+            # ------------------------------------------------------------
+            # -------------------------- Blend ---------------------------
+            # ------------------------------------------------------------
+            blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
+            outputs.append(blended_colour)
+
+            # Save recurrent colour frame and features
+            prev_pred_colour = blended_colour
+            prev_pred_features = out_features
+
+        return torch.stack(outputs, dim=1)
