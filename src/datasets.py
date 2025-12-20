@@ -1,29 +1,44 @@
 from bisect import bisect_right
 import json
-import os
 from pathlib import Path
+import random
 import torch
 from torchvision.io import decode_image
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Sampler
+from typing import Iterator
 
-from utils import cumsum
+from utils import Scene, cumsum
 
 
-class Scene:
-    def __init__(
-        self,
-        scene_input_imgs_path: Path,
-        scene_output_imgs_path: Path
-    ):
-        self.scene_input_imgs_path = scene_input_imgs_path
-        self.scene_output_imgs_path = scene_output_imgs_path
+class QualcommDatasetSampler(Sampler[list[int]]):
+    def __init__(self, data: Dataset, batch_size: int):
+        self.data = data
+        self.batch_size = batch_size
 
-        instances = os.listdir(scene_input_imgs_path)
-        frames = os.listdir(scene_input_imgs_path / instances[0])
+    def __len__(self) -> int:
+        return len(self.data)
 
-        self.num_instances = len(instances)
-        self.num_frames_per_instance = len(frames)
-        self.num_frames = self.num_instances * self.num_frames_per_instance
+    def __iter__(self) -> Iterator[list[int]]:
+        """
+        Each batch is an 8 frame clip. Within each clip, the frames must follow 
+        each other, so it's necessary to shuffle the clips and not the frames. 
+
+        Between epochs, the starting points of the clips may differ; i.e. between
+        epochs, the collection of clips may differ.
+        """
+        frame_indices = list(range(len(self.data)))
+        clip_indices = list(
+            range(
+                random.choice(frame_indices) % self.batch_size, 
+                len(self.data) - self.batch_size, 
+                self.batch_size
+            )
+        )
+        random.shuffle(clip_indices)
+
+        # Yield an 8 frame clip in the order defined by the shuffle
+        for idx in clip_indices:
+            yield [i for i in range(idx, idx + self.batch_size)]
 
 
 class QualcommDataset(Dataset):
@@ -37,6 +52,8 @@ class QualcommDataset(Dataset):
     ):
         self.input_imgs_path = input_imgs_path
         self.output_imgs_path = output_imgs_path
+        
+        # ------------------------ Code to handle multiple scenes ------------------------
 
         self.scenes = []
         for scene_name in scene_names:
@@ -45,9 +62,10 @@ class QualcommDataset(Dataset):
             self.scenes.append(Scene(scene_input_imgs_path, scene_output_imgs_path))
 
         scene_num_frames = [scene.num_frames for scene in self.scenes]
-
         self.frame_boundaries = cumsum(scene_num_frames)
         self.total_frames = sum(scene_num_frames)
+
+        # --------------------------------------------------------------------------------
 
         self.transform = transform
         self.target_transform = target_transform
@@ -98,18 +116,7 @@ class QualcommDataset(Dataset):
             depth[3] / (255 ** 4)
         ), 0)
         return depth
-
-    def get_motion_vectors(
-        self,
-        scene: Scene,
-        instance: str,
-        curr_frame_num: int
-    ) -> torch.Tensor:
-        curr_frame = str(curr_frame_num).zfill(4) + ".exr"
-        motion_vectors_path = scene.scene_input_imgs_path / "../MotionVectorsMipBiasMinus2Jittered" / instance / curr_frame
-        motion_vectors = decode_image(motion_vectors_path.resolve())
-        return motion_vectors
-
+    
     def __len__(self) -> int:
         return self.total_frames
 
@@ -124,6 +131,10 @@ class QualcommDataset(Dataset):
 
         instance = str(idx // scene.num_frames_per_instance).zfill(4)
 
+        # -------------------------------------------------------------------
+        # -------------------------- Current frame --------------------------
+        # -------------------------------------------------------------------
+
         curr_frame_num = idx % scene.num_frames_per_instance
         curr_frame = str(curr_frame_num).zfill(4) + ".png"
         curr_input_img_path = scene.scene_input_imgs_path / instance / curr_frame
@@ -131,25 +142,25 @@ class QualcommDataset(Dataset):
         curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, ...]
         curr_output_img = decode_image(curr_output_img_path.resolve())[0:3, ...]
 
-        # Teacher forcing: use the gound truth as the previous frame during
-        # training. Limitation is that the network never explicitly learns
-        # to use its own output as the previous frame during inference.
+        # -------------------------------------------------------------------
+        # -------------------------- Previous frame -------------------------
+        # -------------------------------------------------------------------
 
-        # Alternatively, we could gradually introduce using the model's own
-        # output as the previous frame during inference.
+        prev_output_img = curr_input_img.clone().detach()
 
-        # When there is no previous frame, i.e. this is the first frame,
-        # duplicate the current frame and use it as the previous frame.
-        prev_frame_num = 0 if curr_frame_num == 0 else curr_frame_num - 1
-        prev_frame = str(prev_frame_num).zfill(4) + ".png"
-        prev_output_img_path = scene.scene_output_imgs_path / instance / prev_frame
-        prev_output_img = decode_image(prev_output_img_path.resolve())[0:3, ...]
+        # -------------------------------------------------------------------
+        # ---------------------------- Transforms ---------------------------
+        # -------------------------------------------------------------------
 
         if self.transform:
             curr_input_img = self.transform(curr_input_img)
             prev_output_img = self.transform(prev_output_img)
         if self.target_transform:
             curr_output_img = self.target_transform(curr_output_img)
+
+        # -------------------------------------------------------------------
+        # ----------------------------- Features ----------------------------
+        # -------------------------------------------------------------------
 
         curr_depth = self.get_depth(
             scene,
@@ -164,27 +175,7 @@ class QualcommDataset(Dataset):
             curr_frame_num
         )
 
-        prev_depth = self.get_depth(
-            scene,
-            instance,
-            prev_frame_num
-        )
-
-        prev_jitter_x, prev_jitter_y = self.get_jitter(
-            prev_output_img,
-            scene,
-            instance,
-            prev_frame_num
-        )
-
-        prev_features = torch.cat(
-            [
-                prev_depth,
-                prev_jitter_x,
-                prev_jitter_y
-            ],
-            dim=0
-        )
+        prev_features = torch.zeros((1, curr_input_img.shape[1], curr_input_img.shape[2]))
 
         input_imgs = torch.cat(
             [

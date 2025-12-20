@@ -6,16 +6,13 @@ defaults:
 
 setup:
   seed: 42
-  shuffle: true
   saved-models-path: ../saved/models/toy_model.pt
+  tensorboard-dir: ../saved/logs/runs
 
 model:
-  hidden-channels: 16
-  num-blocks: 1
+  hidden-channels: 32
+  num-blocks: 3
   parameters: null
-
-logging:
-  tensorboard-dir: ../saved/logs/runs
 
 hydra:
   run:

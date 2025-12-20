@@ -6,6 +6,23 @@ import torch
 from torchvision.utils import save_image
 
 
+class Scene:
+    def __init__(
+        self,
+        scene_input_imgs_path: Path,
+        scene_output_imgs_path: Path
+    ):
+        self.scene_input_imgs_path = scene_input_imgs_path
+        self.scene_output_imgs_path = scene_output_imgs_path
+
+        instances = os.listdir(scene_input_imgs_path)
+        frames = os.listdir(scene_input_imgs_path / instances[0])
+
+        self.num_instances = len(instances)
+        self.num_frames_per_instance = len(frames)
+        self.num_frames = self.num_instances * self.num_frames_per_instance
+
+
 def gamma_to_linear(image: torch.Tensor) -> torch.Tensor:
     image = image.to(torch.float32) / 255.0
 

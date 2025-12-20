@@ -27,31 +27,30 @@ def evaluate(
     writer: SummaryWriter,
     eval_output_path: Path
 ) -> None:
-    dataset_size = len(test_dataloader.dataset)
-
-    num_batches = len(test_dataloader)
-    metrics = Metrics(writer, num_batches)
-
     model.eval()
     with torch.no_grad():
-        prev_colour = None
-        prev_features = None
+        dataset_size = len(test_dataloader.dataset)
 
-        for batch, (X, y) in enumerate(test_dataloader):
+        num_batches = len(test_dataloader)
+        metrics = Metrics(writer, num_batches)
+        
+        prev_pred_frame = prev_features = None
+
+        for batch, (X, y, _) in enumerate(test_dataloader):
             X, y = X.to(device), y.to(device)
 
             # Use the previously predicted frame and features during test
-            if prev_colour is not None and prev_features is not None:
-                offset_0 = model.num_prev_colour_channels + model.num_prev_feature_channels
-                offset_1 = model.num_prev_feature_channels
-                X[:, model.in_channels - offset_0:model.in_channels - offset_1] = prev_colour
-                # X[:, model.in_channels - offset_1:model.in_channels] = prev_features
+            if prev_pred_frame is not None and prev_features is not None:
+                c0 = model.in_channels - (model.num_prev_colour + model.num_prev_feature)
+                c1 = model.in_channels - model.num_prev_feature
+                X[:, c0:c1] = prev_pred_frame
+                X[:, c1:model.in_channels] = prev_features
 
-            pred_frame, pred_features = model(X)
+            pred_frame, features = model(X)
             loss = loss_fn(pred_frame, y)
 
-            prev_colour = pred_frame
-            prev_features = pred_features
+            prev_pred_frame = pred_frame
+            prev_features = features
 
             loss, current_img = loss.item(), (batch + 1) * len(X)
             print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
@@ -97,7 +96,7 @@ def main(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ------------------------------ Diagnostics ------------------------------
     # -------------------------------------------------------------------------
-    writer = SummaryWriter(log_dir=cfg["logging"]["tensorboard-dir"])
+    writer = SummaryWriter(log_dir=cfg["setup"]["tensorboard-dir"])
 
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
@@ -112,8 +111,7 @@ def main(cfg: DictConfig) -> None:
 
     test_dataloader = DataLoader(
         test_data,
-        batch_size=cfg["setup"]["batch-size"],
-        shuffle=cfg["setup"]["shuffle"]  # False for evaluation
+        batch_size=1,
     )
 
     # -------------------------------------------------------------------------
@@ -132,7 +130,7 @@ def main(cfg: DictConfig) -> None:
         )
     )
 
-    example_input_imgs, _ = test_data[0]
+    example_input_imgs, _, _= test_data[0]
     example_input_imgs = example_input_imgs.to(device).unsqueeze(0)
     writer.add_graph(model, example_input_imgs)
 

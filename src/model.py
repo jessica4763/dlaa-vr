@@ -9,19 +9,19 @@ class QualcommNetwork(nn.Module):
         """
         super().__init__()
 
-        self.num_curr_colour_channels = 3
-        self.num_curr_depth_channels = 1
-        self.num_curr_jitter_channels = 2  # 2 for displacement in both x and y
-        self.num_prev_colour_channels = self.num_curr_colour_channels
-        self.num_prev_feature_channels = self.num_curr_depth_channels + self.num_curr_jitter_channels
+        self.num_curr_colour = 3
+        self.num_curr_depth = 1
+        self.num_curr_jitter = 2  # 2 for displacement in both x and y
+        self.num_prev_colour = self.num_curr_colour
+        self.num_prev_feature = 1
 
         # * 2 to include the previous frame ground truth
         self.in_channels = (
-            self.num_curr_colour_channels +
-            self.num_curr_depth_channels +
-            self.num_curr_jitter_channels +
-            self.num_prev_colour_channels +
-            self.num_prev_feature_channels
+            self.num_curr_colour +
+            self.num_curr_depth +
+            self.num_curr_jitter +
+            self.num_prev_colour +
+            self.num_prev_feature
         )
 
         # Initial 3 × 3 Conv + ReLU block
@@ -52,7 +52,7 @@ class QualcommNetwork(nn.Module):
         # Feature head
         self.feature_head = nn.Conv2d(
             hidden_channels,
-            self.num_prev_feature_channels,
+            self.num_prev_feature,
             kernel_size=3,
             padding=1,
             padding_mode="reflect"
@@ -62,7 +62,7 @@ class QualcommNetwork(nn.Module):
         self.colour_head = nn.Sequential(
             nn.Conv2d(
                 hidden_channels,
-                self.num_curr_colour_channels,
+                self.num_curr_colour,
                 kernel_size=3,
                 padding=1,
                 padding_mode="reflect"
@@ -85,27 +85,23 @@ class QualcommNetwork(nn.Module):
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         # Split inputs (mainly to isolate prev_colour for blending)
         c0 = 0
-        c1 = c0 + self.num_curr_colour_channels
+        c1 = c0 + self.num_curr_colour
         _ = x[:, c0:c1]
 
         c0 = c1
-        c1 = c0 + self.num_curr_depth_channels
+        c1 = c0 + self.num_curr_depth
         _ = x[:, c0:c1]
 
         c0 = c1
-        c1 = c0 + self.num_curr_jitter_channels
+        c1 = c0 + self.num_curr_jitter
         _ = x[:, c0:c1]
 
         c0 = c1
-        c1 = c0 + self.num_curr_colour_channels
+        c1 = c0 + self.num_curr_colour
         prev_colour = x[:, c0:c1]
 
         c0 = c1
-        c1 = c0 + self.num_curr_depth_channels
-        _ = x[:, c0:c1]
-
-        c0 = c1
-        c1 = c0 + self.num_curr_jitter_channels
+        c1 = c0 + self.num_prev_feature
         _ = x[:, c0:c1]
 
         # Main conv stack

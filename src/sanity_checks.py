@@ -9,35 +9,30 @@ from utils import linear_to_gamma
 
 def output_input(model: nn.Module, input_imgs: torch.Tensor) -> None:
     c0 = 0
-    c1 = c0 + model.num_curr_colour_channels
+    c1 = c0 + model.num_curr_colour
     curr_colour = input_imgs[c0:c1]
 
     c0 = c1
-    c1 = c0 + model.num_curr_depth_channels
+    c1 = c0 + model.num_curr_depth
     curr_depth = input_imgs[c0:c1]
 
     c0 = c1
-    c1 = c0 + model.num_curr_jitter_channels
+    c1 = c0 + model.num_curr_jitter
     curr_jitter = input_imgs[c0:c1]
 
     c0 = c1
-    c1 = c0 + model.num_curr_colour_channels
+    c1 = c0 + model.num_curr_colour
     prev_colour = input_imgs[c0:c1]
 
     c0 = c1
-    c1 = c0 + model.num_curr_depth_channels
-    prev_depth = input_imgs[c0:c1]
-
-    c0 = c1
-    c1 = c0 + model.num_curr_jitter_channels
-    prev_jitter = input_imgs[c0:c1]
+    c1 = c0 + model.num_prev_feature
+    prev_feature = input_imgs[c0:c1]
 
     save_image(linear_to_gamma(curr_colour), "sanity_checks_output/curr_colour.png")
     save_image(curr_depth, "sanity_checks_output/curr_depth.png")
     save_image(curr_jitter, "sanity_checks_output/curr_jitter.png")
     save_image(linear_to_gamma(prev_colour), "sanity_checks_output/prev_colour.png")
-    save_image(prev_depth, "sanity_checks_output/prev_depth.png")
-    save_image(prev_jitter, "sanity_checks_output/prev_jitter.png")
+    save_image(prev_feature, "sanity_checks_output/prev_feature.png")
 
 
 def print_parameters(eval_output_path: Path, parameters: dict[str, Any]) -> None:

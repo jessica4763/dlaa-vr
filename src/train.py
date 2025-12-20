@@ -1,6 +1,7 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
+from scipy import stats
 import sys
 import torch
 from torch import nn, optim
@@ -8,10 +9,43 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
 
-from datasets import QualcommDataset
+from datasets import QualcommDataset, QualcommDatasetSampler
 from model import QualcommNetwork
 from sanity_checks import output_input
 from utils import gamma_to_linear, linear_to_gamma
+
+
+def apply_learning_curriculum(
+    learning_curriculum: str, 
+    model: nn.Module,
+    X: torch.Tensor,
+    prev_frame_num: int,
+    prev_pred_frame: torch.Tensor,
+    prev_features: torch.Tensor,
+    total_batches: int,
+    epsilon: float,
+    k: float,
+    c: float
+) -> torch.Tensor:
+    if prev_pred_frame is None or prev_features is None:
+        return X
+
+    if learning_curriculum == "teacher-forcing":
+        return X 
+    elif learning_curriculum == "scheduled-sampling":
+        p = max(epsilon, k - c * total_batches)
+        x = stats.uniform.rvs(loc=0, scale=1, size=1)
+        if x < p:
+            return X
+            
+    # Use the predicted frame
+    c0 = model.in_channels - (model.num_prev_colour + model.num_prev_feature)
+    c1 = model.in_channels - model.num_prev_feature
+    mask = prev_frame_num != 0
+    X[mask, c0:c1] = prev_pred_frame[mask, ...].detach()
+    X[mask, c1:model.in_channels] = prev_features[mask, ...].detach()
+
+    return X
 
 
 def train_epoch(
@@ -20,17 +54,41 @@ def train_epoch(
     training_dataloader: DataLoader,
     loss_fn: nn.Module,
     optimizer: optim.Optimizer,
+    learning_curriculum: str,
+    scheduled_sampling_epsilon: float,
+    scheduled_sampling_k: float,
+    scheduled_sampling_c: float,
     writer: SummaryWriter,
     epoch: int
 ) -> None:
     dataset_size = len(training_dataloader.dataset)
 
+    prev_pred_frame = prev_features = None
+
     model.train()
-    for batch, (X, y) in enumerate(training_dataloader):
+    for batch, (X, y, prev_frame_num) in enumerate(training_dataloader):
         X, y = X.to(device), y.to(device)
 
-        pred_frame, _ = model(X)
+        total_batches = epoch * dataset_size + batch
+
+        X = apply_learning_curriculum(
+            learning_curriculum,
+            model,
+            X,
+            prev_frame_num,
+            prev_pred_frame,
+            prev_features,
+            total_batches,
+            scheduled_sampling_epsilon,
+            scheduled_sampling_k,
+            scheduled_sampling_c
+        )
+            
+        pred_frame, features = model(X)
         loss = loss_fn(pred_frame, y)
+
+        prev_pred_frame = pred_frame
+        prev_features = features
 
         loss.backward()
         optimizer.step()
@@ -39,7 +97,7 @@ def train_epoch(
         writer.add_scalar(
             "loss/train",
             loss.item(),
-            epoch * len(training_dataloader) + batch
+            total_batches
         )
 
         loss, current_img = loss.item(), (batch + 1) * len(X)
@@ -75,7 +133,7 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ------------------------------ Diagnostics ------------------------------
     # -------------------------------------------------------------------------
-    writer = SummaryWriter(log_dir=cfg["logging"]["tensorboard-dir"])
+    writer = SummaryWriter(log_dir=cfg["setup"]["tensorboard-dir"])
 
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
@@ -88,10 +146,14 @@ def train(cfg: DictConfig) -> None:
         target_transform=gamma_to_linear,
     )
 
+    training_sampler = QualcommDatasetSampler(
+        training_data,
+        cfg["optimiser"]["batch-size"],
+    )
+
     training_dataloader = DataLoader(
         training_data,
-        batch_size=cfg["optimiser"]["batch-size"],
-        shuffle=cfg["setup"]["shuffle"]
+        batch_sampler=training_sampler
     )
 
     # -------------------------------------------------------------------------
@@ -135,6 +197,12 @@ def train(cfg: DictConfig) -> None:
     else:
         sys.exit("Chosen optimiser implementation does not exist.")
 
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        optimiser, 
+        milestones=cfg["optimiser"]["learning-rate-milestones"],
+        gamma=cfg["optimiser"]["learning-rate-gamma"]
+    )
+
     # -------------------------------------------------------------------------
     # ----------------------------- Training loop -----------------------------
     # -------------------------------------------------------------------------
@@ -146,6 +214,10 @@ def train(cfg: DictConfig) -> None:
             training_dataloader,
             loss_function,
             optimiser,
+            cfg["optimiser"]["learning-curriculum"],
+            cfg["optimiser"]["scheduled-sampling-epsilon"],
+            cfg["optimiser"]["scheduled-sampling-k"],
+            cfg["optimiser"]["scheduled-sampling-c"],
             writer,
             epoch
         )
@@ -156,6 +228,7 @@ def train(cfg: DictConfig) -> None:
             writer,
             epoch
         )
+        scheduler.step()
 
     # Save the model
     torch.save(model.state_dict(), Path(cfg["setup"]["saved-models-path"]))
@@ -181,7 +254,7 @@ def checkpoint(
 
     model.eval()
     with torch.no_grad():
-        input_imgs, _ = training_data[0]
+        input_imgs, _, _= training_data[0]
 
         # Verify what exactly goes into the network
         if epoch == 0:
