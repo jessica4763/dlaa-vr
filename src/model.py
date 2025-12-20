@@ -88,8 +88,8 @@ class QualcommNetwork(nn.Module):
         prev_pred_colour = prev_pred_features = None
 
         outputs = []
-        for clip in clip_size:
-            clip_frames = x[:, clip]
+        for clip in range(clip_size):
+            clip_frames = x[:, clip].clone()
 
             # Use recurrent colour frame
             c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter

@@ -27,32 +27,32 @@ def train_epoch(
     epoch: int
 ) -> None:
     dataset_size = len(training_dataloader.dataset)
+    with torch.autograd.set_detect_anomaly(True, check_nan=True):
+        model.train()
+        for batch, (X, y) in enumerate(training_dataloader):
+            X, y = X.to(device), y.to(device)
 
-    model.train()
-    for batch, (X, y) in enumerate(training_dataloader):
-        X, y = X.to(device), y.to(device)
+            # Sampler gives N = batch_size * clip_size
+            N, C, H, W = X.shape
 
-        # Sampler gives N = batch_size * clip_size
-        N, C, H, W = X.shape
-        X = X.view(batch_size, clip_size, C, H, W)
+            X = X.view(batch_size, clip_size, C, H, W)
+            pred_frame = model(X)
+            pred_frame = pred_frame.view(-1, 3, H, W)
 
-        total_batches = epoch * dataset_size + batch
-            
-        pred_frame = model(X)
-        loss = loss_fn(pred_frame, y)
+            loss = loss_fn(pred_frame, y)
 
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
 
-        writer.add_scalar(
-            "loss/train",
-            loss.item(),
-            total_batches
-        )
+            writer.add_scalar(
+                "loss/train",
+                loss.item(),
+                epoch * dataset_size + batch
+            )
 
-        loss, current_img = loss.item(), (batch + 1) * len(X)
-        print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
+            loss, current_img = loss.item(), (batch + 1) * len(X)
+            print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")

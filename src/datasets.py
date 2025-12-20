@@ -36,10 +36,9 @@ class QualcommDatasetSampler(Sampler[list[int]]):
             )
         )
         random.shuffle(clip_indices)
-
         for batch in clip_indices[::self.batch_size]:
-            clip_starts = clip_indices[batch:batch + self.batch_size]
-
+            clip_starts = list(range(batch, batch + self.batch_size))
+            
             frame_indices = []
             for clip in clip_starts:
                 for frame_idx in range(clip, clip + self.clip_size):
