@@ -31,7 +31,7 @@ def evaluate(
     with torch.no_grad():
         dataset_size = len(test_dataloader.dataset)
 
-        metrics = Metrics(writer, num_batches=len(test_dataloader))
+        metrics = Metrics(writer, dataset_size)
         
         prev_pred_frame = prev_features = None
         for batch, (X, y) in enumerate(test_dataloader):

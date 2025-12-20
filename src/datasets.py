@@ -114,12 +114,14 @@ class QualcommDataset(Dataset):
         curr_frame = str(curr_frame_num).zfill(4) + ".png"
         depth_path = scene.scene_input_imgs_path / "../DepthMipBiasMinus2Jittered" / instance / curr_frame
         depth = decode_image(depth_path.resolve())
+        print(f"{depth=}")
         depth = torch.unsqueeze((
             depth[0] / (255 ** 1) +
             depth[1] / (255 ** 2) +
             depth[2] / (255 ** 3) +
             depth[3] / (255 ** 4)
         ), 0)
+        print(f"{depth=}")
         return depth
     
     def __len__(self) -> int:

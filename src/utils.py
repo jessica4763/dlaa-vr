@@ -25,7 +25,6 @@ class Scene:
 
 def gamma_to_linear(image: torch.Tensor) -> torch.Tensor:
     image = image.to(torch.float32) / 255.0
-
     return torch.where(
         image <= 0.04045,
         image / 12.92,
@@ -64,7 +63,13 @@ def write_video(
     filename: str,
     fps: int = 24
 ) -> None:
-    writer = imageio.get_writer(imgs_path / filename, fps=fps, codec="libx264", quality=10)
+    writer = imageio.get_writer(
+        imgs_path / filename, 
+        fps=fps, 
+        codec="libx264", 
+        quality=10, 
+        pixelformat='yuvj444p'
+    )
 
     imgs_path = imgs_path / "pred"
     for img_name in natsorted(os.listdir(imgs_path)):
