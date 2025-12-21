@@ -68,7 +68,8 @@ def write_video(
         fps=fps, 
         codec="libx264", 
         quality=10, 
-        pixelformat='yuvj444p'
+        pixelformat='yuv420p',
+        macro_block_size=8
     )
 
     imgs_path = imgs_path / "pred"

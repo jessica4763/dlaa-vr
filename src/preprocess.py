@@ -14,7 +14,7 @@ from utils import (
 def get_baselines(filename: Path, fps: int = 24) -> None:
     input_imgs = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced")
     write_video(input_imgs, filename, fps=fps)
-
+    
     input_imgs = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/DLSS2")
     write_video(input_imgs, filename, fps=fps)
 

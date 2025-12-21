@@ -28,14 +28,15 @@ def train_epoch(
     dataset_size = len(training_dataloader.dataset)
 
     model.train()
-    for batch, (X, y) in enumerate(training_dataloader):
+    for batch, (X, y, motion_vectors) in enumerate(training_dataloader):
         X, y = X.to(device), y.to(device)
 
         # Sampler gives N = batch_size * clip_size
         N, C, H, W = X.shape
         X = X.view(batch_size, clip_size, C, H, W)
 
-        pred_frame, _ = model(X)
+        # Pass in motion vectors for warping
+        pred_frame, _ = model(X, motion_vectors)
         pred_frame = pred_frame.view(-1, 3, H, W)
 
         loss = loss_fn(pred_frame, y)
@@ -62,7 +63,7 @@ def train(cfg: DictConfig) -> None:
     )
     print(f"Using {device} device")
 
-    checkpoints_path = Path("checkpoints")
+    checkpoints_path = Path(cfg["setup"]["checkpoints-path"])
     checkpoints_path.mkdir(parents=True, exist_ok=True)
 
     # -------------------------------------------------------------------------
@@ -134,7 +135,7 @@ def train(cfg: DictConfig) -> None:
         optimiser = torch.optim.SGD(
             model.parameters(),
             lr=cfg["optimiser"]["learning-rate"],
-            weight_decay=cfg["optimiser"]["regularisation-parameter"]
+            weight_decay=cfg["optimiser"]["weight-decay"]
         )
     elif cfg["optimiser"]["name"] == "adamw":
         optimiser = torch.optim.AdamW(
@@ -142,7 +143,7 @@ def train(cfg: DictConfig) -> None:
             lr=cfg["optimiser"]["learning-rate"],
             betas=cfg["optimiser"]["betas"],
             eps=cfg["optimiser"]["epsilon"],
-            weight_decay=cfg["optimiser"]["regularisation-parameter"]
+            weight_decay=cfg["optimiser"]["weight-decay"]
         )
     else:
         sys.exit("Chosen optimiser implementation does not exist.")
@@ -170,6 +171,7 @@ def train(cfg: DictConfig) -> None:
             epoch
         )
         checkpoint(
+            checkpoints_path,
             device,
             model,
             training_data,
@@ -191,6 +193,7 @@ def train(cfg: DictConfig) -> None:
 
 
 def checkpoint(
+    checkpoint_path: Path,
     device: str,
     model: nn.Module,
     training_data: Dataset,
@@ -199,21 +202,19 @@ def checkpoint(
 ) -> None:
     # Strictly a training diagnostic, so it's OK if
     # training data is used here
-
     model.eval()
     with torch.no_grad():
-        input_imgs, _ = training_data[0]
+        input_imgs, _, _ = training_data[0]
 
         # Verify what exactly goes into the network
-        if epoch == 0:
-            output_input(model, input_imgs)
+        output_input(model, input_imgs)
 
         input_imgs = input_imgs.to(device).unsqueeze(0).unsqueeze(0)
         anti_aliased_img, _ = model(input_imgs)
         anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
 
-        save_image(anti_aliased_img, f"checkpoints/{epoch}.png")
+        save_image(anti_aliased_img, checkpoint_path / f"{epoch}.png")
         if (epoch + 1) % 10 == 0:
             writer.add_image(
                 "checkpoint images",

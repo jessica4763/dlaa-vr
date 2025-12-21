@@ -1,4 +1,4 @@
 ---
-scene_names: [CBApocalypse]
+scene_names: [FloodedGrounds]
 training-input-img-path: ../data/training_data/QRISP/*/270p/MipBiasMinus2Jittered
 training-output-img-path: ../data/training_data/QRISP/*/270p/Enhanced

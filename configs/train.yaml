@@ -1,18 +1,19 @@
 ---
 defaults:
-  - dataset: full-train
+  - dataset: toy-train
   - loss: l1
   - optimiser: adamw
 
 setup:
   seed: 42
-  saved-models-path: ../saved/models/full_model.pt
+  saved-models-path: ../saved/models/toy_model.pt
   tensorboard-dir: ../saved/logs/runs
+  checkpoints-path: checkpoints
 
 model:
   hidden-channels: 16
   num-blocks: 1
-  parameters: null
+  parameters:
 
 hydra:
   run:

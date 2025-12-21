@@ -1,5 +1,4 @@
 import numpy as np
-import pyvista as pv
 from skimage.metrics import (
     normalized_root_mse,
     peak_signal_noise_ratio,
@@ -47,8 +46,8 @@ class Metrics:
         )
 
     def record_pixel_wise_std(self, pred_frame: np.ndarray) -> None:
-        self.pixel_mean += pred_frame
-        self.pixel_mean_squared += np.square(pred_frame)
+        self.pixel_sum += pred_frame
+        self.pixel_squared_sum += np.square(pred_frame)
 
     def record(self, pred_frame: torch.Tensor, y: torch.Tensor) -> None:
         y_ndarray = np.squeeze(y.cpu().numpy())
@@ -56,7 +55,7 @@ class Metrics:
         self.record_rmse(pred_frame_ndarray, y_ndarray)
         self.record_psnr(pred_frame_ndarray, y_ndarray)
         self.record_ssim(pred_frame_ndarray, y_ndarray)
-        self.record_pixel_wise_std(pred_frame_ndarray, y_ndarray)
+        self.record_pixel_wise_std(pred_frame_ndarray)
 
     def report(self) -> None:
         self.metrics["avg_norm_rmse"] = self.norm_rmse.item() / self.dataset_size

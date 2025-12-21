@@ -1,0 +1,30 @@
+dataset:
+  scene_names:
+  - CBApocalypse
+  - FloodedGrounds
+  - ScifiBase
+  - ScifiFacility
+  - SunTemple
+  training-input-img-path: ../data/training_data/QRISP/*/270p/MipBiasMinus2Jittered
+  training-output-img-path: ../data/training_data/QRISP/*/270p/Enhanced
+loss: {}
+optimiser:
+  name: sgd
+  batch-size: 2
+  clip-size: 16
+  epochs: 50
+  learning-rate: 0.0001
+  learning-rate-gamma: 1.0
+  learning-rate-milestones: []
+  weight-decay: 0.0001
+  momentum: null
+  dropout-rate: null
+setup:
+  seed: 42
+  saved-models-path: ../saved/models/full_tuned_model.pt
+  tensorboard-dir: ../saved/logs/runs
+  checkpoints-path: checkpoints
+model:
+  hidden-channels: 16
+  num-blocks: 1
+  parameters: ../saved/logs/runs/exp16-full/full_model.pt

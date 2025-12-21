@@ -1,11 +1,17 @@
+import os
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+
 from bisect import bisect_right
+import cv2
 import json
 from pathlib import Path
 import random
 import torch
+import torch.nn.functional as F
 from torchvision.io import decode_image
 from torch.utils.data import Dataset, Sampler
 from typing import Iterator
+
 
 from utils import Scene, cumsum
 
@@ -44,7 +50,9 @@ class QualcommDatasetSampler(Sampler[list[int]]):
                 for frame_idx in range(clip, clip + self.clip_size):
                     frame_indices.append(frame_idx)
 
+            # 1D array. Reshape occurs later
             yield frame_indices
+
 
 class QualcommDataset(Dataset):
     def __init__(
@@ -77,7 +85,9 @@ class QualcommDataset(Dataset):
 
     def get_jitter(
         self,
-        input_image: torch.Tensor,
+        size: tuple[int, int, int],
+        device: str,
+        dtype: torch.dtype,
         scene: Scene,
         instance: str,
         curr_frame_num: int
@@ -90,17 +100,17 @@ class QualcommDataset(Dataset):
             curr_frame_y = camera_data["jitter_offset"]["y"]
 
         jitter_x = torch.full(
-            (1, input_image.shape[1], input_image.shape[2]),
+            size,
             fill_value=curr_frame_x,
-            device=input_image.device,
-            dtype=input_image.dtype
+            device=device,
+            dtype=dtype
         )
 
         jitter_y = torch.full(
-            (1, input_image.shape[1], input_image.shape[2]),
+            size,
             fill_value=curr_frame_y,
-            device=input_image.device,
-            dtype=input_image.dtype
+            device=device,
+            dtype=dtype
         )
 
         return jitter_x, jitter_y
@@ -114,15 +124,107 @@ class QualcommDataset(Dataset):
         curr_frame = str(curr_frame_num).zfill(4) + ".png"
         depth_path = scene.scene_input_imgs_path / "../DepthMipBiasMinus2Jittered" / instance / curr_frame
         depth = decode_image(depth_path.resolve())
-        print(f"{depth=}")
         depth = torch.unsqueeze((
             depth[0] / (255 ** 1) +
             depth[1] / (255 ** 2) +
             depth[2] / (255 ** 3) +
             depth[3] / (255 ** 4)
         ), 0)
-        print(f"{depth=}")
         return depth
+    
+    def get_motion_vectors(
+        self,
+        scene: Scene,
+        instance: str,
+        curr_frame_num: int
+    ) -> torch.Tensor:
+        curr_frame = str(curr_frame_num).zfill(4) + '.exr'
+        motion_vectors_path = scene.scene_input_imgs_path / "../MotionVectorsMipBiasMinus2Jittered" / instance / curr_frame
+        motion_vectors = cv2.imread(motion_vectors_path.resolve(), cv2.IMREAD_UNCHANGED)
+
+        # (H, W, C) --> (C, H, W)
+        motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
+
+        # The vertical velocity is stored in the first channel and the 
+        # horizontal velocity is stored in the second channel
+        motion_vectors = motion_vectors[0:2, ...]
+
+        # Although Unity uses a Y-up coordinate system, this code 
+        # assumes a Y-down coordinate system
+        motion_vectors[0, ...] *= -1
+
+        # Let the horizontal velocity be stored in the first channel and the 
+        # vertical velocity in the second channel
+        motion_vectors[0, ...], motion_vectors[1, ...] = motion_vectors[1, ...], motion_vectors[0, ...]
+
+        return motion_vectors
+    
+    def apply_jitter_compensation(
+        self,
+        motion_vectors: torch.Tensor, 
+        scene: Scene, 
+        instance: str,
+        curr_jitter_x: torch.Tensor,
+        curr_jitter_y: torch.Tensor, 
+        prev_frame_num: int
+    ) -> torch.Tensor:
+        """Update the motion vectors to account for jitter."""
+        prev_jitter_x, prev_jitter_y = self.get_jitter(
+            (1, motion_vectors.shape[1], motion_vectors.shape[2]),
+            motion_vectors.device,
+            motion_vectors.dtype,
+            scene,
+            instance,
+            prev_frame_num
+        )
+
+        motion_vectors[[0], ...] += prev_jitter_x - curr_jitter_x
+        motion_vectors[[1], ...] += prev_jitter_y - curr_jitter_y
+
+        return motion_vectors
+
+    def depth_informed_dilation(
+        self, 
+        depth: torch.Tensor,
+        motion_vectors: torch.Tensor
+    ) -> torch.Tensor:
+        depth, motion_vectors = depth.unsqueeze(0), motion_vectors.unsqueeze(0)
+
+        min_pooled_depths, indices = F.max_pool2d(
+            -depth, 
+            kernel_size=2, 
+            stride=2, 
+            return_indices=True
+        )
+        min_pooled_depths = -min_pooled_depths
+
+        # (1, 2, H, W) --> (1, 2, H * W)
+        flattened_motion_vectors = torch.flatten(
+            motion_vectors,
+            start_dim=2
+        )
+        flattened_indices = torch.flatten(indices)
+
+        # The motion vectors which correspond to the pixels
+        # in each 2 x 2 block with the shallowest depth
+        selected_motion_vectors = torch.stack([
+            flattened_motion_vectors[:, 0, flattened_indices],
+            flattened_motion_vectors[:, 1, flattened_indices]
+        ], dim=1)
+
+        # (1, 2, H_new * W_new) --> (1, 2, H_new, W_new)
+        seleted_motion_vectors = torch.reshape(
+            selected_motion_vectors,
+            (1, 2, min_pooled_depths.shape[2], min_pooled_depths.shape[3])
+        )
+
+        output_motion_vectors = F.interpolate(
+            seleted_motion_vectors, 
+            scale_factor=2, 
+            mode='nearest'
+        )
+
+        return output_motion_vectors    
     
     def __len__(self) -> int:
         return self.total_frames
@@ -153,6 +255,7 @@ class QualcommDataset(Dataset):
         # -------------------------- Previous frame -------------------------
         # -------------------------------------------------------------------
 
+        prev_frame_num = 0 if curr_frame_num == 0 else curr_frame_num - 1
         prev_output_img = curr_input_img.clone().detach()
 
         # -------------------------------------------------------------------
@@ -162,6 +265,7 @@ class QualcommDataset(Dataset):
         if self.transform:
             curr_input_img = self.transform(curr_input_img)
             prev_output_img = self.transform(prev_output_img)
+
         if self.target_transform:
             curr_output_img = self.target_transform(curr_output_img)
 
@@ -176,10 +280,32 @@ class QualcommDataset(Dataset):
         )
 
         curr_jitter_x, curr_jitter_y = self.get_jitter(
-            curr_input_img,
+            (1, curr_input_img.shape[1], curr_input_img.shape[2]),
+            curr_input_img.device,
+            curr_input_img.dtype,
             scene,
             instance,
             curr_frame_num
+        )
+
+        motion_vectors = self.get_motion_vectors(
+            scene, 
+            instance, 
+            curr_frame_num
+        )
+
+        motion_vectors = self.apply_jitter_compensation(
+            motion_vectors,
+            scene,
+            instance,
+            curr_jitter_x,
+            curr_jitter_y,
+            prev_frame_num
+        )
+
+        motion_vectors = self.depth_informed_dilation(
+            curr_depth,
+            motion_vectors
         )
 
         prev_features = torch.zeros((1, curr_input_img.shape[1], curr_input_img.shape[2]))
@@ -196,4 +322,5 @@ class QualcommDataset(Dataset):
             dim=0
         )
 
-        return input_imgs, curr_output_img
+        # Return motion vectors for the current frame to be used for warping
+        return input_imgs, curr_output_img, motion_vectors

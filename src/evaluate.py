@@ -73,10 +73,10 @@ def main(cfg: DictConfig) -> None:
     )
     print(f"Using {device} device")
 
-    eval_output_pred_path = Path("evaluation_output/pred")
+    eval_output_pred_path = Path("evaluation_outputs/pred")
     eval_output_pred_path.mkdir(parents=True, exist_ok=True)
 
-    eval_output_y_path = Path("evaluation_output/y")
+    eval_output_y_path = Path("evaluation_outputs/y")
     eval_output_y_path.mkdir(parents=True, exist_ok=True)
 
     # -------------------------------------------------------------------------
@@ -151,7 +151,7 @@ def main(cfg: DictConfig) -> None:
 
     write_video(
         Path(cfg["setup"]["eval-output-path"]),
-        "evaluation_output.avi",
+        "evaluation_output.mp4",
         fps=24
     )
 
