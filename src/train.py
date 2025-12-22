@@ -26,32 +26,34 @@ def train_epoch(
     epoch: int
 ) -> None:
     dataset_size = len(training_dataloader.dataset)
+    with torch.autograd.set_detect_anomaly(True):
 
-    model.train()
-    for batch, (X, y, motion_vectors) in enumerate(training_dataloader):
-        X, y = X.to(device), y.to(device)
+        model.train()
+        for batch, (X, y, motion_vectors) in enumerate(training_dataloader):
+            X, y, motion_vectors = X.to(device), y.to(device), motion_vectors.to(device)
 
-        # Sampler gives N = batch_size * clip_size
-        N, C, H, W = X.shape
-        X = X.view(batch_size, clip_size, C, H, W)
+            # Sampler gives N = batch_size * clip_size
+            N, C, H, W = X.shape
+            X = X.view(batch_size, clip_size, C, H, W)
+            motion_vectors = motion_vectors.view(batch_size, clip_size, 2, H, W)
 
-        # Pass in motion vectors for warping
-        pred_frame, _ = model(X, motion_vectors)
-        pred_frame = pred_frame.view(-1, 3, H, W)
+            # Pass in motion vectors for warping
+            pred_frame, _ = model(X, motion_vectors)
+            pred_frame = pred_frame.view(-1, 3, H, W)
 
-        loss = loss_fn(pred_frame, y)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
+            loss = loss_fn(pred_frame, y)
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
 
-        writer.add_scalar(
-            "loss/train",
-            loss.item(),
-            epoch * len(training_dataloader.dataset) + batch
-        )
+            writer.add_scalar(
+                "loss/train",
+                loss.item(),
+                epoch * len(training_dataloader.dataset) + batch
+            )
 
-        loss, current_img = loss.item(), (batch + 1) * batch_size * clip_size
-        print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
+            loss, current_img = loss.item(), (batch + 1) * batch_size * clip_size
+            print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
@@ -75,7 +77,7 @@ def train(cfg: DictConfig) -> None:
     torch.backends.cudnn.benchmark = False
 
     # Use only deterministic algorithms
-    torch.use_deterministic_algorithms(True)
+    torch.use_deterministic_algorithms(True, warn_only=True)
 
     # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = False
@@ -204,13 +206,14 @@ def checkpoint(
     # training data is used here
     model.eval()
     with torch.no_grad():
-        input_imgs, _, _ = training_data[0]
+        X, _, motion_vectors = training_data[0]
 
         # Verify what exactly goes into the network
-        output_input(model, input_imgs)
+        output_input(model, X)
 
-        input_imgs = input_imgs.to(device).unsqueeze(0).unsqueeze(0)
-        anti_aliased_img, _ = model(input_imgs)
+        X = X.to(device).unsqueeze(0).unsqueeze(0)
+        motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
+        anti_aliased_img, _ = model(X, motion_vectors)
         anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
 

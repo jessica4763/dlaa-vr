@@ -4,7 +4,7 @@ defaults:
 
 setup:
   seed: 42
-  saved-models-path: ../saved/logs/runs/exp20/full_model.pt
+  saved-models-path: ../saved/logs/runs/exp22/full_model.pt
   eval-output-path: evaluation_outputs
   tensorboard-dir: ../saved/logs/runs
 

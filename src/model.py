@@ -85,33 +85,32 @@ class QualcommNetwork(nn.Module):
 
     @staticmethod
     def warp(
-        input_tensor: torch.Tensor, 
+        input_tensor: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
-        height = 270
-        width = 480
+        H = motion_vectors.shape[2]
+        W = motion_vectors.shape[3]
 
-        # (1, 2, H_new, W_new) --> (1, H_new, W_new, 2)
+        # (B, 2, H, W) --> (B, H, W, 2)
         motion_vectors = torch.permute(motion_vectors, (0, 2, 3, 1))
 
-        # Once motion vectors are added to base_grid, each location 
+        # Once motion_vectors is added to base_grid, each location 
         # in the grid contains the absolute coordinates of the previous
         # pixel/feature after motion compensation. There is no need to
-        # normalise the motion vectors because they are stored in the [0, 1] range
+        # normalise the motion vectors because they are stored in the [-1, 1] range
         y, x = torch.meshgrid(
-            torch.linspace(-1, 1, height), 
-            torch.linspace(-1, 1, width), 
+            torch.linspace(-1, 1, H),
+            torch.linspace(-1, 1, W),
             indexing='ij'
         )
-        base_grid = torch.stack((x, y), dim=-1).unsqueeze(0)
-
+        base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
         warped_grid = base_grid + motion_vectors 
 
         warped_input_tensor = F.grid_sample(
             input_tensor, 
             warped_grid, 
             mode='bilinear', 
-            padding_mode='zeros'
+            padding_mode='zeros'  # To mean no corresponding pixel in the previous frame
         )
 
         return warped_input_tensor
@@ -129,33 +128,30 @@ class QualcommNetwork(nn.Module):
         outputs = []
         for clip in range(clip_size):
             clip_frames = x[:, clip].clone()
+            motion_vector_frames = motion_vectors[:, clip].clone()
 
             # Use recurrent colour frame
             c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter
             c1 = c0 + self.num_prev_colour
             if prev_pred_colour is not None:
-                clip_frames[:, c0:c1] = prev_pred_colour
+                # Warp recurrent colour frame
+                clip_frames[:, c0:c1] = QualcommNetwork.warp(
+                    prev_pred_colour,
+                    motion_vector_frames
+                )
 
-            # Warp recurrent colour frame
-            clip_frames[:, c0:c1] = QualcommNetwork.warp(
-                clip_frames[:, c0:c1],
-                motion_vectors
-            )
-
-            # Save for blending 
+            # Save for the blend step 
             prev_colour = clip_frames[:, c0:c1]
 
             # Use recurrent features
             c0 = c1
             c1 = c0 + self.num_prev_feature
             if prev_pred_features is not None:
-                clip_frames[:, c0:c1] = prev_pred_features
-
-            # Warp recurrent features
-            clip_frames[:, c0:c1] = QualcommNetwork.warp(
-                clip_frames[:, c0:c1],
-                motion_vectors
-            )
+                # Warp recurrent features
+                clip_frames[:, c0:c1] = QualcommNetwork.warp(
+                    prev_pred_features,
+                    motion_vector_frames
+                )
 
             # ------------------------------------------------------------
             # ---------------------- Main conv stack ---------------------

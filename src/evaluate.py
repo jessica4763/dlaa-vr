@@ -34,10 +34,10 @@ def evaluate(
         metrics = Metrics(writer, dataset_size)
         
         prev_pred_frame = prev_features = None
-        for batch, (X, y) in enumerate(test_dataloader):
-            X, y = X.to(device), y.to(device)
+        for batch, (X, y, motion_vectors) in enumerate(test_dataloader):
+            X, y, motion_vectors = X.to(device), y.to(device), motion_vectors.to(device)
 
-            X = X.unsqueeze(0)
+            X, motion_vectors = X.unsqueeze(0), motion_vectors.unsqueeze(0)
 
             # Use the previously predicted frame and features during test
             if prev_pred_frame is not None and prev_features is not None:
@@ -46,7 +46,7 @@ def evaluate(
                 X[:, :, c0:c1] = prev_pred_frame
                 X[:, :, c1:model.in_channels] = prev_features
 
-            pred_frame, features = model(X)
+            pred_frame, features = model(X, motion_vectors)
             loss = loss_fn(pred_frame, y)
 
             prev_pred_frame = pred_frame
@@ -129,9 +129,9 @@ def main(cfg: DictConfig) -> None:
         )
     )
 
-    example_input_imgs, _, = test_data[0]
+    example_input_imgs, _, motion_vectors = test_data[0]
     example_input_imgs = example_input_imgs.to(device).unsqueeze(0).unsqueeze(0)
-    writer.add_graph(model, example_input_imgs)
+    writer.add_graph(model, input_to_model=(example_input_imgs, motion_vectors))
 
     print_parameters(Path(cfg["setup"]["eval-output-path"]), model.state_dict())
 

@@ -7,6 +7,8 @@ from skimage.metrics import (
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+# TODO: LPIPS
+
 # TODO: ColourVideoVDP
 
 
