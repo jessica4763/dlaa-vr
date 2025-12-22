@@ -17,6 +17,7 @@ class Metrics:
         self.writer = writer
 
         self.dataset_size = dataset_size
+        print(f"{self.dataset_size=}")
 
         self.norm_rmse = 0
         self.psnr = 0

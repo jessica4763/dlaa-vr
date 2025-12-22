@@ -79,3 +79,11 @@ def write_video(
         writer.append_data(img)
 
     writer.close()
+
+
+if __name__ == "__main__":
+    write_video(
+        Path("evaluation_outputs"),
+        "Enhanced.mp4",
+        fps=24
+    )

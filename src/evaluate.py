@@ -34,32 +34,32 @@ def evaluate(
         metrics = Metrics(writer, dataset_size)
         
         prev_pred_frame = prev_features = None
-        for batch, (X, y, motion_vectors) in enumerate(test_dataloader):
-            X, y, motion_vectors = X.to(device), y.to(device), motion_vectors.to(device)
+        for batch, (inputs, target, motion_vectors) in enumerate(test_dataloader):
+            inputs, target, motion_vectors = inputs.to(device), target.to(device), motion_vectors.to(device)
 
-            X, motion_vectors = X.unsqueeze(0), motion_vectors.unsqueeze(0)
+            inputs, motion_vectors = inputs.unsqueeze(0), motion_vectors.unsqueeze(0)
 
             # Use the previously predicted frame and features during test
             if prev_pred_frame is not None and prev_features is not None:
                 c0 = model.in_channels - (model.num_prev_colour + model.num_prev_feature)
                 c1 = model.in_channels - model.num_prev_feature
-                X[:, :, c0:c1] = prev_pred_frame
-                X[:, :, c1:model.in_channels] = prev_features
+                inputs[:, :, c0:c1] = prev_pred_frame
+                inputs[:, :, c1:model.in_channels] = prev_features
 
-            pred_frame, features = model(X, motion_vectors)
-            loss = loss_fn(pred_frame, y)
+            pred_frame, features = model(inputs, motion_vectors)
+            loss = loss_fn(pred_frame, target)
 
             prev_pred_frame = pred_frame
             prev_features = features.squeeze(0)
 
-            loss, current_img = loss.item(), (batch + 1) * len(X)
+            loss, current_img = loss.item(), (batch + 1) * len(inputs)
             print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
 
             gamma_pred_frame = linear_to_gamma(pred_frame)
-            gamma_y_frame = linear_to_gamma(y)
-            metrics.record(gamma_pred_frame, gamma_y_frame)
+            gamma_target_frame = linear_to_gamma(target)
+            metrics.record(gamma_pred_frame, gamma_target_frame)
             write_frames(eval_output_path / "pred", gamma_pred_frame, batch)
-            write_frames(eval_output_path / "y", gamma_y_frame, batch)
+            write_frames(eval_output_path / "target", gamma_target_frame, batch)
 
     metrics.report()
 
@@ -76,7 +76,7 @@ def main(cfg: DictConfig) -> None:
     eval_output_pred_path = Path("evaluation_outputs/pred")
     eval_output_pred_path.mkdir(parents=True, exist_ok=True)
 
-    eval_output_y_path = Path("evaluation_outputs/y")
+    eval_output_y_path = Path("evaluation_outputs/target")
     eval_output_y_path.mkdir(parents=True, exist_ok=True)
 
     # -------------------------------------------------------------------------

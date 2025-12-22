@@ -30,20 +30,20 @@ class QualcommDatasetSampler(Sampler[list[int]]):
         Each batch is an 8 frame clip. Within each clip, the frames must follow 
         each other, so it's necessary to shuffle the clips and not the frames. 
 
-        Between epochs, the starting points of the clips may differ; i.e. between
-        epochs, the collection of clips may differ.
+        Between epochs, the starting points of the clips may differ, so the 
+        collection of clips may differ.
         """
         frame_indices = list(range(len(self.data)))
         clip_indices = list(
             range(
-                random.choice(frame_indices) % self.clip_size, 
-                len(self.data) - self.clip_size, 
+                random.choice(frame_indices) % self.clip_size,
+                len(self.data) - self.clip_size + 1, 
                 self.clip_size
             )
         )
         random.shuffle(clip_indices)
-        for batch in clip_indices[::self.batch_size]:
-            clip_starts = list(range(batch, batch + self.batch_size))
+        for i in range(0, len(clip_indices), self.batch_size):
+            clip_starts = clip_indices[i:i + self.batch_size]
             
             frame_indices = []
             for clip in clip_starts:
@@ -85,7 +85,9 @@ class QualcommDataset(Dataset):
 
     def get_jitter(
         self,
-        size: tuple[int, int, int],
+        depth,
+        height,
+        width,
         device: str,
         dtype: torch.dtype,
         scene: Scene,
@@ -100,14 +102,14 @@ class QualcommDataset(Dataset):
             curr_frame_y = camera_data["jitter_offset"]["y"]
 
         jitter_x = torch.full(
-            size,
+            (depth, height, width),
             fill_value=curr_frame_x,
             device=device,
             dtype=dtype
         )
 
         jitter_y = torch.full(
-            size,
+            (depth, height, width),
             fill_value=curr_frame_y,
             device=device,
             dtype=dtype
@@ -169,14 +171,25 @@ class QualcommDataset(Dataset):
         prev_frame_num: int
     ) -> torch.Tensor:
         """Update the motion vectors to account for jitter."""
+        depth = 1
+        height = motion_vectors.shape[1]
+        width = motion_vectors.shape[2]
+
         prev_jitter_x, prev_jitter_y = self.get_jitter(
-            (1, motion_vectors.shape[1], motion_vectors.shape[2]),
+            depth, 
+            height, 
+            width,
             motion_vectors.device,
             motion_vectors.dtype,
             scene,
             instance,
             prev_frame_num
         )
+
+        prev_jitter_x /= width / 2
+        curr_jitter_x /= width / 2
+        prev_jitter_y /= height / 2
+        curr_jitter_y /= height / 2
 
         motion_vectors[[0], ...] += prev_jitter_x - curr_jitter_x
         motion_vectors[[1], ...] += prev_jitter_y - curr_jitter_y
@@ -231,9 +244,13 @@ class QualcommDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         # Get the scene associated with this index
-        scene_idx = bisect_right(self.frame_boundaries, idx)
-        scene = self.scenes[scene_idx - 1]
-
+        try:
+            scene_idx = bisect_right(self.frame_boundaries, idx)
+            scene = self.scenes[scene_idx - 1]
+        except IndexError:
+            print(f"{idx=}")
+            raise IndexError
+    
         # Offset the index relative to the scene
         idx_offset = self.frame_boundaries[scene_idx - 1]
         idx -= idx_offset
@@ -280,7 +297,9 @@ class QualcommDataset(Dataset):
         )
 
         curr_jitter_x, curr_jitter_y = self.get_jitter(
-            (1, curr_input_img.shape[1], curr_input_img.shape[2]),
+            1,
+            curr_input_img.shape[1],
+            curr_input_img.shape[2],
             curr_input_img.device,
             curr_input_img.dtype,
             scene,

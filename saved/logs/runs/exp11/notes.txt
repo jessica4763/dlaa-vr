@@ -1,0 +1,2 @@
+Batch size: 8
+Clip size: 16

@@ -1,5 +1,6 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
+import os
 from pathlib import Path
 import sys
 import torch
@@ -18,7 +19,6 @@ def train_epoch(
     device: str,
     model: nn.Module,
     training_dataloader: DataLoader,
-    batch_size: int,
     clip_size: int,
     loss_fn: nn.Module,
     optimizer: optim.Optimizer,
@@ -26,34 +26,35 @@ def train_epoch(
     epoch: int
 ) -> None:
     dataset_size = len(training_dataloader.dataset)
-    with torch.autograd.set_detect_anomaly(True):
 
-        model.train()
-        for batch, (X, y, motion_vectors) in enumerate(training_dataloader):
-            X, y, motion_vectors = X.to(device), y.to(device), motion_vectors.to(device)
+    model.train()
+    for batch, (inputs, targets, motion_vectors) in enumerate(training_dataloader):
+        inputs = inputs.to(device, non_blocking=True)
+        targets = targets.to(device, non_blocking=True)
+        motion_vectors = motion_vectors.to(device, non_blocking=True)
 
-            # Sampler gives N = batch_size * clip_size
-            N, C, H, W = X.shape
-            X = X.view(batch_size, clip_size, C, H, W)
-            motion_vectors = motion_vectors.view(batch_size, clip_size, 2, H, W)
+        # Sampler gives N = num_batches * clip_size
+        N, C, H, W = inputs.shape
+        inputs = inputs.view(-1, clip_size, C, H, W)
+        motion_vectors = motion_vectors.view(-1, clip_size, 2, H, W)
 
-            # Pass in motion vectors for warping
-            pred_frame, _ = model(X, motion_vectors)
-            pred_frame = pred_frame.view(-1, 3, H, W)
+        # Pass in motion vectors as well, for warping
+        pred_frame, _ = model(inputs, motion_vectors)
+        pred_frame = pred_frame.view(-1, 3, H, W)
 
-            loss = loss_fn(pred_frame, y)
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+        loss = loss_fn(pred_frame, targets)
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
 
-            writer.add_scalar(
-                "loss/train",
-                loss.item(),
-                epoch * len(training_dataloader.dataset) + batch
-            )
+        writer.add_scalar(
+            "loss/train",
+            loss.item(),
+            epoch * len(training_dataloader.dataset) + batch
+        )
 
-            loss, current_img = loss.item(), (batch + 1) * batch_size * clip_size
-            print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
+        loss, current_img = loss.item(), (batch + 1) * N
+        print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
@@ -73,11 +74,10 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     torch.manual_seed(cfg["setup"]["seed"])
 
-    # Deterministcally selects an algorithm; reduces efficiency
-    torch.backends.cudnn.benchmark = False
+    # Deterministically selecting an algorithm reduces efficiency
+    torch.backends.cudnn.benchmark = True
 
-    # Use only deterministic algorithms
-    torch.use_deterministic_algorithms(True, warn_only=True)
+    torch.use_deterministic_algorithms(False)
 
     # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = False
@@ -106,7 +106,10 @@ def train(cfg: DictConfig) -> None:
 
     training_dataloader = DataLoader(
         training_data,
-        batch_sampler=training_sampler
+        batch_sampler=training_sampler,
+        num_workers=os.cpu_count(), 
+        pin_memory=True,
+        persistent_workers=True
     )
 
     # -------------------------------------------------------------------------
@@ -128,6 +131,8 @@ def train(cfg: DictConfig) -> None:
             )
         )
 
+    # model = torch.compile(model)
+    
     # -------------------------------------------------------------------------
     # ----------------------------- Optimisation ------------------------------
     # -------------------------------------------------------------------------
@@ -165,7 +170,6 @@ def train(cfg: DictConfig) -> None:
             device,
             model,
             training_dataloader,
-            cfg["optimiser"]["batch-size"],
             cfg["optimiser"]["clip-size"],
             loss_function,
             optimiser,

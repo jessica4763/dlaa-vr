@@ -1,0 +1,9 @@
+Removed .detach():
+
+prev_pred_colour = blended_colour.detach()
+prev_pred_features = out_features.detach()
+
+-->
+
+prev_pred_colour = blended_colour
+prev_pred_features = out_features

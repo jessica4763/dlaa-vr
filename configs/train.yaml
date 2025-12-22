@@ -17,4 +17,4 @@ model:
 
 hydra:
   run:
-    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: hydra_outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

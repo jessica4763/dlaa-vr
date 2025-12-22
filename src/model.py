@@ -177,7 +177,7 @@ class QualcommNetwork(nn.Module):
             outputs.append(blended_colour)
 
             # Save recurrent colour frame and features
-            prev_pred_colour = blended_colour
-            prev_pred_features = out_features
+            prev_pred_colour = blended_colour.detach()
+            prev_pred_features = out_features.detach()
 
         return torch.stack(outputs, dim=1), prev_pred_features
