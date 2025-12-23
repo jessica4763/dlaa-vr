@@ -1,6 +1,6 @@
 ---
 name: adamw
-batch-size: 2
+batch-size: 8
 clip-size: 8
 epochs: 100
 learning-rate: 1e-4

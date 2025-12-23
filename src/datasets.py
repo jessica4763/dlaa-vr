@@ -17,79 +17,52 @@ from utils import Scene, cumsum
 
 
 class QualcommDatasetSampler(Sampler[list[int]]):
-    def __init__(self, data: Dataset, batch_size: int, clip_size: int):
-        self.data = data
+    def __init__(
+        self,
+        scenes: list[Scene],
+        batch_size: int,
+        clip_size: int
+    ):
+        self.scenes = scenes
+        self.total_scenes = len(scenes)
+
+        scene_num_instances = [scene.num_instances for scene in self.scenes]
+        self.instance_boundaries = cumsum(scene_num_instances)
+        self.total_instances = sum(scene_num_instances)
+
+        scene_num_frames = [scene.num_frames for scene in self.scenes]
+        self.frame_boundaries = cumsum(scene_num_frames)
+        self.total_frames = sum(scene_num_frames)
+
         self.batch_size = batch_size
         self.clip_size = clip_size
 
     def __len__(self) -> int:
-        return len(self.data)
+        return self.total_instances
 
     def __iter__(self) -> Iterator[list[int]]:
-        """
-        Each batch is an 8 frame clip. Within each clip, the frames must follow 
-        each other, so it's necessary to shuffle the clips and not the frames. 
+        instance_indices = list(range(self.total_instances))
+        random.shuffle(instance_indices)
 
-        Between epochs, the starting points of the clips may differ; i.e. between
-        epochs, the collection of clips may differ.
-        """
-        frame_indices = list(range(len(self.data)))
-        clip_indices = list(
-            range(
-                random.choice(frame_indices) % self.clip_size, 
-                len(self.data) - self.clip_size, 
-                self.clip_size
-            )
-        )
-        random.shuffle(clip_indices)
-        for batch in clip_indices[::self.batch_size]:
-            clip_starts = list(range(batch, batch + self.batch_size))
-            
+        for batch in range(0, self.total_instances, self.batch_size):
+            instances = instance_indices[batch:batch + self.batch_size]
+
             frame_indices = []
-            for clip in clip_starts:
-                for frame_idx in range(clip, clip + self.clip_size):
+            for instance_idx in instances:
+                # Get the scene associated with instance_idx
+                scene_idx = bisect_right(self.instance_boundaries, instance_idx)
+                scene = self.scenes[scene_idx - 1]
+
+                # Offset the index relative to the scene
+                idx_offset = self.instance_boundaries[scene_idx - 1]
+                relative_instance_idx = instance_idx - idx_offset
+
+                instance_start = self.frame_boundaries[scene_idx - 1] + relative_instance_idx * scene.num_frames_per_instance,
+                clip_start = random.randint(instance_start, instance_start + scene.num_frames_per_instance - self.batch_size)
+                for frame_idx in range(clip_start, clip_start + self.clip_size):
                     frame_indices.append(frame_idx)
 
-            # 1D array. Reshape occurs later
             yield frame_indices
-
-
-# class QualcommDatasetSampler(Sampler[list[int]]):
-#     def __init__(self, data: Dataset, batch_size: int, clip_size: int):
-#         self.data = data
-#         self.batch_size = batch_size
-#         self.clip_size = clip_size
-
-#     def __len__(self) -> int:
-#         return len(self.data)
-
-#     def __iter__(self) -> Iterator[list[int]]:
-#         """
-#         Each batch is an 8 frame clip. Within each clip, the frames must follow 
-#         each other, so it's necessary to shuffle the clips and not the frames. 
-
-#         Between epochs, the starting points of the clips may differ; i.e. between
-#         epochs, the collection of clips may differ.
-#         """
-#         frame_indices = list(range(len(self.data)))
-#         clip_indices = list(
-#             range(
-#                 random.choice(frame_indices) % self.clip_size, 
-#                 len(self.data) - self.clip_size, 
-#                 self.clip_size
-#             )
-#         )
-#         random.shuffle(clip_indices)
-#         for batch in clip_indices[::self.batch_size]:
-#             clip_starts = list(range(batch, batch + self.batch_size))
-            
-#             frame_indices = []
-#             for clip in clip_starts:
-#                 for frame_idx in range(clip, clip + self.clip_size):
-#                     frame_indices.append(frame_idx)
-
-#             # 1D array. Reshape occurs later
-#             yield frame_indices
 
 
 class QualcommDataset(Dataset):
