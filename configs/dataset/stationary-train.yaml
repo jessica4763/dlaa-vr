@@ -1,4 +1,9 @@
 ---
 scene_names: [ScifiBaseStartStop]
-training-input-img-path: ../data/training_data/QRISP/*/270p/MipBiasMinus2Jittered
-training-output-img-path: ../data/training_data/QRISP/*/270p/Enhanced
+training-input-img-path: ../data/training_data/QRISP/*/270p
+training-output-img-path: ../data/training_data/QRISP/*/270p
+ground-truth-path-suffix: Enhanced
+colour-path-suffix: MipBiasMinus2
+depth-path-suffix: DepthMipBiasMinus2
+camera-data-path-suffix: CameraData
+motion-vector-patth-suffix: MotionVectorsMipBiasMinus2
