@@ -7,3 +7,5 @@ prev_pred_features = out_features.detach()
 
 prev_pred_colour = blended_colour
 prev_pred_features = out_features
+
+Added a learning rate milestone relative to exp10

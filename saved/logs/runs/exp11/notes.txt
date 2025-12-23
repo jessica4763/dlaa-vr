@@ -1,2 +1,4 @@
 Batch size: 8
 Clip size: 16
+
+Added a learning rate milestone relative to exp10

@@ -1,9 +1,9 @@
 ---
-scene_names: [ScifiBaseStartStop]
+scene_names: [FloodedGrounds]
 test-input-img-path: ../data/test_data/QRISP/TestSet/*/270p
 test-output-img-path: ../data/test_data/QRISP/TestSet/*/270p
 ground-truth-path-suffix: Enhanced
-colour-path-suffix: MipBiasMinus2
-depth-path-suffix: DepthMipBiasMinus2
+colour-path-suffix: MipBiasMinus2Jittered
+depth-path-suffix: DepthMipBiasMinus2Jittered
 camera-data-path-suffix: CameraData
-motion-vector-patth-suffix: MotionVectorsMipBiasMinus2
+motion-vector-path-suffix: MotionVectorsMipBiasMinus2Jittered

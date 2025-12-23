@@ -6,4 +6,4 @@ ground-truth-path-suffix: Enhanced
 colour-path-suffix: MipBiasMinus2
 depth-path-suffix: DepthMipBiasMinus2
 camera-data-path-suffix: CameraData
-motion-vector-patth-suffix: MotionVectorsMipBiasMinus2
+motion-vector-path-suffix: MotionVectorsMipBiasMinus2
