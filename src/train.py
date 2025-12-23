@@ -9,8 +9,10 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
 
-from datasets import QualcommDataset, QualcommDatasetSampler
+from datasets import QualcommDataset
+from loss import CVVDPLoss, L1LossWithCVVDP
 from model import QualcommNetwork
+from samplers import QualcommDatasetSampler
 from sanity_checks import output_input
 from utils import gamma_to_linear, linear_to_gamma
 
@@ -156,7 +158,17 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ----------------------------- Optimisation ------------------------------
     # -------------------------------------------------------------------------
-    loss_function = nn.L1Loss()
+    if cfg["optimiser"]["loss"] == "l1loss":
+        loss_function = nn.L1Loss()
+    elif cfg["optimiser"]["loss"] == "cvvdploss":
+        loss_function = CVVDPLoss(cfg["optimiser"]["display-name"])
+    elif cfg["optimiser"]["loss"] == "l1loss_with_cvvdp":
+        loss_function = L1LossWithCVVDP(
+            cfg["optimiser"]["display-name"],
+            cvvdp_weight=cfg["optimiser"]["cvvdp-weight"]
+        )
+    else:
+        sys.exit("Chosen loss function does not exist.")
 
     if cfg["optimiser"]["name"] == "sgd":
         optimiser = torch.optim.SGD(

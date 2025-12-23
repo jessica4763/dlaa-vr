@@ -1,7 +1,11 @@
 ---
 name: sgd
-batch-size: 2
-clip-size: 16
+display-name: standard_fhd
+loss: l1loss_with_cvvdp
+cvvdp-weight: 0.05
+actual-batch-size:
+virtual-batch-size: 8
+clip-size: 8
 epochs: 50
 learning-rate: 1e-4
 learning-rate-gamma: 1.0

@@ -1,5 +1,8 @@
 ---
 name: adamw
+display-name: standard_fhd
+loss: l1loss_with_cvvdp
+cvvdp-weight: 0.05
 actual-batch-size: 1
 virtual-batch-size: 8
 clip-size: 8
