@@ -11,9 +11,9 @@ from datasets import QualcommDataset
 from model import QualcommNetwork
 from metrics import Metrics
 from utils import (
-    gamma_to_linear, 
-    linear_to_gamma, 
-    write_frames, 
+    gamma_to_linear,
+    linear_to_gamma,
+    write_frames,
     write_video
 )
 from sanity_checks import print_parameters
@@ -32,7 +32,7 @@ def evaluate(
         dataset_size = len(test_dataloader.dataset)
 
         metrics = Metrics(writer, dataset_size)
-        
+
         prev_pred_frame = prev_features = None
         for batch, (inputs, target, motion_vectors) in enumerate(test_dataloader):
             inputs, target, motion_vectors = inputs.to(device), target.to(device), motion_vectors.to(device)
@@ -84,10 +84,9 @@ def main(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     torch.manual_seed(cfg["setup"]["seed"])
 
-    # Deterministically select an algorithm; reduces efficiency
+    # Deterministically selecting an algorithm reduces efficiency
     torch.backends.cudnn.benchmark = False
 
-    # Use only deterministic algorithms
     torch.use_deterministic_algorithms(True)
 
     # Does not use unitialised memory as an input to an operation
@@ -102,9 +101,15 @@ def main(cfg: DictConfig) -> None:
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
     test_data = QualcommDataset(
-        cfg["dataset"]["scene_names"],
         cfg["dataset"]["test-input-img-path"],
         cfg["dataset"]["test-output-img-path"],
+        cfg["dataset"]["ground-truth-path-suffix"],
+        cfg["dataset"]["colour-path-suffix"],
+        cfg["dataset"]["depth-path-suffix"],
+        cfg["dataset"]["camera-data-path-suffix"],
+        cfg["dataset"]["motion-vector-path-suffix"],
+        cfg["dataset"]["scene_names"],
+        jitter=False,
         transform=gamma_to_linear,
         target_transform=gamma_to_linear
     )

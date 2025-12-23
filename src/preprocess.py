@@ -5,8 +5,8 @@ from pathlib import Path
 import skimage.io as io
 
 from utils import (
-    gamma_to_linear, 
-    linear_to_gamma, 
+    gamma_to_linear,
+    linear_to_gamma,
     write_video
 )
 
@@ -14,7 +14,7 @@ from utils import (
 def get_baselines(filename: Path, fps: int = 24) -> None:
     input_imgs = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced")
     write_video(input_imgs, filename, fps=fps)
-    
+
     input_imgs = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/DLSS2")
     write_video(input_imgs, filename, fps=fps)
 
@@ -26,9 +26,9 @@ def get_baselines(filename: Path, fps: int = 24) -> None:
 
 
 def downsample(
-    input_path: Path, 
-    output_path: Path, 
-    output_dimensions: tuple[int, int], 
+    input_path: Path,
+    output_path: Path,
+    output_dimensions: tuple[int, int],
 ) -> None:
     for instance in os.listdir(input_path):
         input_frames_path = input_path / instance

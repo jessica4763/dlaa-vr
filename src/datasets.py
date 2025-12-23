@@ -27,24 +27,24 @@ class QualcommDatasetSampler(Sampler[list[int]]):
 
     def __iter__(self) -> Iterator[list[int]]:
         """
-        Each batch is an 8 frame clip. Within each clip, the frames must follow 
-        each other, so it's necessary to shuffle the clips and not the frames. 
+        Each batch is an 8 frame clip. Within each clip, the frames must follow
+        each other, so it's necessary to shuffle the clips and not the frames.
 
-        Between epochs, the starting points of the clips may differ, so the 
+        Between epochs, the starting points of the clips may differ, so the
         collection of clips may differ.
         """
         frame_indices = list(range(len(self.data)))
         clip_indices = list(
             range(
                 random.choice(frame_indices) % self.clip_size,
-                len(self.data) - self.clip_size + 1, 
+                len(self.data) - self.clip_size + 1,
                 self.clip_size
             )
         )
         random.shuffle(clip_indices)
         for i in range(0, len(clip_indices), self.batch_size):
             clip_starts = clip_indices[i:i + self.batch_size]
-            
+
             frame_indices = []
             for clip in clip_starts:
                 for frame_idx in range(clip, clip + self.clip_size):
@@ -57,15 +57,27 @@ class QualcommDatasetSampler(Sampler[list[int]]):
 class QualcommDataset(Dataset):
     def __init__(
         self,
-        scene_names: list[str],
         input_imgs_path: str,
         output_imgs_path: str,
+        ground_truth_path_suffix: str,
+        colour_path_suffix: str,
+        depth_path_suffix: str,
+        camera_data_path_suffix: str,
+        motion_vector_path_suffix: str,
+        scene_names: list[str],
+        jitter: bool = False,
         transform=None,
         target_transform=None,
     ):
         self.input_imgs_path = input_imgs_path
         self.output_imgs_path = output_imgs_path
-        
+        self.ground_truth_path_suffix = ground_truth_path_suffix
+        self.colour_path_suffix = colour_path_suffix
+        self.depth_path_suffix = depth_path_suffix
+        self.camera_data_path_suffix = camera_data_path_suffix
+        self.motion_vector_path_suffix = motion_vector_path_suffix
+        self.jitter = jitter
+
         # ------------------------ Code to handle multiple scenes ------------------------
 
         self.scenes = []
@@ -95,7 +107,7 @@ class QualcommDataset(Dataset):
         curr_frame_num: int
     ) -> tuple[torch.Tensor, torch.Tensor]:
         curr_frame = str(curr_frame_num).zfill(4) + ".json"
-        json_file_path = scene.scene_input_imgs_path / "../CameraData" / instance / curr_frame
+        json_file_path = scene.scene_input_imgs_path / self.camera_data_path_suffix / instance / curr_frame
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
             camera_data = json.load(json_file)
             curr_frame_x = camera_data["jitter_offset"]["x"]
@@ -124,7 +136,9 @@ class QualcommDataset(Dataset):
         curr_frame_num: int
     ) -> torch.Tensor:
         curr_frame = str(curr_frame_num).zfill(4) + ".png"
-        depth_path = scene.scene_input_imgs_path / "../DepthMipBiasMinus2Jittered" / instance / curr_frame
+
+        depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
+
         depth = decode_image(depth_path.resolve())
         depth = torch.unsqueeze((
             depth[0] / (255 ** 1) +
@@ -133,7 +147,7 @@ class QualcommDataset(Dataset):
             depth[3] / (255 ** 4)
         ), 0)
         return depth
-    
+
     def get_motion_vectors(
         self,
         scene: Scene,
@@ -141,33 +155,35 @@ class QualcommDataset(Dataset):
         curr_frame_num: int
     ) -> torch.Tensor:
         curr_frame = str(curr_frame_num).zfill(4) + '.exr'
-        motion_vectors_path = scene.scene_input_imgs_path / "../MotionVectorsMipBiasMinus2Jittered" / instance / curr_frame
+
+        motion_vectors_path = scene.scene_input_imgs_path / self.motion_vector_path_suffix / instance / curr_frame
+
         motion_vectors = cv2.imread(motion_vectors_path.resolve(), cv2.IMREAD_UNCHANGED)
 
         # (H, W, C) --> (C, H, W)
         motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
 
-        # The vertical velocity is stored in the first channel and the 
+        # The vertical velocity is stored in the first channel and the
         # horizontal velocity is stored in the second channel
         motion_vectors = motion_vectors[0:2, ...]
 
-        # Although Unity uses a Y-up coordinate system, this code 
+        # Although Unity uses a Y-up coordinate system, this code
         # assumes a Y-down coordinate system
         motion_vectors[0, ...] *= -1
 
-        # Let the horizontal velocity be stored in the first channel and the 
+        # Let the horizontal velocity be stored in the first channel and the
         # vertical velocity in the second channel
         motion_vectors[0, ...], motion_vectors[1, ...] = motion_vectors[1, ...], motion_vectors[0, ...]
 
         return motion_vectors
-    
+
     def apply_jitter_compensation(
         self,
-        motion_vectors: torch.Tensor, 
-        scene: Scene, 
+        motion_vectors: torch.Tensor,
+        scene: Scene,
         instance: str,
         curr_jitter_x: torch.Tensor,
-        curr_jitter_y: torch.Tensor, 
+        curr_jitter_y: torch.Tensor,
         prev_frame_num: int
     ) -> torch.Tensor:
         """Update the motion vectors to account for jitter."""
@@ -176,8 +192,8 @@ class QualcommDataset(Dataset):
         width = motion_vectors.shape[2]
 
         prev_jitter_x, prev_jitter_y = self.get_jitter(
-            depth, 
-            height, 
+            depth,
+            height,
             width,
             motion_vectors.device,
             motion_vectors.dtype,
@@ -186,27 +202,22 @@ class QualcommDataset(Dataset):
             prev_frame_num
         )
 
-        prev_jitter_x /= width / 2
-        curr_jitter_x /= width / 2
-        prev_jitter_y /= height / 2
-        curr_jitter_y /= height / 2
-
-        motion_vectors[[0], ...] += prev_jitter_x - curr_jitter_x
-        motion_vectors[[1], ...] += prev_jitter_y - curr_jitter_y
+        motion_vectors[[0], ...] += 2.0 * (prev_jitter_x - curr_jitter_x) / width
+        motion_vectors[[1], ...] += 2.0 * (prev_jitter_y - curr_jitter_y) / height
 
         return motion_vectors
 
     def depth_informed_dilation(
-        self, 
+        self,
         depth: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
         depth, motion_vectors = depth.unsqueeze(0), motion_vectors.unsqueeze(0)
 
         min_pooled_depths, indices = F.max_pool2d(
-            -depth, 
-            kernel_size=2, 
-            stride=2, 
+            -depth,
+            kernel_size=2,
+            stride=2,
             return_indices=True
         )
         min_pooled_depths = -min_pooled_depths
@@ -232,25 +243,21 @@ class QualcommDataset(Dataset):
         )
 
         output_motion_vectors = F.interpolate(
-            seleted_motion_vectors, 
-            scale_factor=2, 
+            seleted_motion_vectors,
+            scale_factor=2,
             mode='nearest'
         )
 
-        return output_motion_vectors    
-    
+        return output_motion_vectors
+
     def __len__(self) -> int:
         return self.total_frames
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         # Get the scene associated with this index
-        try:
-            scene_idx = bisect_right(self.frame_boundaries, idx)
-            scene = self.scenes[scene_idx - 1]
-        except IndexError:
-            print(f"{idx=}")
-            raise IndexError
-    
+        scene_idx = bisect_right(self.frame_boundaries, idx)
+        scene = self.scenes[scene_idx - 1]
+
         # Offset the index relative to the scene
         idx_offset = self.frame_boundaries[scene_idx - 1]
         idx -= idx_offset
@@ -263,8 +270,8 @@ class QualcommDataset(Dataset):
 
         curr_frame_num = idx % scene.num_frames_per_instance
         curr_frame = str(curr_frame_num).zfill(4) + ".png"
-        curr_input_img_path = scene.scene_input_imgs_path / instance / curr_frame
-        curr_output_img_path = scene.scene_output_imgs_path / instance / curr_frame
+        curr_input_img_path = scene.scene_input_imgs_path / self.colour_path_suffix / instance / curr_frame
+        curr_output_img_path = scene.scene_output_imgs_path / self.ground_truth_path_suffix / instance / curr_frame
         curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, ...]
         curr_output_img = decode_image(curr_output_img_path.resolve())[0:3, ...]
 
@@ -296,31 +303,32 @@ class QualcommDataset(Dataset):
             curr_frame_num
         )
 
-        curr_jitter_x, curr_jitter_y = self.get_jitter(
-            1,
-            curr_input_img.shape[1],
-            curr_input_img.shape[2],
-            curr_input_img.device,
-            curr_input_img.dtype,
-            scene,
-            instance,
-            curr_frame_num
-        )
-
         motion_vectors = self.get_motion_vectors(
-            scene, 
-            instance, 
+            scene,
+            instance,
             curr_frame_num
         )
 
-        motion_vectors = self.apply_jitter_compensation(
-            motion_vectors,
-            scene,
-            instance,
-            curr_jitter_x,
-            curr_jitter_y,
-            prev_frame_num
-        )
+        if self.jitter:
+            curr_jitter_x, curr_jitter_y = self.get_jitter(
+                1,
+                curr_input_img.shape[1],
+                curr_input_img.shape[2],
+                curr_input_img.device,
+                curr_input_img.dtype,
+                scene,
+                instance,
+                curr_frame_num
+            )
+
+            motion_vectors = self.apply_jitter_compensation(
+                motion_vectors,
+                scene,
+                instance,
+                curr_jitter_x,
+                curr_jitter_y,
+                prev_frame_num
+            )
 
         motion_vectors = self.depth_informed_dilation(
             curr_depth,
@@ -329,17 +337,28 @@ class QualcommDataset(Dataset):
 
         prev_features = torch.zeros((1, curr_input_img.shape[1], curr_input_img.shape[2]))
 
-        input_imgs = torch.cat(
-            [
-                curr_input_img,
-                curr_depth,
-                curr_jitter_x,
-                curr_jitter_y,
-                prev_output_img,
-                prev_features
-            ],
-            dim=0
-        )
+        if self.jitter:
+            input_imgs = torch.cat(
+                [
+                    curr_input_img,
+                    curr_depth,
+                    curr_jitter_x,
+                    curr_jitter_y,
+                    prev_output_img,
+                    prev_features
+                ],
+                dim=0
+            )
+        else:
+            input_imgs = torch.cat(
+                [
+                    curr_input_img,
+                    curr_depth,
+                    prev_output_img,
+                    prev_features
+                ],
+                dim=0
+            )
 
         # Return motion vectors for the current frame to be used for warping
         return input_imgs, curr_output_img, motion_vectors

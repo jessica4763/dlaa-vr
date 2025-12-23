@@ -64,10 +64,10 @@ def write_video(
     fps: int = 24
 ) -> None:
     writer = imageio.get_writer(
-        imgs_path / filename, 
-        fps=fps, 
-        codec="libx264", 
-        quality=10, 
+        imgs_path / filename,
+        fps=fps,
+        codec="libx264",
+        quality=10,
         pixelformat='yuv420p',
         macro_block_size=8
     )

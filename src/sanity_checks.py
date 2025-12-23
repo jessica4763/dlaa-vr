@@ -7,39 +7,43 @@ from typing import Any
 from utils import linear_to_gamma
 
 
-def output_input(model: nn.Module, input_imgs: torch.Tensor) -> None:
+def output_input(
+    model: nn.Module,
+    input_imgs: torch.Tensor,
+    jitter: bool = False
+) -> None:
     c0 = 0
     c1 = c0 + model.num_curr_colour
     curr_colour = input_imgs[c0:c1]
+    save_image(linear_to_gamma(curr_colour), "sanity_checks_outputs/curr_colour.png")
 
     c0 = c1
     c1 = c0 + model.num_curr_depth
     curr_depth = input_imgs[c0:c1]
+    save_image(curr_depth, "sanity_checks_outputs/curr_depth.png")
 
-    c0 = c1
-    c1 = c0 + model.num_curr_jitter
-    curr_jitter = input_imgs[c0:c1]
-    zeros = torch.zeros(
-        1, 
-        curr_jitter.shape[1], 
-        curr_jitter.shape[2], 
-        device=curr_jitter.device, 
-        dtype=curr_jitter.dtype
-    )
-    curr_jitter = torch.cat([curr_jitter, zeros], dim=0)
+    if jitter:
+        c0 = c1
+        c1 = c0 + model.num_curr_jitter
+        curr_jitter = input_imgs[c0:c1]
+        zeros = torch.zeros(
+            1,
+            curr_jitter.shape[1],
+            curr_jitter.shape[2],
+            device=curr_jitter.device,
+            dtype=curr_jitter.dtype
+        )
+        curr_jitter = torch.cat([curr_jitter, zeros], dim=0)
+        save_image(curr_jitter, "sanity_checks_outputs/curr_jitter.png")
 
     c0 = c1
     c1 = c0 + model.num_curr_colour
     prev_colour = input_imgs[c0:c1]
+    save_image(linear_to_gamma(prev_colour), "sanity_checks_outputs/prev_colour.png")
 
     c0 = c1
     c1 = c0 + model.num_prev_feature
     prev_feature = input_imgs[c0:c1].squeeze(0)
-
-    save_image(linear_to_gamma(curr_colour), "sanity_checks_outputs/curr_colour.png")
-    save_image(curr_depth, "sanity_checks_outputs/curr_depth.png")
-    save_image(curr_jitter, "sanity_checks_outputs/curr_jitter.png")
-    save_image(linear_to_gamma(prev_colour), "sanity_checks_outputs/prev_colour.png")
     save_image(prev_feature, "sanity_checks_outputs/prev_feature.png")
 
 

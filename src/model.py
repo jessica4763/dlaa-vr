@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class QualcommNetwork(nn.Module):
-    def __init__(self, hidden_channels: int, num_blocks: int):
+    def __init__(self, hidden_channels: int, num_blocks: int, jitter: bool = False):
         """
         Simplified implementation of the Qualcomm network, adapted for DLAA.
         """
@@ -12,7 +12,7 @@ class QualcommNetwork(nn.Module):
 
         self.num_curr_colour = 3
         self.num_curr_depth = 1
-        self.num_curr_jitter = 2  # 2 for displacement in both x and y
+        self.num_curr_jitter = 2 if jitter else 0  # 2 for displacement in both x and y
         self.num_prev_colour = self.num_curr_colour
         self.num_prev_feature = 1
 
@@ -94,7 +94,7 @@ class QualcommNetwork(nn.Module):
         # (B, 2, H, W) --> (B, H, W, 2)
         motion_vectors = torch.permute(motion_vectors, (0, 2, 3, 1))
 
-        # Once motion_vectors is added to base_grid, each location 
+        # Once motion_vectors is added to base_grid, each location
         # in the grid contains the absolute coordinates of the previous
         # pixel/feature after motion compensation. There is no need to
         # normalise the motion vectors because they are stored in the [-1, 1] range
@@ -104,20 +104,20 @@ class QualcommNetwork(nn.Module):
             indexing='ij'
         )
         base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
-        warped_grid = base_grid + motion_vectors 
+        warped_grid = base_grid + motion_vectors
 
         warped_input_tensor = F.grid_sample(
-            input_tensor, 
-            warped_grid, 
-            mode='bilinear', 
+            input_tensor,
+            warped_grid,
+            mode='bilinear',
             padding_mode='zeros'  # To mean no corresponding pixel in the previous frame
         )
 
         return warped_input_tensor
 
     def forward(
-        self, 
-        x: torch.Tensor, 
+        self,
+        x: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         batch_size, clip_size, C, H, W = x.shape
@@ -140,7 +140,7 @@ class QualcommNetwork(nn.Module):
                     motion_vector_frames
                 )
 
-            # Save for the blend step 
+            # Save for the blend step
             prev_colour = clip_frames[:, c0:c1]
 
             # Use recurrent features

@@ -54,7 +54,7 @@ def train_epoch(
         )
 
         loss, current_img = loss.item(), (batch + 1) * N
-        print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
+        print(f"Loss: {loss:>7f}  [{current_img:>5d} / {dataset_size:>5d}]")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
@@ -91,9 +91,15 @@ def train(cfg: DictConfig) -> None:
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
     training_data = QualcommDataset(
-        cfg["dataset"]["scene_names"],
         cfg["dataset"]["training-input-img-path"],
         cfg["dataset"]["training-output-img-path"],
+        cfg["dataset"]["ground-truth-path-suffix"],
+        cfg["dataset"]["colour-path-suffix"],
+        cfg["dataset"]["depth-path-suffix"],
+        cfg["dataset"]["camera-data-path-suffix"],
+        cfg["dataset"]["motion-vector-path-suffix"],
+        cfg["dataset"]["scene_names"],
+        jitter=False,
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
     )
@@ -107,7 +113,7 @@ def train(cfg: DictConfig) -> None:
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
-        num_workers=os.cpu_count(), 
+        num_workers=os.cpu_count(),
         pin_memory=True,
         persistent_workers=True
     )
@@ -132,7 +138,7 @@ def train(cfg: DictConfig) -> None:
         )
 
     # model = torch.compile(model)
-    
+
     # -------------------------------------------------------------------------
     # ----------------------------- Optimisation ------------------------------
     # -------------------------------------------------------------------------
@@ -156,7 +162,7 @@ def train(cfg: DictConfig) -> None:
         sys.exit("Chosen optimiser implementation does not exist.")
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
-        optimiser, 
+        optimiser,
         milestones=cfg["optimiser"]["learning-rate-milestones"],
         gamma=cfg["optimiser"]["learning-rate-gamma"]
     )
