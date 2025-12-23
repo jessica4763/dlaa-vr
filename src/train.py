@@ -51,13 +51,13 @@ def train_epoch(
         loss = loss_fn(pred_frame, targets) / accumulation_steps
         loss.backward()
 
-        total_loss += loss
+        total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
 
-            total_loss, current_img = total_loss.item(), (batch + 1) * N
+            current_img = (batch + 1) * N
 
             writer.add_scalar(
                 "loss/train",
