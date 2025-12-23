@@ -19,6 +19,8 @@ def train_epoch(
     device: str,
     model: nn.Module,
     training_dataloader: DataLoader,
+    actual_batch_size: int,
+    virtual_batch_size: int,
     clip_size: int,
     loss_fn: nn.Module,
     optimizer: optim.Optimizer,
@@ -26,6 +28,10 @@ def train_epoch(
     epoch: int
 ) -> None:
     dataset_size = len(training_dataloader.dataset)
+
+    accumulation_steps = virtual_batch_size // actual_batch_size
+
+    total_loss = 0
 
     model.train()
     for batch, (inputs, targets, motion_vectors) in enumerate(training_dataloader):
@@ -42,19 +48,26 @@ def train_epoch(
         pred_frame, _ = model(inputs, motion_vectors)
         pred_frame = pred_frame.view(-1, 3, H, W)
 
-        loss = loss_fn(pred_frame, targets)
+        loss = loss_fn(pred_frame, targets) / accumulation_steps
         loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
 
-        writer.add_scalar(
-            "loss/train",
-            loss.item(),
-            epoch * len(training_dataloader.dataset) + batch
-        )
+        total_loss += loss
 
-        loss, current_img = loss.item(), (batch + 1) * N
-        print(f"Loss: {loss:>7f}  [{current_img:>5d} / {dataset_size:>5d}]")
+        if (batch + 1) % accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad()
+
+            total_loss, current_img = total_loss.item(), (batch + 1) * N
+
+            writer.add_scalar(
+                "loss/train",
+                total_loss,
+                epoch * len(training_dataloader.dataset) + batch
+            )
+
+            print(f"Loss: {total_loss:>7f}  [{current_img:>5d} / {dataset_size:>5d}]")
+
+            total_loss = 0
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
@@ -106,16 +119,16 @@ def train(cfg: DictConfig) -> None:
 
     training_sampler = QualcommDatasetSampler(
         training_data.scenes,
-        cfg["optimiser"]["batch-size"],
+        cfg["optimiser"]["actual-batch-size"],
         cfg["optimiser"]["clip-size"],
     )
 
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
-        # num_workers=os.cpu_count(),
-        # pin_memory=True,
-        # persistent_workers=True
+        num_workers=os.cpu_count(),
+        pin_memory=True,
+        persistent_workers=True
     )
 
     # -------------------------------------------------------------------------
@@ -177,6 +190,8 @@ def train(cfg: DictConfig) -> None:
             device,
             model,
             training_dataloader,
+            cfg["optimiser"]["actual-batch-size"],
+            cfg["optimiser"]["virtual-batch-size"],
             cfg["optimiser"]["clip-size"],
             loss_function,
             optimiser,

@@ -4,25 +4,23 @@ import numpy as np
 from pathlib import Path
 import skimage.io as io
 
-from utils import (
-    gamma_to_linear,
-    linear_to_gamma,
-    write_video
-)
+
+def gamma_to_linear(image: np.ndarray) -> np.ndarray:
+    image = image.astype(np.float32) / 255.0
+    return np.where(
+        image <= 0.04045,
+        image / 12.92,
+        ((image + 0.055) / 1.055) ** 2.4
+    )
 
 
-def get_baselines(filename: Path, fps: int = 24) -> None:
-    input_imgs = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced")
-    write_video(input_imgs, filename, fps=fps)
-
-    input_imgs = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/DLSS2")
-    write_video(input_imgs, filename, fps=fps)
-
-    input_imgs = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/FSR")
-    write_video(input_imgs, filename, fps=fps)
-
-    input_imgs = Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Native")
-    write_video(input_imgs, filename, fps=fps)
+def linear_to_gamma(image: np.ndarray) -> np.ndarray:
+    image = np.clip(image, 0.0, 1.0)
+    return np.where(
+        image <= 0.0031308,
+        12.92 * image,
+        1.055 * (image ** (1.0 / 2.4)) - 0.055
+    )
 
 
 def downsample(
@@ -56,7 +54,7 @@ def downsample(
 
 
 if __name__ == "__main__":
-    output_dimensions = (480, 270)
+    output_dimensions = (960, 540)
 
     training_data_scenes = [
         "CBApocalypse",
@@ -72,7 +70,7 @@ if __name__ == "__main__":
     ]
     training_data_prefix = Path("../data/training_data/QRISP")
     training_data_input_suffix = Path("1080p/Enhanced")
-    training_data_output_suffix = Path("270p/Enhanced")
+    training_data_output_suffix = Path("540p/Enhanced")
     for training_data_scene in training_data_scenes:
         downsample(
             training_data_prefix / training_data_scene / training_data_input_suffix,
@@ -87,7 +85,7 @@ if __name__ == "__main__":
     ]
     test_data_prefix = Path("../data/test_data/QRISP/TestSet")
     test_data_input_suffix = Path("1080p/Enhanced")
-    test_data_output_suffix = Path("270p/Enhanced")
+    test_data_output_suffix = Path("540p/Enhanced")
     for test_data_scene in test_data_scenes:
         downsample(
             test_data_prefix / test_data_scene / test_data_input_suffix,
