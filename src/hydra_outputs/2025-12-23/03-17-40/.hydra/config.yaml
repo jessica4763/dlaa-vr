@@ -1,0 +1,37 @@
+dataset:
+  scene_names:
+  - CBApocalypse
+  - FloodedGrounds
+  - ScifiBase
+  - ScifiFacility
+  - SunTemple
+  training-input-img-path: ../data/training_data/QRISP/*/270p
+  training-output-img-path: ../data/training_data/QRISP/*/270p
+  ground-truth-path-suffix: Enhanced
+  colour-path-suffix: MipBiasMinus2Jittered
+  depth-path-suffix: DepthMipBiasMinus2Jittered
+  camera-data-path-suffix: CameraData
+  motion-vector-path-suffix: MotionVectorsMipBiasMinus2Jittered
+loss: {}
+optimiser:
+  name: adamw
+  batch-size: 2
+  clip-size: 8
+  epochs: 100
+  learning-rate: 0.0001
+  learning-rate-gamma: 0.5
+  learning-rate-milestones: []
+  betas:
+  - 0.9
+  - 0.999
+  epsilon: 1.0e-08
+  weight-decay: 0.0001
+setup:
+  seed: 42
+  saved-models-path: ../saved/models/full_model.pt
+  tensorboard-dir: ../saved/logs/runs
+  checkpoints-path: checkpoints
+model:
+  hidden-channels: 16
+  num-blocks: 1
+  parameters: null

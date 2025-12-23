@@ -123,7 +123,8 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     model = QualcommNetwork(
         hidden_channels=cfg["model"]["hidden-channels"],
-        num_blocks=cfg["model"]["num-blocks"]
+        num_blocks=cfg["model"]["num-blocks"],
+        jitter=False
     ).to(device)
 
     # Initialise with parameters from a previously trained model if desired

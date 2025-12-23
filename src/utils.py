@@ -10,13 +10,14 @@ class Scene:
     def __init__(
         self,
         scene_input_imgs_path: Path,
-        scene_output_imgs_path: Path
+        scene_output_imgs_path: Path,
+        colour_path_suffix: str,
     ):
         self.scene_input_imgs_path = scene_input_imgs_path
         self.scene_output_imgs_path = scene_output_imgs_path
 
-        instances = os.listdir(scene_input_imgs_path)
-        frames = os.listdir(scene_input_imgs_path / instances[0])
+        instances = os.listdir(scene_input_imgs_path / colour_path_suffix)
+        frames = os.listdir(scene_input_imgs_path / colour_path_suffix / instances[0])
 
         self.num_instances = len(instances)
         self.num_frames_per_instance = len(frames)
