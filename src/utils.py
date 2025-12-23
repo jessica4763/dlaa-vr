@@ -85,6 +85,6 @@ def write_video(
 if __name__ == "__main__":
     write_video(
         Path("evaluation_outputs"),
-        "Enhanced.mp4",
+        "540pMipBiasMinus1.mp4",
         fps=24
     )

@@ -57,7 +57,7 @@ class QualcommDatasetSampler(Sampler[list[int]]):
                 idx_offset = self.instance_boundaries[scene_idx - 1]
                 relative_instance_idx = instance_idx - idx_offset
 
-                instance_start = self.frame_boundaries[scene_idx - 1] + relative_instance_idx * scene.num_frames_per_instance,
+                instance_start = self.frame_boundaries[scene_idx - 1] + relative_instance_idx * scene.num_frames_per_instance
                 clip_start = random.randint(instance_start, instance_start + scene.num_frames_per_instance - self.batch_size)
                 for frame_idx in range(clip_start, clip_start + self.clip_size):
                     frame_indices.append(frame_idx)

@@ -2,6 +2,7 @@ data/
 dlaa-vr-venv/
 learning/
 .vscode/
+saved/comparison-videos
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

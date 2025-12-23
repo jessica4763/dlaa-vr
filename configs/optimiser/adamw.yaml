@@ -2,10 +2,10 @@
 name: adamw
 batch-size: 8
 clip-size: 8
-epochs: 100
+epochs: 400
 learning-rate: 1e-4
 learning-rate-gamma: 0.5
-learning-rate-milestones: []
+learning-rate-milestones: [200, 300]
 betas: [0.9, 0.999]
 epsilon: 1e-8
 weight-decay: 1e-4

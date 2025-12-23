@@ -105,7 +105,7 @@ def train(cfg: DictConfig) -> None:
     )
 
     training_sampler = QualcommDatasetSampler(
-        training_data,
+        training_data.scenes,
         cfg["optimiser"]["batch-size"],
         cfg["optimiser"]["clip-size"],
     )
@@ -113,9 +113,9 @@ def train(cfg: DictConfig) -> None:
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
-        num_workers=os.cpu_count(),
-        pin_memory=True,
-        persistent_workers=True
+        # num_workers=os.cpu_count(),
+        # pin_memory=True,
+        # persistent_workers=True
     )
 
     # -------------------------------------------------------------------------
