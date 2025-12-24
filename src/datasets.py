@@ -28,7 +28,7 @@ class QualcommDataset(Dataset):
         jitter: bool = False,
         transform=None,
         target_transform=None,
-    ):
+    ) -> None:
         self.input_imgs_path = input_imgs_path
         self.output_imgs_path = output_imgs_path
         self.ground_truth_path_suffix = ground_truth_path_suffix
@@ -38,19 +38,19 @@ class QualcommDataset(Dataset):
         self.motion_vector_path_suffix = motion_vector_path_suffix
         self.jitter = jitter
 
-        # ------------------------ Code to handle multiple scenes ------------------------
-
         self.scenes = []
         for scene_name in scene_names:
             scene_input_imgs_path = Path(self.input_imgs_path.replace("*", scene_name))
             scene_output_imgs_path = Path(self.output_imgs_path.replace("*", scene_name))
             self.scenes.append(Scene(scene_input_imgs_path, scene_output_imgs_path, colour_path_suffix))
 
+        scene_num_instances = [scene.num_instances for scene in self.scenes]
+        self.instance_boundaries = cumsum(scene_num_instances)
+        self.total_instances = sum(scene_num_instances)
+
         scene_num_frames = [scene.num_frames for scene in self.scenes]
         self.frame_boundaries = cumsum(scene_num_frames)
         self.total_frames = sum(scene_num_frames)
-
-        # --------------------------------------------------------------------------------
 
         self.transform = transform
         self.target_transform = target_transform

@@ -24,15 +24,11 @@ def evaluate(
     model: nn.Module,
     test_dataloader: DataLoader,
     loss_fn: nn.Module,
-    writer: SummaryWriter,
+    metrics: Metrics,
     eval_output_path: Path
 ) -> None:
     model.eval()
     with torch.no_grad():
-        dataset_size = len(test_dataloader.dataset)
-
-        metrics = Metrics(writer, dataset_size)
-
         prev_pred_frame = prev_features = None
         for batch, (inputs, target, motion_vectors) in enumerate(test_dataloader):
             inputs, target, motion_vectors = inputs.to(device), target.to(device), motion_vectors.to(device)
@@ -53,15 +49,13 @@ def evaluate(
             prev_features = features.squeeze(0)
 
             loss, current_img = loss.item(), (batch + 1) * len(inputs)
-            print(f"Loss: {loss:>7f}  [{current_img:>5d}/{dataset_size:>5d}]")
+            print(f"Loss: {loss:>7f}  [{current_img:>5d}/{len(test_dataloader.dataset):>5d}]")
 
             gamma_pred_frame = linear_to_gamma(pred_frame)
             gamma_target_frame = linear_to_gamma(target)
             metrics.record(gamma_pred_frame, gamma_target_frame)
             write_frames(eval_output_path / "pred", gamma_pred_frame, batch)
             write_frames(eval_output_path / "target", gamma_target_frame, batch)
-
-    metrics.report()
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="test")
@@ -146,14 +140,22 @@ def main(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     loss_fn = nn.L1Loss()
 
+    metrics = Metrics(
+        writer, 
+        len(test_dataloader.dataset),  # The total number of frames in the dataset
+        display_name=cfg["setup"]["display-name"]
+    )
+
     evaluate(
         device,
         model,
         test_dataloader,
         loss_fn,
-        writer,
+        metrics,
         Path(cfg["setup"]["eval-output-path"])
     )
+
+    metrics.report()
 
     write_video(
         Path(cfg["setup"]["eval-output-path"]),

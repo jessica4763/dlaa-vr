@@ -29,11 +29,11 @@ def train_epoch(
     writer: SummaryWriter,
     epoch: int
 ) -> None:
-    dataset_size = len(training_dataloader.dataset)
-
-    accumulation_steps = virtual_batch_size // actual_batch_size
+    total_instances = training_dataloader.dataset.total_instances
 
     total_loss = 0
+
+    accumulation_steps = virtual_batch_size // actual_batch_size
 
     model.train()
     for batch, (inputs, targets, motion_vectors) in enumerate(training_dataloader):
@@ -59,15 +59,13 @@ def train_epoch(
             optimizer.step()
             optimizer.zero_grad()
 
-            current_img = (batch + 1) * N
-
             writer.add_scalar(
                 "loss/train",
                 total_loss,
-                epoch * len(training_dataloader.dataset) + batch
+                epoch * total_instances + batch
             )
 
-            print(f"Loss: {total_loss:>7f}  [{current_img:>5d} / {dataset_size:>5d}]")
+            print(f"Loss: {total_loss:>7f}  [{batch + 1:>5d} / {total_instances:>5d}]")
 
             total_loss = 0
 
@@ -121,6 +119,10 @@ def train(cfg: DictConfig) -> None:
 
     training_sampler = QualcommDatasetSampler(
         training_data.scenes,
+        training_data.instance_boundaries,
+        training_data.total_instances,
+        training_data.frame_boundaries,
+        training_data.total_frames,
         cfg["optimiser"]["actual-batch-size"],
         cfg["optimiser"]["clip-size"],
     )
@@ -161,10 +163,10 @@ def train(cfg: DictConfig) -> None:
     if cfg["optimiser"]["loss"] == "l1loss":
         loss_function = nn.L1Loss()
     elif cfg["optimiser"]["loss"] == "cvvdploss":
-        loss_function = CVVDPLoss(cfg["optimiser"]["display-name"])
+        loss_function = CVVDPLoss(cfg["setup"]["display-name"])
     elif cfg["optimiser"]["loss"] == "l1loss_with_cvvdp":
         loss_function = L1LossWithCVVDP(
-            cfg["optimiser"]["display-name"],
+            cfg["setup"]["display-name"],
             cvvdp_weight=cfg["optimiser"]["cvvdp-weight"]
         )
     else:
@@ -244,14 +246,14 @@ def checkpoint(
     # training data is used here
     model.eval()
     with torch.no_grad():
-        X, _, motion_vectors = training_data[0]
+        inputs, _, motion_vectors = training_data[0]
 
         # Verify what exactly goes into the network
-        output_input(model, X)
+        output_input(model, inputs, motion_vectors, jitter=False)
 
-        X = X.to(device).unsqueeze(0).unsqueeze(0)
+        inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
         motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
-        anti_aliased_img, _ = model(X, motion_vectors)
+        anti_aliased_img, _ = model(inputs, motion_vectors)
         anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
 

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class QualcommNetwork(nn.Module):
-    def __init__(self, hidden_channels: int, num_blocks: int, jitter: bool = False):
+    def __init__(self, hidden_channels: int, num_blocks: int, jitter: bool = False) -> None:
         """
         Simplified implementation of the Qualcomm network, adapted for DLAA.
         """
@@ -174,6 +174,7 @@ class QualcommNetwork(nn.Module):
             # -------------------------- Blend ---------------------------
             # ------------------------------------------------------------
             blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
+            blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
             outputs.append(blended_colour)
 
             # Save recurrent colour frame and features

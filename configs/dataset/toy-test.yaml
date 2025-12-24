@@ -1,5 +1,5 @@
 ---
-scene_names: [SeaPort]
+scene_names: [ScifiBaseStartStop]
 test-input-img-path: ../data/test_data/QRISP/TestSet/*/270p
 test-output-img-path: ../data/test_data/QRISP/TestSet/*/270p
 ground-truth-path-suffix: Enhanced

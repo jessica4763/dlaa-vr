@@ -12,7 +12,7 @@ class Scene:
         scene_input_imgs_path: Path,
         scene_output_imgs_path: Path,
         colour_path_suffix: str,
-    ):
+    ) -> None:
         self.scene_input_imgs_path = scene_input_imgs_path
         self.scene_output_imgs_path = scene_output_imgs_path
 

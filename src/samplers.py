@@ -4,27 +4,25 @@ from typing import Iterator
 from torch.utils.data import Sampler
 
 
-from utils import Scene, cumsum
+from utils import Scene
 
 
 class QualcommDatasetSampler(Sampler[list[int]]):
     def __init__(
         self,
         scenes: list[Scene],
+        instance_boundaries: list[int],
+        total_instances: int,
+        frame_boundaries: list[int],
+        total_frames: int,
         batch_size: int,
         clip_size: int
-    ):
+    ) -> None:
         self.scenes = scenes
-        self.total_scenes = len(scenes)
-
-        scene_num_instances = [scene.num_instances for scene in self.scenes]
-        self.instance_boundaries = cumsum(scene_num_instances)
-        self.total_instances = sum(scene_num_instances)
-
-        scene_num_frames = [scene.num_frames for scene in self.scenes]
-        self.frame_boundaries = cumsum(scene_num_frames)
-        self.total_frames = sum(scene_num_frames)
-
+        self.instance_boundaries = instance_boundaries
+        self.total_instances = total_instances
+        self.frame_boundaries = frame_boundaries
+        self.total_frames = total_frames
         self.batch_size = batch_size
         self.clip_size = clip_size
 
