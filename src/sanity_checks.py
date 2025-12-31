@@ -10,8 +10,7 @@ from utils import linear_to_gamma
 def output_input(
     model: nn.Module,
     inputs: torch.Tensor,
-    motion_vectors: torch.Tensor,
-    jitter: bool = False
+    motion_vectors: torch.Tensor
 ) -> None:
     c0 = 0
     c1 = c0 + model.num_curr_colour
@@ -23,7 +22,7 @@ def output_input(
     curr_depth = inputs[c0:c1]
     save_image(curr_depth, "sanity_checks_outputs/curr_depth.png")
 
-    if jitter:
+    if model.num_curr_jitter != 0:
         c0 = c1
         c1 = c0 + model.num_curr_jitter
         curr_jitter = inputs[c0:c1]

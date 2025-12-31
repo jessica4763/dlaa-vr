@@ -35,10 +35,18 @@ def gamma_to_linear(image: torch.Tensor) -> torch.Tensor:
 
 def linear_to_gamma(image: torch.Tensor) -> torch.Tensor:
     image = torch.clamp(image, 0.0, 1.0)
+
+    # Adding this doesn't change the result of the computation at all, 
+    # but sidesteps the fact that PyTorch computes the gradients of 
+    # both branches of torch.where, which could result in NaN 
+    # if the gradient of one of the branches is NaN even if that 
+    # branch wasn't going to be taken anyway
+    max_image = torch.maximum(image, torch.tensor(0.0031308, device=image.device))
+
     return torch.where(
         image <= 0.0031308,
         12.92 * image,
-        1.055 * (image ** (1.0 / 2.4)) - 0.055
+        1.055 * (max_image ** (1.0 / 2.4)) - 0.055
     )
 
 

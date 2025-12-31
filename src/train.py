@@ -24,7 +24,7 @@ def train_epoch(
     actual_batch_size: int,
     virtual_batch_size: int,
     clip_size: int,
-    loss_fn: nn.Module,
+    loss_function: nn.Module,
     optimizer: optim.Optimizer,
     writer: SummaryWriter,
     epoch: int
@@ -50,7 +50,7 @@ def train_epoch(
         pred_frame, _ = model(inputs, motion_vectors)
         pred_frame = pred_frame.view(-1, 3, H, W)
 
-        loss = loss_fn(pred_frame, targets) / accumulation_steps
+        loss = loss_function(pred_frame, targets) / accumulation_steps
         loss.backward()
 
         total_loss += loss.item()
@@ -112,7 +112,7 @@ def train(cfg: DictConfig) -> None:
         cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["motion-vector-path-suffix"],
         cfg["dataset"]["scene_names"],
-        jitter=False,
+        cfg["setup"]["jitter"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
     )
@@ -141,7 +141,7 @@ def train(cfg: DictConfig) -> None:
     model = QualcommNetwork(
         hidden_channels=cfg["model"]["hidden-channels"],
         num_blocks=cfg["model"]["num-blocks"],
-        jitter=False
+        jitter=cfg["setup"]["jitter"]
     ).to(device)
 
     # Initialise with parameters from a previously trained model if desired
@@ -162,6 +162,8 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     if cfg["optimiser"]["loss"] == "l1loss":
         loss_function = nn.L1Loss()
+    elif cfg["optimiser"]["loss"] == "mseloss":
+        loss_function = nn.MSELoss()
     elif cfg["optimiser"]["loss"] == "cvvdploss":
         loss_function = CVVDPLoss(cfg["setup"]["display-name"])
     elif cfg["optimiser"]["loss"] == "l1loss_with_cvvdp":
@@ -249,7 +251,7 @@ def checkpoint(
         inputs, _, motion_vectors = training_data[0]
 
         # Verify what exactly goes into the network
-        output_input(model, inputs, motion_vectors, jitter=False)
+        output_input(model, inputs, motion_vectors)
 
         inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
         motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)

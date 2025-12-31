@@ -3,6 +3,52 @@ from torch import nn
 import torch.nn.functional as F
 
 
+class JitterConditionedConv(nn.Module):
+    def __init__(
+        self, 
+        out_channels: int,
+        in_channels: int,
+        kernel_height: int,
+        kernel_width: int,
+        num_hidden_features: int = 2048, 
+        num_blocks: int = 7
+    ) -> None:
+        super().__init__()
+
+        self.out_channels = out_channels
+        self.in_channels = in_channels
+        self.kernel_height = kernel_height
+        self.kernel_width = kernel_width
+        num_outputs = out_channels * in_channels, kernel_height, kernel_width
+
+        self.input_layer = nn.Linear(2, num_hidden_features)
+
+        body_layers = []
+        for _ in range(num_blocks - 2):
+            body_layers.append(
+                nn.Linear(num_hidden_features, num_hidden_features)
+            )
+            body_layers.append(nn.ReLU())
+        self.body = nn.Sequential(*body_layers)
+        
+        self.output_layer = nn.Linear(num_hidden_features, num_outputs)
+        
+    def forward(self, x: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
+        h = self.input_layer(jitter)
+        h = self.body(h)
+        kernel = self.output_layer(h)
+        kernel = kernel.view(
+            self.out_channels, 
+            self.in_channels, 
+            self.kernel_height, 
+            self.kernel_width
+        )
+
+        # The network doesn't directly update the kernel weights, but instead 
+        # updates the weights of the MLP used to calculate the kernel weights 
+        return F.conv2d(x, kernel, padding=1)
+
+
 class QualcommNetwork(nn.Module):
     def __init__(self, hidden_channels: int, num_blocks: int, jitter: bool = False) -> None:
         """
@@ -25,14 +71,25 @@ class QualcommNetwork(nn.Module):
             self.num_prev_feature
         )
 
-        # Initial 3 × 3 Conv + ReLU block
-        self.input_conv = nn.Conv2d(
-            self.in_channels,
-            hidden_channels,
-            kernel_size=3,
-            padding=1,
-            padding_mode="reflect"
-        )
+        if jitter: 
+            self.input_conv = JitterConditionedConv(
+                hidden_channels,
+                self.in_channels,
+                3,
+                3,
+                num_hidden_features=2048, 
+                num_blocks=7
+            )
+        else:
+            # Initial 3 × 3 Conv + ReLU block
+            self.input_conv = nn.Conv2d(
+                self.in_channels,
+                hidden_channels,
+                kernel_size=3,
+                padding=1,
+                padding_mode="reflect"
+            )
+
         self.input_relu = nn.ReLU()
 
         # num_blocks × (3 × 3 Conv + ReLU) blocks
@@ -118,7 +175,8 @@ class QualcommNetwork(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        motion_vectors: torch.Tensor
+        motion_vectors: torch.Tensor,
+        jitter: torch.Tensor = None
     ) -> tuple[torch.Tensor, torch.Tensor]:
         batch_size, clip_size, C, H, W = x.shape
 
@@ -154,9 +212,19 @@ class QualcommNetwork(nn.Module):
                 )
 
             # ------------------------------------------------------------
+            # ---------------- Input convolution and ReLU ----------------
+            # ------------------------------------------------------------
+            if self.num_curr_jitter != 0:
+                assert jitter is not None
+                h = self.input_conv(clip_frames, jitter)
+            else:
+                h = self.input_conv(clip_frames)
+
+            h = self.input_relu(h)
+
+            # ------------------------------------------------------------
             # ---------------------- Main conv stack ---------------------
             # ------------------------------------------------------------
-            h = self.input_relu(self.input_conv(clip_frames))
             h = self.body(h)
 
             # ------------------------------------------------------------

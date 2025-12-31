@@ -79,9 +79,9 @@ def main(cfg: DictConfig) -> None:
     torch.manual_seed(cfg["setup"]["seed"])
 
     # Deterministically selecting an algorithm reduces efficiency
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = True
 
-    torch.use_deterministic_algorithms(True)
+    torch.use_deterministic_algorithms(False)
 
     # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = False
@@ -141,9 +141,9 @@ def main(cfg: DictConfig) -> None:
     loss_fn = nn.L1Loss()
 
     metrics = Metrics(
-        writer, 
         len(test_dataloader.dataset),  # The total number of frames in the dataset
-        display_name=cfg["setup"]["display-name"]
+        display_name=cfg["setup"]["display-name"], 
+        writer=writer
     )
 
     evaluate(

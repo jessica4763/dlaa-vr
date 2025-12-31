@@ -5,7 +5,7 @@ defaults:
 setup:
   seed: 42
   display-name: standard_fhd
-  saved-models-path: ../saved/logs/runs/exp6/toy_model.pt
+  saved-models-path: ../saved/logs/runs/exp14/scale_model.pt
   eval-output-path: evaluation_outputs
   tensorboard-dir: ../saved/logs/runs
 

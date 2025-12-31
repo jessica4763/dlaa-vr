@@ -3,6 +3,10 @@ import os
 import numpy as np
 from pathlib import Path
 import skimage.io as io
+import torch
+from torchvision.io import decode_image
+
+from metrics import Metrics
 
 
 def gamma_to_linear(image: np.ndarray) -> np.ndarray:
@@ -53,42 +57,67 @@ def downsample(
         print(f"{instance} done.")
 
 
+def evaluate(pred_path: Path, target_path: Path) -> None:
+    pairs = list(zip(os.listdir(pred_path), os.listdir(target_path)))
+
+    metrics = Metrics(
+        len(pairs),  # The total number of frames in the dataset
+        display_name="standard_fhd"
+    )
+
+    cuda0 = torch.device('cuda:0')
+
+    for pred_name, target_name in pairs:
+        pred = decode_image((pred_path / pred_name).resolve())[0:3, ...]
+        pred = pred.to(cuda0) / 255.0
+        target = decode_image((target_path / target_name).resolve())[0:3, ...]
+        target = target.to(cuda0) / 255.0
+        metrics.record(pred, target)
+
+    metrics.report()
+
+
 if __name__ == "__main__":
-    output_dimensions = (960, 540)
+    evaluate(
+        Path("../data/test_data/QRISP/TestSet/SeaPort/270p/MipBiasMinus2/0000"),
+        Path("../data/test_data/QRISP/TestSet/SeaPort/270p/Enhanced/0000")
+    )
 
-    training_data_scenes = [
-        "CBApocalypse",
-        "FloodedGrounds",
-        "FloodedGroundsBridges",
-        "ScifiBase",
-        "ScifiBaseNightStartStop",
-        "ScifiBaseStartStop",
-        "ScifiFacility",
-        "SunTemple",
-        "SunTempleBush",
-        "SunTempleLamps"
-    ]
-    training_data_prefix = Path("../data/training_data/QRISP")
-    training_data_input_suffix = Path("1080p/Enhanced")
-    training_data_output_suffix = Path("540p/Enhanced")
-    for training_data_scene in training_data_scenes:
-        downsample(
-            training_data_prefix / training_data_scene / training_data_input_suffix,
-            training_data_prefix / training_data_scene / training_data_output_suffix,
-            output_dimensions
-        )
+    # output_dimensions = (960, 540)
 
-    test_data_scenes = [
-        "AbandonedSchool",
-        "SeaPort",
-        "SpaceShipDemo"
-    ]
-    test_data_prefix = Path("../data/test_data/QRISP/TestSet")
-    test_data_input_suffix = Path("1080p/Enhanced")
-    test_data_output_suffix = Path("540p/Enhanced")
-    for test_data_scene in test_data_scenes:
-        downsample(
-            test_data_prefix / test_data_scene / test_data_input_suffix,
-            test_data_prefix / test_data_scene / test_data_output_suffix,
-            output_dimensions
-        )
+    # training_data_scenes = [
+    #     "CBApocalypse",
+    #     "FloodedGrounds",
+    #     "FloodedGroundsBridges",
+    #     "ScifiBase",
+    #     "ScifiBaseNightStartStop",
+    #     "ScifiBaseStartStop",
+    #     "ScifiFacility",
+    #     "SunTemple",
+    #     "SunTempleBush",
+    #     "SunTempleLamps"
+    # ]
+    # training_data_prefix = Path("../data/training_data/QRISP")
+    # training_data_input_suffix = Path("1080p/Enhanced")
+    # training_data_output_suffix = Path("540p/Enhanced")
+    # for training_data_scene in training_data_scenes:
+    #     downsample(
+    #         training_data_prefix / training_data_scene / training_data_input_suffix,
+    #         training_data_prefix / training_data_scene / training_data_output_suffix,
+    #         output_dimensions
+    #     )
+
+    # test_data_scenes = [
+    #     "AbandonedSchool",
+    #     "SeaPort",
+    #     "SpaceShipDemo"
+    # ]
+    # test_data_prefix = Path("../data/test_data/QRISP/TestSet")
+    # test_data_input_suffix = Path("1080p/Enhanced")
+    # test_data_output_suffix = Path("540p/Enhanced")
+    # for test_data_scene in test_data_scenes:
+    #     downsample(
+    #         test_data_prefix / test_data_scene / test_data_input_suffix,
+    #         test_data_prefix / test_data_scene / test_data_output_suffix,
+    #         output_dimensions
+    #     )

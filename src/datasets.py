@@ -55,39 +55,45 @@ class QualcommDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-    def get_jitter(
+    def get_jitter_offsets(
         self,
-        depth,
-        height,
-        width,
-        device: str,
-        dtype: torch.dtype,
         scene: Scene,
         instance: str,
-        curr_frame_num: int
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        curr_frame = str(curr_frame_num).zfill(4) + ".json"
-        json_file_path = scene.scene_input_imgs_path / self.camera_data_path_suffix / instance / curr_frame
+        frame_num: int
+    ) -> tuple[float, float]:
+        frame = str(frame_num).zfill(4) + ".json"
+        json_file_path = scene.scene_input_imgs_path / self.camera_data_path_suffix / instance / frame
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
             camera_data = json.load(json_file)
-            curr_frame_x = camera_data["jitter_offset"]["x"]
-            curr_frame_y = camera_data["jitter_offset"]["y"]
+            jitter_offset_x = camera_data["jitter_offset"]["x"]
+            jitter_offset_y = camera_data["jitter_offset"]["y"]
+            return jitter_offset_x, jitter_offset_y
 
-        jitter_x = torch.full(
+    def get_jitter_tensors(
+        self,
+        jitter_offset_x: float,
+        jitter_offset_y: float,
+        depth: int,
+        height: int,
+        width: int,
+        device: str,
+        dtype: torch.dtype,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        jitter_tensor_x = torch.full(
             (depth, height, width),
-            fill_value=curr_frame_x,
+            fill_value=jitter_offset_x,
             device=device,
             dtype=dtype
         )
 
-        jitter_y = torch.full(
+        jitter_tensor_y = torch.full(
             (depth, height, width),
-            fill_value=curr_frame_y,
+            fill_value=jitter_offset_y,
             device=device,
             dtype=dtype
         )
 
-        return jitter_x, jitter_y
+        return jitter_tensor_x, jitter_tensor_y
 
     def get_depth(
         self,
@@ -140,27 +146,13 @@ class QualcommDataset(Dataset):
     def apply_jitter_compensation(
         self,
         motion_vectors: torch.Tensor,
-        scene: Scene,
-        instance: str,
+        prev_jitter_x: torch.Tensor,
+        prev_jitter_y: torch.Tensor,
         curr_jitter_x: torch.Tensor,
         curr_jitter_y: torch.Tensor,
-        prev_frame_num: int
     ) -> torch.Tensor:
-        """Update the motion vectors to account for jitter."""
-        depth = 1
         height = motion_vectors.shape[1]
         width = motion_vectors.shape[2]
-
-        prev_jitter_x, prev_jitter_y = self.get_jitter(
-            depth,
-            height,
-            width,
-            motion_vectors.device,
-            motion_vectors.dtype,
-            scene,
-            instance,
-            prev_frame_num
-        )
 
         motion_vectors[[0], ...] += 2.0 * (prev_jitter_x - curr_jitter_x) / width
         motion_vectors[[1], ...] += 2.0 * (prev_jitter_y - curr_jitter_y) / height
@@ -240,7 +232,7 @@ class QualcommDataset(Dataset):
         # -------------------------------------------------------------------
 
         prev_frame_num = 0 if curr_frame_num == 0 else curr_frame_num - 1
-        prev_output_img = curr_input_img.clone().detach()
+        prev_output_img = curr_input_img.clone().detach()  # This will be overwritten later, if there was a previous frame
 
         # -------------------------------------------------------------------
         # ---------------------------- Transforms ---------------------------
@@ -270,24 +262,44 @@ class QualcommDataset(Dataset):
         )
 
         if self.jitter:
-            curr_jitter_x, curr_jitter_y = self.get_jitter(
+            curr_jitter_offset_x, curr_jitter_offset_y = self.get_jitter_offsets(
+                scene, 
+                instance, 
+                curr_frame_num
+            )
+
+            prev_jitter_offset_x, prev_jitter_offset_y = self.get_jitter_offsets(
+                scene, 
+                instance, 
+                prev_frame_num
+            )
+
+            curr_jitter_x, curr_jitter_y = self.get_jitter_tensors(
+                curr_jitter_offset_x,
+                curr_jitter_offset_y,
                 1,
                 curr_input_img.shape[1],
                 curr_input_img.shape[2],
                 curr_input_img.device,
-                curr_input_img.dtype,
-                scene,
-                instance,
-                curr_frame_num
+                curr_input_img.dtype
+            )
+
+            prev_jitter_x, prev_jitter_y = self.get_jitter_tensors(
+                prev_jitter_offset_x,
+                prev_jitter_offset_y,
+                1,
+                curr_input_img.shape[1],
+                curr_input_img.shape[2],
+                curr_input_img.device,
+                curr_input_img.dtype
             )
 
             motion_vectors = self.apply_jitter_compensation(
                 motion_vectors,
-                scene,
-                instance,
+                prev_jitter_x,
+                prev_jitter_y,
                 curr_jitter_x,
                 curr_jitter_y,
-                prev_frame_num
             )
 
         motion_vectors = self.depth_informed_dilation(
