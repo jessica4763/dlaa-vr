@@ -19,9 +19,12 @@ class JitterConditionedConv(nn.Module):
         self.in_channels = in_channels
         self.kernel_height = kernel_height
         self.kernel_width = kernel_width
-        num_outputs = out_channels * in_channels, kernel_height, kernel_width
+        num_outputs = out_channels * in_channels * kernel_height * kernel_width
 
-        self.input_layer = nn.Linear(2, num_hidden_features)
+        self.input_layer = nn.Sequential(
+            nn.Linear(2, num_hidden_features),
+            nn.ReLU()
+        )
 
         body_layers = []
         for _ in range(num_blocks - 2):
@@ -31,7 +34,10 @@ class JitterConditionedConv(nn.Module):
             body_layers.append(nn.ReLU())
         self.body = nn.Sequential(*body_layers)
         
-        self.output_layer = nn.Linear(num_hidden_features, num_outputs)
+        self.output_layer = nn.Sequential(
+            nn.Linear(num_hidden_features, num_outputs),
+            nn.ReLU()
+        )
         
     def forward(self, x: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
         h = self.input_layer(jitter)
@@ -50,7 +56,7 @@ class JitterConditionedConv(nn.Module):
 
 
 class QualcommNetwork(nn.Module):
-    def __init__(self, hidden_channels: int, num_blocks: int, jitter: bool = False) -> None:
+    def __init__(self, hidden_channels: int, num_blocks: int, use_jitter: bool = False) -> None:
         """
         Simplified implementation of the Qualcomm network, adapted for DLAA.
         """
@@ -58,7 +64,7 @@ class QualcommNetwork(nn.Module):
 
         self.num_curr_colour = 3
         self.num_curr_depth = 1
-        self.num_curr_jitter = 2 if jitter else 0  # 2 for displacement in both x and y
+        self.num_curr_jitter = 2 if use_jitter else 0  # 2 for displacement in both x and y
         self.num_prev_colour = self.num_curr_colour
         self.num_prev_feature = 1
 
@@ -71,7 +77,7 @@ class QualcommNetwork(nn.Module):
             self.num_prev_feature
         )
 
-        if jitter: 
+        if use_jitter: 
             self.input_conv = JitterConditionedConv(
                 hidden_channels,
                 self.in_channels,
@@ -108,13 +114,23 @@ class QualcommNetwork(nn.Module):
         self.body = nn.Sequential(*body_layers)
 
         # Feature head
-        self.feature_head = nn.Conv2d(
-            hidden_channels,
-            self.num_prev_feature,
-            kernel_size=3,
-            padding=1,
-            padding_mode="reflect"
-        )
+        if use_jitter: 
+            self.feature_head = JitterConditionedConv(
+                self.num_prev_feature,
+                hidden_channels,
+                3,
+                3,
+                num_hidden_features=2048, 
+                num_blocks=7
+            )
+        else:
+            self.feature_head = nn.Conv2d(
+                hidden_channels,
+                self.num_prev_feature,
+                kernel_size=3,
+                padding=1,
+                padding_mode="reflect"
+            )
 
         # Colour head
         self.colour_head = nn.Sequential(
@@ -187,6 +203,9 @@ class QualcommNetwork(nn.Module):
         for clip in range(clip_size):
             clip_frames = x[:, clip].clone()
             motion_vector_frames = motion_vectors[:, clip].clone()
+            if self.num_curr_jitter != 0:
+                assert jitter is not None
+                jitter_frames = jitter[:, clip].clone()
 
             # Use recurrent colour frame
             c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter
@@ -216,21 +235,25 @@ class QualcommNetwork(nn.Module):
             # ------------------------------------------------------------
             if self.num_curr_jitter != 0:
                 assert jitter is not None
-                h = self.input_conv(clip_frames, jitter)
+                h = self.input_conv(clip_frames, jitter_frames)
             else:
                 h = self.input_conv(clip_frames)
 
             h = self.input_relu(h)
 
             # ------------------------------------------------------------
-            # ---------------------- Main conv stack ---------------------
+            # ---------------------- Main conv body ----------------------
             # ------------------------------------------------------------
             h = self.body(h)
 
             # ------------------------------------------------------------
             # ---------------------- Feature branch ----------------------
             # ------------------------------------------------------------
-            out_features = self.feature_head(h)
+            if self.num_curr_jitter != 0:
+                assert jitter is not None
+                out_features = self.feature_head(h, jitter_frames)
+            else:
+                out_features = self.feature_head(h)
 
             # ------------------------------------------------------------
             # ------------ Colour and blending mask branches -------------

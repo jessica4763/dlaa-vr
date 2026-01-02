@@ -30,10 +30,17 @@ def evaluate(
     model.eval()
     with torch.no_grad():
         prev_pred_frame = prev_features = None
-        for batch, (inputs, target, motion_vectors) in enumerate(test_dataloader):
-            inputs, target, motion_vectors = inputs.to(device), target.to(device), motion_vectors.to(device)
+        for batch, (inputs, motion_vectors, jitter, target) in enumerate(test_dataloader):
+            inputs = inputs.to(device)
+            inputs = inputs.unsqueeze(0)
 
-            inputs, motion_vectors = inputs.unsqueeze(0), motion_vectors.unsqueeze(0)
+            motion_vectors = motion_vectors.to(device)
+            motion_vectors = motion_vectors.unsqueeze(0)
+
+            jitter = jitter.to(device)
+            jitter = jitter.unsqueeze(0)
+
+            target = target.to(device)
 
             # Use the previously predicted frame and features during test
             if prev_pred_frame is not None and prev_features is not None:
@@ -42,7 +49,7 @@ def evaluate(
                 inputs[:, :, c0:c1] = prev_pred_frame
                 inputs[:, :, c1:model.in_channels] = prev_features
 
-            pred_frame, features = model(inputs, motion_vectors)
+            pred_frame, features = model(inputs, motion_vectors, jitter)
             loss = loss_fn(pred_frame, target)
 
             prev_pred_frame = pred_frame
@@ -103,7 +110,7 @@ def main(cfg: DictConfig) -> None:
         cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["motion-vector-path-suffix"],
         cfg["dataset"]["scene_names"],
-        jitter=False,
+        jitter=cfg["setup"]["jitter"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear
     )
@@ -118,7 +125,7 @@ def main(cfg: DictConfig) -> None:
     model = QualcommNetwork(
         hidden_channels=cfg["model"]["hidden-channels"],
         num_blocks=cfg["model"]["num-blocks"],
-        jitter=False
+        jitter=cfg["setup"]["jitter"]
     ).to(device)
 
     model.load_state_dict(
@@ -129,9 +136,10 @@ def main(cfg: DictConfig) -> None:
         )
     )
 
-    example_input_imgs, _, motion_vectors = test_data[0]
+    example_input_imgs, _, motion_vectors, jitter = test_data[0]
     example_input_imgs = example_input_imgs.to(device).unsqueeze(0).unsqueeze(0)
-    writer.add_graph(model, input_to_model=(example_input_imgs, motion_vectors))
+    jitter = jitter.to(device).unsqueeze(0).unsqueeze(0)
+    writer.add_graph(model, input_to_model=(example_input_imgs, motion_vectors, jitter))
 
     print_parameters(Path(cfg["setup"]["eval-output-path"]), model.state_dict())
 

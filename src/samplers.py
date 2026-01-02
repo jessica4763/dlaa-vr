@@ -16,7 +16,10 @@ class QualcommDatasetSampler(Sampler[list[int]]):
         frame_boundaries: list[int],
         total_frames: int,
         batch_size: int,
-        clip_size: int
+        clip_size: int,
+        patch_size: int,
+        frame_height: int,
+        frame_width: int
     ) -> None:
         self.scenes = scenes
         self.instance_boundaries = instance_boundaries
@@ -25,6 +28,9 @@ class QualcommDatasetSampler(Sampler[list[int]]):
         self.total_frames = total_frames
         self.batch_size = batch_size
         self.clip_size = clip_size
+        self.frame_height = frame_height
+        self.frame_width = frame_width
+        self.patch_size = patch_size
 
     def __len__(self) -> int:
         return self.total_instances
@@ -51,9 +57,15 @@ class QualcommDatasetSampler(Sampler[list[int]]):
                 idx_offset = self.instance_boundaries[scene_idx]
                 relative_instance_idx = instance_idx - idx_offset
 
+                # Get a random patch_size x patch_size patch
+                patch_start_x = random.randint(0, self.frame_width - self.patch_size)
+                patch_start_y = random.randint(0, self.frame_height - self.patch_size)
+                patch_end_x = patch_start_x + self.patch_size
+                patch_end_y = patch_start_y + self.patch_size
+
                 instance_start = self.frame_boundaries[scene_idx] + relative_instance_idx * scene.num_frames_per_instance
                 clip_start = random.randint(instance_start, instance_start + scene.num_frames_per_instance - self.clip_size)
                 for frame_idx in range(clip_start, clip_start + self.clip_size):
-                    frame_indices.append(frame_idx)
+                    frame_indices.append((frame_idx, patch_start_x, patch_start_y, patch_end_x, patch_end_y))
 
             yield frame_indices

@@ -5,10 +5,11 @@ cvvdp-weight: 0.01
 actual-batch-size: 1
 virtual-batch-size: 8
 clip-size: 8
-epochs: 400
+patch-size: 264
+epochs: 1600
 learning-rate: 1e-4
 learning-rate-gamma: 0.5
-learning-rate-milestones: [200, 300]
+learning-rate-milestones: [800, 1200]
 betas: [0.9, 0.999]
 epsilon: 1e-8
 weight-decay: 1e-4

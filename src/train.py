@@ -13,7 +13,7 @@ from datasets import QualcommDataset
 from loss import CVVDPLoss, L1LossWithCVVDP
 from model import QualcommNetwork
 from samplers import QualcommDatasetSampler
-from sanity_checks import output_input
+from sanity_checks import save_input, save_output
 from utils import gamma_to_linear, linear_to_gamma
 
 
@@ -27,7 +27,8 @@ def train_epoch(
     loss_function: nn.Module,
     optimizer: optim.Optimizer,
     writer: SummaryWriter,
-    epoch: int
+    epoch: int,
+    use_jitter: bool = False
 ) -> None:
     total_instances = training_dataloader.dataset.total_instances
 
@@ -36,18 +37,26 @@ def train_epoch(
     accumulation_steps = virtual_batch_size // actual_batch_size
 
     model.train()
-    for batch, (inputs, targets, motion_vectors) in enumerate(training_dataloader):
-        inputs = inputs.to(device, non_blocking=True)
-        targets = targets.to(device, non_blocking=True)
-        motion_vectors = motion_vectors.to(device, non_blocking=True)
-
+    for batch, (inputs, motion_vectors, jitter, targets) in enumerate(training_dataloader):
         # Sampler gives N = num_batches * clip_size
         N, C, H, W = inputs.shape
+
+        inputs = inputs.to(device, non_blocking=True)
         inputs = inputs.view(-1, clip_size, C, H, W)
+
+        motion_vectors = motion_vectors.to(device, non_blocking=True)
         motion_vectors = motion_vectors.view(-1, clip_size, 2, H, W)
 
+        if use_jitter: 
+            jitter = jitter.to(device, non_blocking=True)
+            jitter = jitter.view(-1, clip_size, 2)
+        else:
+            jitter = None
+
+        targets = targets.to(device, non_blocking=True)
+
         # Pass in motion vectors as well, for warping
-        pred_frame, _ = model(inputs, motion_vectors)
+        pred_frame, _ = model(inputs, motion_vectors, jitter)
         pred_frame = pred_frame.view(-1, 3, H, W)
 
         loss = loss_function(pred_frame, targets) / accumulation_steps
@@ -82,6 +91,9 @@ def train(cfg: DictConfig) -> None:
     checkpoints_path = Path(cfg["setup"]["checkpoints-path"])
     checkpoints_path.mkdir(parents=True, exist_ok=True)
 
+    sanity_checks_output_path = Path(cfg["setup"]["sanity-checks-output-path"])
+    sanity_checks_output_path.mkdir(parents=True, exist_ok=True)
+
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
     # -------------------------------------------------------------------------
@@ -112,7 +124,7 @@ def train(cfg: DictConfig) -> None:
         cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["motion-vector-path-suffix"],
         cfg["dataset"]["scene_names"],
-        cfg["setup"]["jitter"],
+        use_jitter=cfg["setup"]["jitter"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
     )
@@ -125,6 +137,9 @@ def train(cfg: DictConfig) -> None:
         training_data.total_frames,
         cfg["optimiser"]["actual-batch-size"],
         cfg["optimiser"]["clip-size"],
+        cfg["optimiser"]["patch-size"],
+        cfg["dataset"]["frame-height"],
+        cfg["dataset"]["frame-width"]
     )
 
     training_dataloader = DataLoader(
@@ -141,7 +156,7 @@ def train(cfg: DictConfig) -> None:
     model = QualcommNetwork(
         hidden_channels=cfg["model"]["hidden-channels"],
         num_blocks=cfg["model"]["num-blocks"],
-        jitter=cfg["setup"]["jitter"]
+        use_jitter=cfg["setup"]["jitter"]
     ).to(device)
 
     # Initialise with parameters from a previously trained model if desired
@@ -212,15 +227,20 @@ def train(cfg: DictConfig) -> None:
             loss_function,
             optimiser,
             writer,
-            epoch
+            epoch,
+            use_jitter=False
         )
         checkpoint(
             checkpoints_path,
+            sanity_checks_output_path,
             device,
             model,
             training_data,
             writer,
-            epoch
+            epoch,
+            cfg["dataset"]["frame-height"],
+            cfg["dataset"]["frame-width"],
+            use_jitter=False
         )
         scheduler.step()
 
@@ -238,24 +258,33 @@ def train(cfg: DictConfig) -> None:
 
 def checkpoint(
     checkpoint_path: Path,
+    sanity_checks_output_path: Path,
     device: str,
     model: nn.Module,
     training_data: Dataset,
     writer: SummaryWriter,
-    epoch: int
+    epoch: int,
+    frame_height: int,
+    frame_width: int,
+    use_jitter: bool = False
 ) -> None:
     # Strictly a training diagnostic, so it's OK if
     # training data is used here
     model.eval()
     with torch.no_grad():
-        inputs, _, motion_vectors = training_data[0]
+        inputs, motion_vectors, jitter, output = training_data[(0, 0, 0, frame_width, frame_height)]
 
-        # Verify what exactly goes into the network
-        output_input(model, inputs, motion_vectors)
+        # Verify input to the network
+        save_input(sanity_checks_output_path, model, inputs, motion_vectors)
+
+        # Verify the goal of the network
+        output = linear_to_gamma(output)
+        save_output(sanity_checks_output_path, output)
 
         inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
         motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
-        anti_aliased_img, _ = model(inputs, motion_vectors)
+        jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+        anti_aliased_img, _ = model(inputs, motion_vectors, jitter)
         anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
 

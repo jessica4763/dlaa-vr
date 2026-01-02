@@ -7,7 +7,8 @@ from typing import Any
 from utils import linear_to_gamma
 
 
-def output_input(
+def save_input(
+    sanity_checks_output_path: Path,
     model: nn.Module,
     inputs: torch.Tensor,
     motion_vectors: torch.Tensor
@@ -15,12 +16,12 @@ def output_input(
     c0 = 0
     c1 = c0 + model.num_curr_colour
     curr_colour = inputs[c0:c1]
-    save_image(linear_to_gamma(curr_colour), "sanity_checks_outputs/curr_colour.png")
+    save_image(linear_to_gamma(curr_colour), sanity_checks_output_path / "curr_colour.png")
 
     c0 = c1
     c1 = c0 + model.num_curr_depth
     curr_depth = inputs[c0:c1]
-    save_image(curr_depth, "sanity_checks_outputs/curr_depth.png")
+    save_image(curr_depth, sanity_checks_output_path / "curr_depth.png")
 
     if model.num_curr_jitter != 0:
         c0 = c1
@@ -34,19 +35,31 @@ def output_input(
             dtype=curr_jitter.dtype
         )
         curr_jitter = torch.cat([curr_jitter, zeros], dim=0)
-        save_image(curr_jitter, "sanity_checks_outputs/curr_jitter.png")
+        save_image(curr_jitter, sanity_checks_output_path / "curr_jitter.png")
 
     c0 = c1
     c1 = c0 + model.num_curr_colour
     prev_colour = inputs[c0:c1]
-    save_image(linear_to_gamma(prev_colour), "sanity_checks_outputs/prev_colour.png")
+    save_image(linear_to_gamma(prev_colour), sanity_checks_output_path / "prev_colour.png")
 
     c0 = c1
     c1 = c0 + model.num_prev_feature
     prev_feature = inputs[c0:c1]
-    save_image(prev_feature, "sanity_checks_outputs/prev_feature.png")
+    save_image(prev_feature, sanity_checks_output_path / "prev_feature.png")
+    
+    motion_vectors = motion_vectors.squeeze(0)
+    motion_vectors = torch.concat([
+        torch.zeros((1, motion_vectors.shape[1], motion_vectors.shape[2])),
+        motion_vectors
+    ])
+    save_image(motion_vectors, sanity_checks_output_path / "motion_vectors.png")
 
-    save_image(motion_vectors, "sanity_checks_outputs/motion_vectors.png")
+
+def save_output(
+    sanity_checks_output_path: Path,
+    output: torch.Tensor
+) -> None:
+    save_image(output, sanity_checks_output_path / "ground_truth.png")
 
 
 def print_parameters(eval_output_path: Path, parameters: dict[str, Any]) -> None:

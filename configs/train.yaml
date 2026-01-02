@@ -1,19 +1,20 @@
 ---
 defaults:
-  - dataset: scale-train
+  - dataset: full-train
   - optimiser: adamw
 
 setup:
   seed: 42
   display-name: standard_fhd
   jitter: false
-  saved-models-path: ../saved/models/scale_model.pt
+  saved-models-path: ../saved/models/full_model.pt
   tensorboard-dir: ../saved/logs/runs
   checkpoints-path: checkpoints
+  sanity-checks-output-path: sanity_checks_output
 
 model:
-  hidden-channels: 16
-  num-blocks: 1
+  hidden-channels: 64
+  num-blocks: 5
   parameters: null
 
 hydra:

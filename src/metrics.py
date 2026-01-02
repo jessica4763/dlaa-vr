@@ -9,7 +9,6 @@ from skimage.metrics import (
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-# TODO: LPIPS
 
 class Metrics:
     def __init__(
