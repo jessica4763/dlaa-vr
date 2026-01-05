@@ -25,7 +25,7 @@ def train_epoch(
     virtual_batch_size: int,
     clip_size: int,
     loss_function: nn.Module,
-    optimizer: optim.Optimizer,
+    optimiser: optim.Optimizer,
     writer: SummaryWriter,
     epoch: int,
     use_jitter: bool = False
@@ -65,8 +65,8 @@ def train_epoch(
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
-            optimizer.step()
-            optimizer.zero_grad()
+            optimiser.step()
+            optimiser.zero_grad()
 
             writer.add_scalar(
                 "loss/train",
@@ -209,11 +209,18 @@ def train(cfg: DictConfig) -> None:
     else:
         sys.exit("Chosen optimiser implementation does not exist.")
 
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(
-        optimiser,
-        milestones=cfg["optimiser"]["learning-rate-milestones"],
-        gamma=cfg["optimiser"]["learning-rate-gamma"]
-    )
+    if cfg["optimiser"]["lr-scheduler"] == "multi-step":
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimiser,
+            milestones=cfg["optimiser"]["learning-rate-milestones"],
+            gamma=cfg["optimiser"]["learning-rate-gamma"]
+        )
+    elif cfg["optimiser"]["lr-scheduler"] == "cosine-annealing":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimiser,
+            cfg["optimiser"]["epochs"],
+            cfg["optimiser"]["learning-rate-eta-min"]
+        )
 
     # -------------------------------------------------------------------------
     # ----------------------------- Training loop -----------------------------

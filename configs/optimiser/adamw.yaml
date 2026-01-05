@@ -6,10 +6,17 @@ actual-batch-size: 1
 virtual-batch-size: 8
 clip-size: 8
 patch-size: 264
-epochs: 1600
+epochs: 400
+lr-scheduler: cosine-annealing  # multi-step, cosine-annealing
+
+# MultiStepLR
 learning-rate: 1e-4
 learning-rate-gamma: 0.5
 learning-rate-milestones: [800, 1200]
+
+# CosineAnnealingLR
+learning-rate-eta-min: 0
+
 betas: [0.9, 0.999]
 epsilon: 1e-8
 weight-decay: 1e-4
