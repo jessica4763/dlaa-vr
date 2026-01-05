@@ -25,7 +25,8 @@ def evaluate(
     test_dataloader: DataLoader,
     loss_fn: nn.Module,
     metrics: Metrics,
-    eval_output_path: Path
+    eval_output_path: Path,
+    use_jitter: bool = False
 ) -> None:
     model.eval()
     with torch.no_grad():
@@ -37,8 +38,11 @@ def evaluate(
             motion_vectors = motion_vectors.to(device)
             motion_vectors = motion_vectors.unsqueeze(0)
 
-            jitter = jitter.to(device)
-            jitter = jitter.unsqueeze(0)
+            if use_jitter:
+                jitter = jitter.to(device)
+                jitter = jitter.unsqueeze(0)
+            else:
+                jitter = None
 
             target = target.to(device)
 
@@ -110,9 +114,12 @@ def main(cfg: DictConfig) -> None:
         cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["motion-vector-path-suffix"],
         cfg["dataset"]["scene_names"],
-        jitter=cfg["setup"]["jitter"],
+        cfg["dataset"]["frame-height"],
+        cfg["dataset"]["frame-width"],
+        use_jitter=cfg["setup"]["jitter"],
         transform=gamma_to_linear,
-        target_transform=gamma_to_linear
+        target_transform=gamma_to_linear,
+        mode="test"
     )
 
     test_dataloader = DataLoader(
@@ -125,7 +132,7 @@ def main(cfg: DictConfig) -> None:
     model = QualcommNetwork(
         hidden_channels=cfg["model"]["hidden-channels"],
         num_blocks=cfg["model"]["num-blocks"],
-        jitter=cfg["setup"]["jitter"]
+        use_jitter=cfg["setup"]["jitter"]
     ).to(device)
 
     model.load_state_dict(
@@ -136,10 +143,10 @@ def main(cfg: DictConfig) -> None:
         )
     )
 
-    example_input_imgs, _, motion_vectors, jitter = test_data[0]
-    example_input_imgs = example_input_imgs.to(device).unsqueeze(0).unsqueeze(0)
-    jitter = jitter.to(device).unsqueeze(0).unsqueeze(0)
-    writer.add_graph(model, input_to_model=(example_input_imgs, motion_vectors, jitter))
+    inputs, motion_vectors, jitter, _ = test_data[0]
+    inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
+    jitter = jitter.to(device).unsqueeze(0).unsqueeze(0)  # if use_jitter is None, this is a zero tensor, and is ignored during inference
+    writer.add_graph(model, input_to_model=(inputs, motion_vectors, jitter))
 
     print_parameters(Path(cfg["setup"]["eval-output-path"]), model.state_dict())
 
@@ -160,7 +167,8 @@ def main(cfg: DictConfig) -> None:
         test_dataloader,
         loss_fn,
         metrics,
-        Path(cfg["setup"]["eval-output-path"])
+        Path(cfg["setup"]["eval-output-path"]),
+        use_jitter=cfg["setup"]["jitter"]
     )
 
     metrics.report()

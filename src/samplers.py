@@ -7,7 +7,7 @@ from torch.utils.data import Sampler
 from utils import Scene
 
 
-class QualcommDatasetSampler(Sampler[list[int]]):
+class QualcommDatasetSampler(Sampler[list[tuple[int, int, int, int, int]]]):
     def __init__(
         self,
         scenes: list[Scene],
@@ -28,9 +28,9 @@ class QualcommDatasetSampler(Sampler[list[int]]):
         self.total_frames = total_frames
         self.batch_size = batch_size
         self.clip_size = clip_size
+        self.patch_size = patch_size
         self.frame_height = frame_height
         self.frame_width = frame_width
-        self.patch_size = patch_size
 
     def __len__(self) -> int:
         return self.total_instances

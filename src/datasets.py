@@ -25,9 +25,12 @@ class QualcommDataset(Dataset):
         camera_data_path_suffix: str,
         motion_vector_path_suffix: str,
         scene_names: list[str],
+        frame_height: int,
+        frame_width: int,
         use_jitter: bool = False,
         transform=None,
         target_transform=None,
+        mode: str = "training"
     ) -> None:
         self.input_imgs_path = input_imgs_path
         self.output_imgs_path = output_imgs_path
@@ -36,7 +39,12 @@ class QualcommDataset(Dataset):
         self.depth_path_suffix = depth_path_suffix
         self.camera_data_path_suffix = camera_data_path_suffix
         self.motion_vector_path_suffix = motion_vector_path_suffix
+        self.frame_height = frame_height
+        self.frame_width = frame_width
         self.use_jitter = use_jitter
+        self.transform = transform
+        self.target_transform = target_transform
+        self.mode = mode
 
         self.scenes = []
         for scene_name in scene_names:
@@ -51,9 +59,6 @@ class QualcommDataset(Dataset):
         scene_num_frames = [scene.num_frames for scene in self.scenes]
         self.frame_boundaries = cumsum(scene_num_frames)
         self.total_frames = sum(scene_num_frames)
-
-        self.transform = transform
-        self.target_transform = target_transform
 
     def get_jitter_offsets(
         self,
@@ -219,7 +224,11 @@ class QualcommDataset(Dataset):
         return self.total_frames
 
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        idx, patch_start_x, patch_start_y, patch_end_x, patch_end_y = item
+        if self.mode == "training":
+            idx, patch_start_x, patch_start_y, patch_end_x, patch_end_y = item
+        else:
+            idx = item 
+            patch_start_x, patch_start_y, patch_end_x, patch_end_y = (0, 0, self.frame_width, self.frame_height)
 
         # Get the scene associated with this index
         scene_idx = bisect_right(self.frame_boundaries, idx)

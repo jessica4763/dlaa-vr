@@ -124,9 +124,12 @@ def train(cfg: DictConfig) -> None:
         cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["motion-vector-path-suffix"],
         cfg["dataset"]["scene_names"],
+        cfg["dataset"]["frame-height"],
+        cfg["dataset"]["frame-width"],
         use_jitter=cfg["setup"]["jitter"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
+        mode="training"
     )
 
     training_sampler = QualcommDatasetSampler(

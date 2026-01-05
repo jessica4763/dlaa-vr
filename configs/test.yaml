@@ -5,14 +5,14 @@ defaults:
 setup:
   seed: 42
   display-name: standard_fhd
-  jitter: true
-  saved-models-path: ../saved/logs/runs/exp15/toy_model.pt
+  jitter: false
+  saved-models-path: ../saved/logs/runs/exp21/full_model.pt
   eval-output-path: evaluation_outputs
   tensorboard-dir: ../saved/logs/runs
 
 model:
-  hidden-channels: 16
-  num-blocks: 1
+  hidden-channels: 64
+  num-blocks: 5
   parameters: null
 
 hydra:
