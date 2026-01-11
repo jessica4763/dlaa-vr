@@ -2,6 +2,9 @@
 scene_names: [CBApocalypse, FloodedGrounds, FloodedGroundsBridges, ScifiBase, ScifiBaseNightStartStop, ScifiBaseStartStop, ScifiFacility, SunTemple, SunTempleBush, SunTempleLamps]
 training-input-img-path: ../data/training_data/QRISP/*/540p
 training-output-img-path: ../data/training_data/QRISP/*/540p
+frame-height: 540
+frame-width: 960
+dilation-block-size: 8
 ground-truth-path-suffix: Enhanced
 colour-path-suffix: MipBiasMinus1
 depth-path-suffix: DepthMipBiasMinus1

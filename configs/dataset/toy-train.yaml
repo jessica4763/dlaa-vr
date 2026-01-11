@@ -4,8 +4,9 @@ training-input-img-path: ../data/training_data/QRISP/*/540p
 training-output-img-path: ../data/training_data/QRISP/*/540p
 frame-height: 540
 frame-width: 960
+dilation-block-size: 8
 ground-truth-path-suffix: Enhanced
-colour-path-suffix: MipBiasMinus1
-depth-path-suffix: DepthMipBiasMinus1
+colour-path-suffix: MipBiasMinus1Jittered
+depth-path-suffix: DepthMipBiasMinus1Jittered
 camera-data-path-suffix: CameraData
-motion-vector-path-suffix: MotionVectorsMipBiasMinus1
+motion-vector-path-suffix: MotionVectorsMipBiasMinus1Jittered

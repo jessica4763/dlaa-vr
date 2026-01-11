@@ -96,7 +96,7 @@ class Metrics:
 
         pixel_mean = self.pixel_sum / self.dataset_size
         pixel_squared_mean = self.pixel_squared_sum / self.dataset_size
-        self.metrics["avg_pixel_wise_std"] = np.mean(np.sqrt(pixel_squared_mean - np.square(pixel_mean)))
+        self.metrics["avg_pixel_wise_std"] = np.mean(np.sqrt(np.maximum(pixel_squared_mean - np.square(pixel_mean), 0)))
 
         reported_metrics_strings = []
         for metric_name in self.metrics:

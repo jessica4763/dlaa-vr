@@ -28,6 +28,7 @@ class QualcommDataset(Dataset):
         frame_height: int,
         frame_width: int,
         use_jitter: bool = False,
+        dilation_block_size: int = 8,
         transform=None,
         target_transform=None,
         mode: str = "training"
@@ -42,6 +43,7 @@ class QualcommDataset(Dataset):
         self.frame_height = frame_height
         self.frame_width = frame_width
         self.use_jitter = use_jitter
+        self.dilation_block_size = dilation_block_size
         self.transform = transform
         self.target_transform = target_transform
         self.mode = mode
@@ -64,16 +66,14 @@ class QualcommDataset(Dataset):
         self,
         scene: Scene,
         instance: str,
-        frame_num: int,
-        height: int,
-        width: int,
+        frame_num: int
     ) -> tuple[float, float]:
         frame = str(frame_num).zfill(4) + ".json"
         json_file_path = scene.scene_input_imgs_path / self.camera_data_path_suffix / instance / frame
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
             camera_data = json.load(json_file)
-            jitter_offset_x = 2.0 * camera_data["jitter_offset"]["x"] / width
-            jitter_offset_y = 2.0 * camera_data["jitter_offset"]["y"] / height
+            jitter_offset_x = camera_data["jitter_offset"]["x"]
+            jitter_offset_y = -camera_data["jitter_offset"]["y"]  # Note the minus, because Unity is Y-up
             return jitter_offset_x, jitter_offset_y
 
     def get_jitter_tensors(
@@ -157,10 +157,13 @@ class QualcommDataset(Dataset):
         prev_jitter_y: torch.Tensor,
         curr_jitter_x: torch.Tensor,
         curr_jitter_y: torch.Tensor,
+        height: int,
+        width: int
     ) -> torch.Tensor:
-        motion_vectors[[0], ...] += prev_jitter_x - curr_jitter_x
-        motion_vectors[[1], ...] += prev_jitter_y - curr_jitter_y
-
+        # Multiply by 2 and divide by the dimensions of the frame because 
+        # motion vectors are stored as values between -1 and 1
+        motion_vectors[[0], ...] += 2.0 * (prev_jitter_x - curr_jitter_x) / width
+        motion_vectors[[1], ...] += 2.0 * (prev_jitter_y - curr_jitter_y) / height
         return motion_vectors
 
     def depth_informed_dilation(
@@ -168,14 +171,13 @@ class QualcommDataset(Dataset):
         depth: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
+        # (C, H, W) -> (1, C, H, W)
         depth, motion_vectors = depth.unsqueeze(0), motion_vectors.unsqueeze(0)
-
-        block_size = 8
 
         min_pooled_depths, indices = F.max_pool2d(
             -depth,
-            kernel_size=block_size,
-            stride=block_size,
+            kernel_size=self.dilation_block_size,
+            stride=self.dilation_block_size,
             return_indices=True
         )
         min_pooled_depths = -min_pooled_depths
@@ -202,7 +204,7 @@ class QualcommDataset(Dataset):
 
         output_motion_vectors = F.interpolate(
             seleted_motion_vectors,
-            scale_factor=block_size,
+            scale_factor=self.dilation_block_size,
             mode='nearest'
         )
 
@@ -226,7 +228,7 @@ class QualcommDataset(Dataset):
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.mode == "training":
             idx, patch_start_x, patch_start_y, patch_end_x, patch_end_y = item
-        else:
+        else: 
             idx = item 
             patch_start_x, patch_start_y, patch_end_x, patch_end_y = (0, 0, self.frame_width, self.frame_height)
 
@@ -259,9 +261,6 @@ class QualcommDataset(Dataset):
         curr_output_img_path = scene.scene_output_imgs_path / self.ground_truth_path_suffix / instance / curr_frame
 
         curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, ...]
-        original_height = curr_input_img.shape[1]
-        original_width = curr_input_img.shape[2]
-
         curr_input_img = get_patch(curr_input_img)
         patch_height = patch_end_y - patch_start_y
         patch_width = patch_end_x - patch_start_x
@@ -312,17 +311,13 @@ class QualcommDataset(Dataset):
             curr_jitter_offset_x, curr_jitter_offset_y = self.get_jitter_offsets(
                 scene, 
                 instance, 
-                curr_frame_num,
-                original_height,
-                original_width
+                curr_frame_num
             )
 
             prev_jitter_offset_x, prev_jitter_offset_y = self.get_jitter_offsets(
                 scene, 
                 instance, 
-                prev_frame_num,
-                original_height,
-                original_width
+                prev_frame_num
             )
 
             curr_jitter_x, curr_jitter_y = self.get_jitter_tensors(
@@ -351,9 +346,15 @@ class QualcommDataset(Dataset):
                 prev_jitter_y,
                 curr_jitter_x,
                 curr_jitter_y,
+                self.frame_height,  # Still need to scale relative to the dimensions of the frame, not the dimensions of the patch
+                self.frame_width
             )
 
             jitter = torch.tensor((curr_jitter_offset_x, curr_jitter_offset_y))
+
+        # Scale the motion vectors so that they work when warping a patch later on
+        motion_vectors[0, ...] /= patch_width / self.frame_width
+        motion_vectors[1, ...] /= patch_height / self.frame_height
         
         motion_vectors = self.depth_informed_dilation(
             curr_depth,

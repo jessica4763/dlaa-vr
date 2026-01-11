@@ -5,8 +5,8 @@ defaults:
 setup:
   seed: 42
   display-name: standard_fhd
-  jitter: false
-  saved-models-path: ../saved/logs/runs/exp21/full_model.pt
+  jitter: true
+  saved-models-path: ../saved/logs/runs/jitter/exp1/full_model.pt
   eval-output-path: evaluation_outputs
   tensorboard-dir: ../saved/logs/runs
 

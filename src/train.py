@@ -127,6 +127,7 @@ def train(cfg: DictConfig) -> None:
         cfg["dataset"]["frame-height"],
         cfg["dataset"]["frame-width"],
         use_jitter=cfg["setup"]["jitter"],
+        dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
         mode="training"
@@ -227,6 +228,7 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     for epoch in range(cfg["optimiser"]["epochs"]):
         print(f"Epoch {epoch + 1}\n-------------------------------")
+
         train_epoch(
             device,
             model,
@@ -238,8 +240,9 @@ def train(cfg: DictConfig) -> None:
             optimiser,
             writer,
             epoch,
-            use_jitter=False
+            use_jitter=cfg["setup"]["jitter"]
         )
+
         checkpoint(
             checkpoints_path,
             sanity_checks_output_path,
@@ -250,12 +253,13 @@ def train(cfg: DictConfig) -> None:
             epoch,
             cfg["dataset"]["frame-height"],
             cfg["dataset"]["frame-width"],
-            use_jitter=False
+            use_jitter=cfg["setup"]["jitter"]
         )
+
         scheduler.step()
 
-    # Save the model
-    torch.save(model.state_dict(), Path(cfg["setup"]["saved-models-path"]))
+        # Save the model after each epoch
+        torch.save(model.state_dict(), Path(cfg["setup"]["saved-models-path"]))
 
     # Log the config
     writer.add_text("hyperparams", OmegaConf.to_yaml(cfg))

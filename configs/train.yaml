@@ -1,21 +1,21 @@
 ---
 defaults:
-  - dataset: toy-train
+  - dataset: full-train
   - optimiser: adamw
 
 setup:
   seed: 42
   display-name: standard_fhd
-  jitter: false
-  saved-models-path: ../saved/models/toy_model.pt
+  jitter: true
+  saved-models-path: ../saved/models/full_model.pt
   tensorboard-dir: ../saved/logs/runs
   checkpoints-path: checkpoints
   sanity-checks-output-path: sanity_checks_output
 
 model:
-  hidden-channels: 16
-  num-blocks: 1
-  parameters: null
+  hidden-channels: 64
+  num-blocks: 5
+  parameters: # ../saved/logs/runs/[exp]/[model]
 
 hydra:
   run:

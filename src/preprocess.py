@@ -77,11 +77,34 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
     metrics.report()
 
 
+def rename_files(folder_path, extension=".png"):
+    files = os.listdir(folder_path)
+    
+    files.sort()
+
+    print(f"Found {len(files)} files. Starting renaming...")
+
+    for index, filename in enumerate(files):
+        # Create the new name with 4-digit padding (0000, 0001, etc.)
+        new_name = f"{index:04d}{extension}"
+        
+        # Build full file paths
+        old_path = os.path.join(folder_path, filename)
+        new_path = os.path.join(folder_path, new_name)
+
+        # Rename the file
+        os.rename(old_path, new_path)
+        
+    print("Renaming complete.")
+
+
 if __name__ == "__main__":
-    evaluate(
-        Path("../data/test_data/QRISP/TestSet/SeaPort/270p/MipBiasMinus2/0000"),
-        Path("../data/test_data/QRISP/TestSet/SeaPort/270p/Enhanced/0000")
-    )
+    rename_files( "../data/test_data/QRISP/TestSet/AbandonedSchoolStationary/540p/MotionVectorsMipBiasMinus1Jittered/0000", extension=".exr")
+
+    # evaluate(
+    #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/MipBiasMinus1/0000"),
+    #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/Enhanced/0000")
+    # )
 
     # output_dimensions = (960, 540)
 
