@@ -78,10 +78,10 @@ def main(cfg: DictConfig) -> None:
     )
     print(f"Using {device} device")
 
-    eval_output_pred_path = Path("evaluation_outputs/pred")
+    eval_output_pred_path = Path(cfg["paths"]["evaluation-output-path"]) / "pred"
     eval_output_pred_path.mkdir(parents=True, exist_ok=True)
 
-    eval_output_y_path = Path("evaluation_outputs/target")
+    eval_output_y_path = Path(cfg["paths"]["evaluation-output-path"]) / "target"
     eval_output_y_path.mkdir(parents=True, exist_ok=True)
 
     # -------------------------------------------------------------------------
@@ -100,7 +100,7 @@ def main(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ------------------------------ Diagnostics ------------------------------
     # -------------------------------------------------------------------------
-    writer = SummaryWriter(log_dir=cfg["setup"]["tensorboard-dir"])
+    writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
 
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
@@ -108,14 +108,17 @@ def main(cfg: DictConfig) -> None:
     test_data = QualcommDataset(
         cfg["dataset"]["test-input-img-path"],
         cfg["dataset"]["test-output-img-path"],
+        cfg["dataset"]["frame-height"],
+        cfg["dataset"]["frame-width"],
+        cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["ground-truth-path-suffix"],
         cfg["dataset"]["colour-path-suffix"],
         cfg["dataset"]["depth-path-suffix"],
-        cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["motion-vector-path-suffix"],
+        cfg["dataset"]["colour-jittered-path-suffix"],
+        cfg["dataset"]["depth-jittered-path-suffix"],
+        cfg["dataset"]["motion-vector-jittered-path-suffix"],
         cfg["dataset"]["scene_names"],
-        cfg["dataset"]["frame-height"],
-        cfg["dataset"]["frame-width"],
         use_jitter=cfg["setup"]["jitter"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
@@ -137,7 +140,7 @@ def main(cfg: DictConfig) -> None:
 
     model.load_state_dict(
         torch.load(
-            cfg["setup"]["saved-models-path"],
+            cfg["paths"]["saved-models-path"],
             weights_only=True,
             map_location=device
         )
@@ -148,7 +151,7 @@ def main(cfg: DictConfig) -> None:
     jitter = jitter.to(device).unsqueeze(0).unsqueeze(0)  # if use_jitter is None, this is a zero tensor, and is ignored during inference
     writer.add_graph(model, input_to_model=(inputs, motion_vectors, jitter))
 
-    print_parameters(Path(cfg["setup"]["eval-output-path"]), model.state_dict())
+    print_parameters(Path(cfg["paths"]["evaluation-output-path"]), model.state_dict())
 
     # -------------------------------------------------------------------------
     # ------------------------------ Evaluation -------------------------------
@@ -167,14 +170,14 @@ def main(cfg: DictConfig) -> None:
         test_dataloader,
         loss_fn,
         metrics,
-        Path(cfg["setup"]["eval-output-path"]),
+        Path(cfg["paths"]["evaluation-output-path"]),
         use_jitter=cfg["setup"]["jitter"]
     )
 
     metrics.report()
 
     write_video(
-        Path(cfg["setup"]["eval-output-path"]),
+        Path(cfg["paths"]["evaluation-output-path"]),
         "evaluation_output.mp4",
         fps=24
     )

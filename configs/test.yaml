@@ -4,11 +4,13 @@ defaults:
 
 setup:
   seed: 42
-  display-name: standard_fhd
-  jitter: true
-  saved-models-path: ../saved/logs/runs/jitter/exp1/full_model.pt
-  eval-output-path: evaluation_outputs
-  tensorboard-dir: ../saved/logs/runs
+  display-name: standard_fhd  # standard_fhd, standard_hmd
+  jitter: false
+
+paths: 
+  saved-models-path: ../saved/logs/runs/no-jitter/exp24/scale_model.pt
+  evaluation-output-path: evaluation_outputs
+  tensorboard-path: ../saved/logs/runs
 
 model:
   hidden-channels: 64

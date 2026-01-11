@@ -88,10 +88,10 @@ def train(cfg: DictConfig) -> None:
     )
     print(f"Using {device} device")
 
-    checkpoints_path = Path(cfg["setup"]["checkpoints-path"])
+    checkpoints_path = Path(cfg["paths"]["checkpoints-path"])
     checkpoints_path.mkdir(parents=True, exist_ok=True)
 
-    sanity_checks_output_path = Path(cfg["setup"]["sanity-checks-output-path"])
+    sanity_checks_output_path = Path(cfg["paths"]["sanity-checks-output-path"])
     sanity_checks_output_path.mkdir(parents=True, exist_ok=True)
 
     # -------------------------------------------------------------------------
@@ -110,7 +110,7 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ------------------------------ Diagnostics ------------------------------
     # -------------------------------------------------------------------------
-    writer = SummaryWriter(log_dir=cfg["setup"]["tensorboard-dir"])
+    writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
 
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
@@ -118,14 +118,17 @@ def train(cfg: DictConfig) -> None:
     training_data = QualcommDataset(
         cfg["dataset"]["training-input-img-path"],
         cfg["dataset"]["training-output-img-path"],
+        cfg["dataset"]["frame-height"],
+        cfg["dataset"]["frame-width"],
+        cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["ground-truth-path-suffix"],
         cfg["dataset"]["colour-path-suffix"],
         cfg["dataset"]["depth-path-suffix"],
-        cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["motion-vector-path-suffix"],
+        cfg["dataset"]["colour-jittered-path-suffix"],
+        cfg["dataset"]["depth-jittered-path-suffix"],
+        cfg["dataset"]["motion-vector-jittered-path-suffix"],
         cfg["dataset"]["scene_names"],
-        cfg["dataset"]["frame-height"],
-        cfg["dataset"]["frame-width"],
         use_jitter=cfg["setup"]["jitter"],
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
@@ -259,7 +262,7 @@ def train(cfg: DictConfig) -> None:
         scheduler.step()
 
         # Save the model after each epoch
-        torch.save(model.state_dict(), Path(cfg["setup"]["saved-models-path"]))
+        torch.save(model.state_dict(), Path(cfg["paths"]["saved-models-path"]))
 
     # Log the config
     writer.add_text("hyperparams", OmegaConf.to_yaml(cfg))

@@ -99,11 +99,6 @@ class QualcommNetwork(nn.Module):
 
         self.input_relu = nn.ReLU()
 
-        self.pre_body_down = nn.Sequential(
-            nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(inplace=True)
-        )
-
         # num_blocks × (3 × 3 Conv + ReLU) blocks
         body_layers = []
         for _ in range(num_blocks):
@@ -118,12 +113,6 @@ class QualcommNetwork(nn.Module):
             )
             body_layers.append(nn.ReLU())
         self.body = nn.Sequential(*body_layers)
-
-        self.post_body_up = nn.Sequential(
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-            nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
-        )
 
         # Feature head
         if use_jitter: 
@@ -256,9 +245,7 @@ class QualcommNetwork(nn.Module):
             # ------------------------------------------------------------
             # ---------------------- Main conv body ----------------------
             # ------------------------------------------------------------
-            h = self.pre_body_down(h)
             h = self.body(h)
-            h = self.post_body_up(h)
 
             # ------------------------------------------------------------
             # ---------------------- Feature branch ----------------------
@@ -281,8 +268,6 @@ class QualcommNetwork(nn.Module):
             blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
             blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
             outputs.append(blended_colour)
-
-            save_image(out_blending_mask, "out_blending_mask.png")
 
             # Save recurrent colour frame and features
             prev_pred_colour = blended_colour.detach()

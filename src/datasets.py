@@ -19,14 +19,17 @@ class QualcommDataset(Dataset):
         self,
         input_imgs_path: str,
         output_imgs_path: str,
+        frame_height: int,
+        frame_width: int,
+        camera_data_path_suffix: str,
         ground_truth_path_suffix: str,
         colour_path_suffix: str,
         depth_path_suffix: str,
-        camera_data_path_suffix: str,
         motion_vector_path_suffix: str,
+        colour_jittered_path_suffix: str,
+        depth_jittered_path_suffix: str,
+        motion_vector_jittered_path_suffix: str,
         scene_names: list[str],
-        frame_height: int,
-        frame_width: int,
         use_jitter: bool = False,
         dilation_block_size: int = 8,
         transform=None,
@@ -35,13 +38,20 @@ class QualcommDataset(Dataset):
     ) -> None:
         self.input_imgs_path = input_imgs_path
         self.output_imgs_path = output_imgs_path
-        self.ground_truth_path_suffix = ground_truth_path_suffix
-        self.colour_path_suffix = colour_path_suffix
-        self.depth_path_suffix = depth_path_suffix
-        self.camera_data_path_suffix = camera_data_path_suffix
-        self.motion_vector_path_suffix = motion_vector_path_suffix
         self.frame_height = frame_height
         self.frame_width = frame_width
+        self.camera_data_path_suffix = camera_data_path_suffix
+        self.ground_truth_path_suffix = ground_truth_path_suffix
+
+        if use_jitter:
+            self.colour_path_suffix = colour_path_suffix
+            self.depth_path_suffix = depth_path_suffix
+            self.motion_vector_path_suffix = motion_vector_path_suffix
+        else:
+            self.colour_path_suffix = colour_jittered_path_suffix
+            self.depth_path_suffix = depth_jittered_path_suffix
+            self.motion_vector_path_suffix = motion_vector_jittered_path_suffix
+
         self.use_jitter = use_jitter
         self.dilation_block_size = dilation_block_size
         self.transform = transform
