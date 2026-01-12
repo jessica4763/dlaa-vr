@@ -18,8 +18,8 @@ class QualcommDatasetSampler(Sampler[list[tuple[int, int, int, int, int]]]):
         batch_size: int,
         clip_size: int,
         patch_size: int,
-        frame_height: int,
-        frame_width: int
+        input_frame_height: int,
+        input_frame_width: int
     ) -> None:
         self.scenes = scenes
         self.instance_boundaries = instance_boundaries
@@ -29,8 +29,8 @@ class QualcommDatasetSampler(Sampler[list[tuple[int, int, int, int, int]]]):
         self.batch_size = batch_size
         self.clip_size = clip_size
         self.patch_size = patch_size
-        self.frame_height = frame_height
-        self.frame_width = frame_width
+        self.input_frame_height = input_frame_height
+        self.input_frame_width = input_frame_width
 
     def __len__(self) -> int:
         return self.total_instances
@@ -58,8 +58,8 @@ class QualcommDatasetSampler(Sampler[list[tuple[int, int, int, int, int]]]):
                 relative_instance_idx = instance_idx - idx_offset
 
                 # Get a random patch_size x patch_size patch
-                patch_start_x = random.randint(0, self.frame_width - self.patch_size)
-                patch_start_y = random.randint(0, self.frame_height - self.patch_size)
+                patch_start_x = random.randint(0, self.input_frame_width - self.patch_size)
+                patch_start_y = random.randint(0, self.input_frame_height - self.patch_size)
                 patch_end_x = patch_start_x + self.patch_size
                 patch_end_y = patch_start_y + self.patch_size
 

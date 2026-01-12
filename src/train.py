@@ -118,8 +118,10 @@ def train(cfg: DictConfig) -> None:
     training_data = QualcommDataset(
         cfg["dataset"]["training-input-img-path"],
         cfg["dataset"]["training-output-img-path"],
-        cfg["dataset"]["frame-height"],
-        cfg["dataset"]["frame-width"],
+        cfg["dataset"]["input-frame-height"],
+        cfg["dataset"]["input-frame-width"],
+        cfg["dataset"]["output-frame-height"],
+        cfg["dataset"]["output-frame-width"],
         cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["ground-truth-path-suffix"],
         cfg["dataset"]["colour-path-suffix"],
@@ -129,6 +131,7 @@ def train(cfg: DictConfig) -> None:
         cfg["dataset"]["depth-jittered-path-suffix"],
         cfg["dataset"]["motion-vector-jittered-path-suffix"],
         cfg["dataset"]["scene_names"],
+        upscale=cfg["setup"]["upscale"],
         use_jitter=cfg["setup"]["jitter"],
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
@@ -145,8 +148,8 @@ def train(cfg: DictConfig) -> None:
         cfg["optimiser"]["actual-batch-size"],
         cfg["optimiser"]["clip-size"],
         cfg["optimiser"]["patch-size"],
-        cfg["dataset"]["frame-height"],
-        cfg["dataset"]["frame-width"]
+        cfg["dataset"]["input-frame-height"],
+        cfg["dataset"]["input-frame-width"]
     )
 
     training_dataloader = DataLoader(
@@ -254,8 +257,8 @@ def train(cfg: DictConfig) -> None:
             training_data,
             writer,
             epoch,
-            cfg["dataset"]["frame-height"],
-            cfg["dataset"]["frame-width"],
+            cfg["dataset"]["input-frame-height"],
+            cfg["dataset"]["input-frame-width"],
             use_jitter=cfg["setup"]["jitter"]
         )
 
@@ -281,15 +284,15 @@ def checkpoint(
     training_data: Dataset,
     writer: SummaryWriter,
     epoch: int,
-    frame_height: int,
-    frame_width: int,
+    input_frame_height: int,
+    input_frame_width: int,
     use_jitter: bool = False
 ) -> None:
     # Strictly a training diagnostic, so it's OK if
     # training data is used here
     model.eval()
     with torch.no_grad():
-        inputs, motion_vectors, jitter, output = training_data[(0, 0, 0, frame_width, frame_height)]
+        inputs, motion_vectors, jitter, output = training_data[(0, 0, 0, input_frame_width, input_frame_height)]
 
         # Verify input to the network
         save_input(sanity_checks_output_path, model, inputs, motion_vectors)

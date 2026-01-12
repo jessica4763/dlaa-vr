@@ -2,8 +2,11 @@
 test-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
 test-output-img-path: ../data/test_data/QRISP/TestSet/*/540p
 
-frame-height: 540
-frame-width: 960
+input-frame-height: 540
+input-frame-width: 960
+
+output-frame-height: 540
+output-frame-width: 960
 
 dilation-block-size: 8
 

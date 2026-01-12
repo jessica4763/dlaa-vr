@@ -108,8 +108,10 @@ def main(cfg: DictConfig) -> None:
     test_data = QualcommDataset(
         cfg["dataset"]["test-input-img-path"],
         cfg["dataset"]["test-output-img-path"],
-        cfg["dataset"]["frame-height"],
-        cfg["dataset"]["frame-width"],
+        cfg["dataset"]["input-frame-height"],
+        cfg["dataset"]["input-frame-width"],
+        cfg["dataset"]["output-frame-height"],
+        cfg["dataset"]["output-frame-width"],
         cfg["dataset"]["camera-data-path-suffix"],
         cfg["dataset"]["ground-truth-path-suffix"],
         cfg["dataset"]["colour-path-suffix"],
