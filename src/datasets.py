@@ -33,7 +33,6 @@ class QualcommDataset(Dataset):
         depth_jittered_path_suffix: str,
         motion_vector_jittered_path_suffix: str,
         scene_names: list[str],
-        upscale: bool = False,
         use_jitter: bool = False,
         dilation_block_size: int = 8,
         transform=None,
@@ -58,7 +57,6 @@ class QualcommDataset(Dataset):
             self.depth_path_suffix = depth_jittered_path_suffix
             self.motion_vector_path_suffix = motion_vector_jittered_path_suffix
 
-        self.upscale = upscale
         self.use_jitter = use_jitter
         self.dilation_block_size = dilation_block_size
         self.transform = transform
@@ -227,14 +225,14 @@ class QualcommDataset(Dataset):
             mode='nearest'
         )
 
-        return output_motion_vectors
+        return output_motion_vectors.squeeze(0)
     
     def upscale_motion_vectors(self, motion_vectors: torch.Tensor) -> torch.Tensor:
         return F.interpolate(
-            motion_vectors, 
+            motion_vectors.unsqueeze(0), 
             scale_factor=self.scale_factor, 
             mode='nearest'
-        )
+        ).squeeze(0)
     
     def get_patch(
         self, 
@@ -268,16 +266,6 @@ class QualcommDataset(Dataset):
 
         instance = str(idx // scene.num_frames_per_instance).zfill(4)
 
-        # Helper function
-        def get_patch(x: torch.Tensor) -> torch.Tensor:
-            return self.get_patch(
-                x,
-                patch_start_x,
-                patch_start_y,
-                patch_end_x,
-                patch_end_y
-            )
-
         # -------------------------------------------------------------------
         # -------------------------- Current frame --------------------------
         # -------------------------------------------------------------------
@@ -299,7 +287,7 @@ class QualcommDataset(Dataset):
 
         curr_output_img = decode_image(curr_output_img_path.resolve())[0:3, ...]
         curr_output_img = self.get_patch(
-            curr_input_img,
+            curr_output_img,
             patch_start_x * self.scale_factor,
             patch_start_y * self.scale_factor,
             patch_end_x * self.scale_factor,
@@ -313,13 +301,13 @@ class QualcommDataset(Dataset):
         prev_frame_num = 0 if curr_frame_num == 0 else curr_frame_num - 1
 
         # This will be overwritten later, if there was a previous frame
-        low_res_prev_output_img = curr_output_img.clone().detach()
-        high_res_prev_output_img = F.interpolate(
-            low_res_prev_output_img, 
+        prev_output_img = curr_input_img.clone().detach()
+        prev_output_img = F.interpolate(
+            prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
             scale_factor=self.scale_factor, 
             mode='nearest'
-        )
-        prev_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(high_res_prev_output_img)
+        ).squeeze(0)  # Remove the batch dimension
+        prev_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(prev_output_img)
 
         # -------------------------------------------------------------------
         # ---------------------------- Transforms ---------------------------
@@ -407,20 +395,17 @@ class QualcommDataset(Dataset):
             )
 
             jitter = torch.tensor((curr_jitter_offset_x, curr_jitter_offset_y))
-        
+
+        # Must scale motion vectors after taking a patch 
+        motion_vectors[0, ...] /= patch_width / self.input_frame_width
+        motion_vectors[1, ...] /= patch_height / self.input_frame_height
         motion_vectors = self.depth_informed_dilation(
             curr_depth,
             motion_vectors
         )
+        motion_vectors = self.upscale_motion_vectors(motion_vectors)  # Identity if self.scale_factor = 1
 
-        # Scale the motion vectors so that they work when warping a patch later on
-        motion_vectors[0, ...] /= patch_width / self.input_frame_width
-        motion_vectors[1, ...] /= patch_height / self.input_frame_height
-
-        # Identity if self.scale_factor = 1
-        motion_vectors = self.upscale_motion_vectors(motion_vectors)
-
-        prev_features = torch.zeros((1, patch_height, patch_width))
+        prev_features = torch.zeros((self.scale_factor ** 2, patch_height, patch_width))
 
         # -------------------------------------------------------------------------
         # ----------------------------- Prepare input -----------------------------

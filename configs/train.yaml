@@ -1,24 +1,23 @@
 ---
 defaults:
-  - dataset: toy-train
+  - dataset: full-train-upscale
   - optimiser: adamw
 
 setup:
   seed: 42
   display-name: standard_fhd  # standard_fhd, standard_hmd
-  jitter: false
-  upscale: false
+  jitter: true
 
 paths:
   checkpoints-path: checkpoints
   sanity-checks-output-path: sanity_checks_output
   tensorboard-path: ../saved/logs/runs
-  saved-models-path: ../saved/models/toy_model.pt
+  saved-models-path: ../saved/models/full_model.pt
 
 model:
-  hidden-channels: 16
-  num-blocks: 1
-  parameters: null  # ../saved/logs/runs/no-jitter/exp24/scale_model.pt  # ../saved/logs/runs/[exp]/[model]
+  hidden-channels: 64
+  num-blocks: 5
+  parameters: null  # ../saved/logs/runs/[category]/[exp]/[model]
 
 hydra:
   run:

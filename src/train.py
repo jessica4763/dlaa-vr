@@ -38,14 +38,15 @@ def train_epoch(
 
     model.train()
     for batch, (inputs, motion_vectors, jitter, targets) in enumerate(training_dataloader):
-        # Sampler gives N = num_batches * clip_size
-        N, C, H, W = inputs.shape
-
+        # input_N = num_batches * clip_size
+        input_N, input_C, input_H, input_W = inputs.shape
         inputs = inputs.to(device, non_blocking=True)
-        inputs = inputs.view(-1, clip_size, C, H, W)
+        inputs = inputs.view(-1, clip_size, input_C, input_H, input_W)
 
+        # output_N = num_batches * clip_size. output_H == input_H and output_W == input_W for no upscaling
+        output_N, output_C, output_H, output_W = motion_vectors.shape
         motion_vectors = motion_vectors.to(device, non_blocking=True)
-        motion_vectors = motion_vectors.view(-1, clip_size, 2, H, W)
+        motion_vectors = motion_vectors.view(-1, clip_size, output_C, output_H, output_W)
 
         if use_jitter: 
             jitter = jitter.to(device, non_blocking=True)
@@ -57,7 +58,7 @@ def train_epoch(
 
         # Pass in motion vectors as well, for warping
         pred_frame, _ = model(inputs, motion_vectors, jitter)
-        pred_frame = pred_frame.view(-1, 3, H, W)
+        pred_frame = pred_frame.view(-1, 3, output_H, output_W)
 
         loss = loss_function(pred_frame, targets) / accumulation_steps
         loss.backward()
@@ -116,22 +117,21 @@ def train(cfg: DictConfig) -> None:
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
     training_data = QualcommDataset(
-        cfg["dataset"]["training-input-img-path"],
-        cfg["dataset"]["training-output-img-path"],
-        cfg["dataset"]["input-frame-height"],
-        cfg["dataset"]["input-frame-width"],
-        cfg["dataset"]["output-frame-height"],
-        cfg["dataset"]["output-frame-width"],
-        cfg["dataset"]["camera-data-path-suffix"],
-        cfg["dataset"]["ground-truth-path-suffix"],
-        cfg["dataset"]["colour-path-suffix"],
-        cfg["dataset"]["depth-path-suffix"],
-        cfg["dataset"]["motion-vector-path-suffix"],
-        cfg["dataset"]["colour-jittered-path-suffix"],
-        cfg["dataset"]["depth-jittered-path-suffix"],
-        cfg["dataset"]["motion-vector-jittered-path-suffix"],
-        cfg["dataset"]["scene_names"],
-        upscale=cfg["setup"]["upscale"],
+        input_imgs_path=cfg["dataset"]["training-input-img-path"],
+        output_imgs_path=cfg["dataset"]["training-output-img-path"],
+        input_frame_height=cfg["dataset"]["input-frame-height"],
+        input_frame_width=cfg["dataset"]["input-frame-width"],
+        output_frame_height=cfg["dataset"]["output-frame-height"],
+        output_frame_width=cfg["dataset"]["output-frame-width"],
+        camera_data_path_suffix=cfg["dataset"]["camera-data-path-suffix"],
+        ground_truth_path_suffix=cfg["dataset"]["ground-truth-path-suffix"],
+        colour_path_suffix=cfg["dataset"]["colour-path-suffix"],
+        depth_path_suffix=cfg["dataset"]["depth-path-suffix"],
+        motion_vector_path_suffix=cfg["dataset"]["motion-vector-path-suffix"],
+        colour_jittered_path_suffix=cfg["dataset"]["colour-jittered-path-suffix"],
+        depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
+        motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
+        scene_names=cfg["dataset"]["scene_names"],
         use_jitter=cfg["setup"]["jitter"],
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
@@ -166,6 +166,10 @@ def train(cfg: DictConfig) -> None:
     model = QualcommNetwork(
         hidden_channels=cfg["model"]["hidden-channels"],
         num_blocks=cfg["model"]["num-blocks"],
+        input_frame_height=cfg["dataset"]["input-frame-height"],
+        input_frame_width=cfg["dataset"]["input-frame-width"],
+        output_frame_height=cfg["dataset"]["output-frame-height"],
+        output_frame_width=cfg["dataset"]["output-frame-width"],
         use_jitter=cfg["setup"]["jitter"]
     ).to(device)
 

@@ -56,17 +56,25 @@ class JitterConditionedConv(nn.Module):
 
 
 class QualcommNetwork(nn.Module):
-    def __init__(self, hidden_channels: int, num_blocks: int, use_jitter: bool = False) -> None:
-        """
-        Simplified implementation of the Qualcomm network, adapted for DLAA.
-        """
+    def __init__(
+        self, 
+        hidden_channels: int, 
+        num_blocks: int,
+        input_frame_height: int,
+        input_frame_width: int,
+        output_frame_height: int,
+        output_frame_width: int,
+        use_jitter: bool = False
+    ) -> None:
         super().__init__()
+
+        scale_factor = output_frame_height // input_frame_height
 
         self.num_curr_colour = 3
         self.num_curr_depth = 1
         self.num_curr_jitter = 2 if use_jitter else 0  # 2 for displacement in both x and y
-        self.num_prev_colour = self.num_curr_colour
-        self.num_prev_feature = 1
+        self.num_prev_colour = self.num_curr_colour * (scale_factor ** 2)
+        self.num_prev_feature = 1 * (scale_factor ** 2)
 
         # * 2 to include the previous frame ground truth
         self.in_channels = (
@@ -76,6 +84,11 @@ class QualcommNetwork(nn.Module):
             self.num_prev_colour +
             self.num_prev_feature
         )
+
+        self.depth_to_space = nn.PixelShuffle(upscale_factor=scale_factor)
+        self.space_to_depth = nn.PixelUnshuffle(downscale_factor=scale_factor)
+
+        hidden_channels *= (scale_factor ** 2)
 
         if use_jitter: 
             self.input_conv = JitterConditionedConv(
@@ -136,7 +149,7 @@ class QualcommNetwork(nn.Module):
         self.colour_head = nn.Sequential(
             nn.Conv2d(
                 hidden_channels,
-                self.num_curr_colour,
+                self.num_prev_colour,
                 kernel_size=3,
                 padding=1,
                 padding_mode="reflect"
@@ -156,11 +169,14 @@ class QualcommNetwork(nn.Module):
             nn.Sigmoid()
         )
 
-    @staticmethod
     def warp(
+        self,
         input_tensor: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
+        # Depth to space: (1, 12, 264, 264) -> (1, 3, 584, 584)
+        input_tensor = self.depth_to_space(input_tensor)
+
         H = motion_vectors.shape[2]
         W = motion_vectors.shape[3]
 
@@ -185,6 +201,9 @@ class QualcommNetwork(nn.Module):
             mode='bilinear',
             padding_mode='zeros'  # To mean no corresponding pixel in the previous frame
         )
+
+        # Space to depth 
+        warped_input_tensor = self.space_to_depth(input_tensor)
 
         return warped_input_tensor
 
@@ -212,20 +231,18 @@ class QualcommNetwork(nn.Module):
             c1 = c0 + self.num_prev_colour
             if prev_pred_colour is not None:
                 # Warp recurrent colour frame
-                clip_frames[:, c0:c1] = QualcommNetwork.warp(
+                clip_frames[:, c0:c1] = self.warp(
                     prev_pred_colour,
                     motion_vector_frames
                 )
-
-            # Save for the blend step
-            prev_colour = clip_frames[:, c0:c1]
+            prev_colour = clip_frames[:, c0:c1]  # Save for the blend step
 
             # Use recurrent features
             c0 = c1
             c1 = c0 + self.num_prev_feature
             if prev_pred_features is not None:
                 # Warp recurrent features
-                clip_frames[:, c0:c1] = QualcommNetwork.warp(
+                clip_frames[:, c0:c1] = self.warp(
                     prev_pred_features,
                     motion_vector_frames
                 )
@@ -266,7 +283,11 @@ class QualcommNetwork(nn.Module):
             # ------------------------------------------------------------
             blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
             blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
-            outputs.append(blended_colour)
+
+            # ------------------------------------------------------------
+            # ---------------------- Depth to space ----------------------
+            # ------------------------------------------------------------
+            outputs.append(self.depth_to_space(blended_colour))
 
             # Save recurrent colour frame and features
             prev_pred_colour = blended_colour.detach()

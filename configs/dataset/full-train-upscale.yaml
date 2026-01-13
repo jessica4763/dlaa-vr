@@ -1,0 +1,24 @@
+---
+training-input-img-path: ../data/training_data/QRISP/*/270p
+training-output-img-path: ../data/training_data/QRISP/*/1080p
+
+input-frame-height: 270
+input-frame-width: 480
+
+output-frame-height: 1080
+output-frame-width: 1920
+
+dilation-block-size: 8
+
+camera-data-path-suffix: CameraData
+ground-truth-path-suffix: Enhanced
+
+colour-path-suffix: MipBiasMinus2
+depth-path-suffix: DepthMipBiasMinus2
+motion-vector-path-suffix: MotionVectorsMipBiasMinus2
+
+colour-jittered-path-suffix: MipBiasMinus2Jittered
+depth-jittered-path-suffix: DepthMipBiasMinus2Jittered
+motion-vector-jittered-path-suffix: MotionVectorsMipBiasMinus2Jittered
+
+scene_names: [CBApocalypse, FloodedGrounds, ScifiBase, ScifiFacility, SunTemple]
