@@ -1,6 +1,7 @@
 from pathlib import Path
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torchvision.utils import save_image
 from typing import Any
 
@@ -11,7 +12,8 @@ def save_input(
     sanity_checks_output_path: Path,
     model: nn.Module,
     inputs: torch.Tensor,
-    motion_vectors: torch.Tensor
+    motion_vectors: torch.Tensor,
+    scale_factor: int
 ) -> None:
     c0 = 0
     c1 = c0 + model.num_curr_colour
@@ -45,7 +47,7 @@ def save_input(
     c0 = c1
     c1 = c0 + model.num_prev_feature
     prev_feature = inputs[c0:c1]
-    save_image(prev_feature, sanity_checks_output_path / "prev_feature.png")
+    save_image(F.pixel_shuffle(prev_feature, upscale_factor=scale_factor), sanity_checks_output_path / "prev_feature.png")
     
     motion_vectors = motion_vectors.squeeze(0)
     motion_vectors = torch.concat([

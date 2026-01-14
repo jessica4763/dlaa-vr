@@ -59,7 +59,6 @@ def train_epoch(
         # Pass in motion vectors as well, for warping
         pred_frame, _ = model(inputs, motion_vectors, jitter)
         pred_frame = pred_frame.view(-1, 3, output_H, output_W)
-
         loss = loss_function(pred_frame, targets) / accumulation_steps
         loss.backward()
 
@@ -147,9 +146,11 @@ def train(cfg: DictConfig) -> None:
         training_data.total_frames,
         cfg["optimiser"]["actual-batch-size"],
         cfg["optimiser"]["clip-size"],
-        cfg["optimiser"]["patch-size"],
         cfg["dataset"]["input-frame-height"],
-        cfg["dataset"]["input-frame-width"]
+        cfg["dataset"]["input-frame-width"],
+        cfg["dataset"]["output-frame-height"],
+        cfg["dataset"]["output-frame-width"],
+        cfg["optimiser"]["patch-size"]
     )
 
     training_dataloader = DataLoader(
@@ -263,6 +264,8 @@ def train(cfg: DictConfig) -> None:
             epoch,
             cfg["dataset"]["input-frame-height"],
             cfg["dataset"]["input-frame-width"],
+            cfg["dataset"]["output-frame-height"],
+            cfg["dataset"]["output-frame-width"],
             use_jitter=cfg["setup"]["jitter"]
         )
 
@@ -290,6 +293,8 @@ def checkpoint(
     epoch: int,
     input_frame_height: int,
     input_frame_width: int,
+    output_frame_height: int,
+    output_frame_width: int,
     use_jitter: bool = False
 ) -> None:
     # Strictly a training diagnostic, so it's OK if
@@ -299,7 +304,8 @@ def checkpoint(
         inputs, motion_vectors, jitter, output = training_data[(0, 0, 0, input_frame_width, input_frame_height)]
 
         # Verify input to the network
-        save_input(sanity_checks_output_path, model, inputs, motion_vectors)
+        scale_factor = output_frame_height // input_frame_height
+        save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
 
         # Verify the goal of the network
         output = linear_to_gamma(output)
