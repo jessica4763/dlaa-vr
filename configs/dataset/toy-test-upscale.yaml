@@ -1,6 +1,6 @@
 ---
-training-input-img-path: ../data/training_data/QRISP/*/540p
-training-output-img-path: ../data/training_data/QRISP/*/1080p
+test-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
+test-output-img-path: ../data/test_data/QRISP/TestSet/*/1080p
 
 input-frame-height: 540
 input-frame-width: 960
@@ -21,4 +21,4 @@ colour-jittered-path-suffix: MipBiasMinus1Jittered
 depth-jittered-path-suffix: DepthMipBiasMinus1Jittered
 motion-vector-jittered-path-suffix: MotionVectorsMipBiasMinus1Jittered
 
-scene_names: [CBApocalypse, FloodedGrounds, ScifiBase, ScifiFacility, SunTemple]
+scene_names: [SeaPort]

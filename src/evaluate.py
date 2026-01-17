@@ -1,6 +1,7 @@
 from pathlib import Path
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -33,14 +34,15 @@ def evaluate(
         prev_pred_frame = prev_features = None
         for batch, (inputs, motion_vectors, jitter, target) in enumerate(test_dataloader):
             inputs = inputs.to(device)
-            inputs = inputs.unsqueeze(0)
+            inputs = inputs.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
+            output_N, output_C, output_H, output_W = motion_vectors.shape
             motion_vectors = motion_vectors.to(device)
-            motion_vectors = motion_vectors.unsqueeze(0)
+            motion_vectors = motion_vectors.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
             if use_jitter:
                 jitter = jitter.to(device)
-                jitter = jitter.unsqueeze(0)
+                jitter = jitter.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
             else:
                 jitter = None
 
@@ -54,9 +56,10 @@ def evaluate(
                 inputs[:, :, c1:model.in_channels] = prev_features
 
             pred_frame, features = model(inputs, motion_vectors, jitter)
+            pred_frame = pred_frame.view(-1, 3, output_H, output_W)
             loss = loss_fn(pred_frame, target)
 
-            prev_pred_frame = pred_frame
+            prev_pred_frame = F.pixel_unshuffle(pred_frame, downscale_factor=2)
             prev_features = features.squeeze(0)
 
             loss, current_img = loss.item(), (batch + 1) * len(inputs)
@@ -122,6 +125,7 @@ def main(cfg: DictConfig) -> None:
         cfg["dataset"]["motion-vector-jittered-path-suffix"],
         cfg["dataset"]["scene_names"],
         use_jitter=cfg["setup"]["jitter"],
+        dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
         mode="test"
@@ -137,6 +141,10 @@ def main(cfg: DictConfig) -> None:
     model = QualcommNetwork(
         hidden_channels=cfg["model"]["hidden-channels"],
         num_blocks=cfg["model"]["num-blocks"],
+        input_frame_height=cfg["dataset"]["input-frame-height"],
+        input_frame_width=cfg["dataset"]["input-frame-width"],
+        output_frame_height=cfg["dataset"]["output-frame-height"],
+        output_frame_width=cfg["dataset"]["output-frame-width"],
         use_jitter=cfg["setup"]["jitter"]
     ).to(device)
 

@@ -111,6 +111,9 @@ def train(cfg: DictConfig) -> None:
     # ------------------------------ Diagnostics ------------------------------
     # -------------------------------------------------------------------------
     writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
+    
+    # Log the config
+    writer.add_text("hyperparams", OmegaConf.to_yaml(cfg))
 
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
@@ -139,18 +142,18 @@ def train(cfg: DictConfig) -> None:
     )
 
     training_sampler = QualcommDatasetSampler(
-        training_data.scenes,
-        training_data.instance_boundaries,
-        training_data.total_instances,
-        training_data.frame_boundaries,
-        training_data.total_frames,
-        cfg["optimiser"]["actual-batch-size"],
-        cfg["optimiser"]["clip-size"],
-        cfg["dataset"]["input-frame-height"],
-        cfg["dataset"]["input-frame-width"],
-        cfg["dataset"]["output-frame-height"],
-        cfg["dataset"]["output-frame-width"],
-        cfg["optimiser"]["patch-size"]
+        scenes=training_data.scenes,
+        instance_boundaries=training_data.instance_boundaries,
+        total_instances=training_data.total_instances,
+        frame_boundaries=training_data.frame_boundaries,
+        total_frames=training_data.total_frames,
+        batch_size=cfg["optimiser"]["actual-batch-size"],
+        clip_size=cfg["optimiser"]["clip-size"],
+        input_frame_height=cfg["dataset"]["input-frame-height"],
+        input_frame_width=cfg["dataset"]["input-frame-width"],
+        output_frame_height=cfg["dataset"]["output-frame-height"],
+        output_frame_width=cfg["dataset"]["output-frame-width"],
+        high_res_patch_size=cfg["optimiser"]["patch-size"]
     )
 
     training_dataloader = DataLoader(
@@ -241,31 +244,31 @@ def train(cfg: DictConfig) -> None:
         print(f"Epoch {epoch + 1}\n-------------------------------")
 
         train_epoch(
-            device,
-            model,
-            training_dataloader,
-            cfg["optimiser"]["actual-batch-size"],
-            cfg["optimiser"]["virtual-batch-size"],
-            cfg["optimiser"]["clip-size"],
-            loss_function,
-            optimiser,
-            writer,
-            epoch,
+            device=device,
+            model=model,
+            training_dataloader=training_dataloader,
+            actual_batch_size=cfg["optimiser"]["actual-batch-size"],
+            virtual_batch_size=cfg["optimiser"]["virtual-batch-size"],
+            clip_size=cfg["optimiser"]["clip-size"],
+            loss_function=loss_function,
+            optimiser=optimiser,
+            writer=writer,
+            epoch=epoch,
             use_jitter=cfg["setup"]["jitter"]
         )
 
         checkpoint(
-            checkpoints_path,
-            sanity_checks_output_path,
-            device,
-            model,
-            training_data,
-            writer,
-            epoch,
-            cfg["dataset"]["input-frame-height"],
-            cfg["dataset"]["input-frame-width"],
-            cfg["dataset"]["output-frame-height"],
-            cfg["dataset"]["output-frame-width"],
+            checkpoint_path=checkpoints_path,
+            sanity_checks_output_path=sanity_checks_output_path,
+            device=device,
+            model=model,
+            training_data=training_data,
+            writer=writer,
+            epoch=epoch,
+            input_frame_height=cfg["dataset"]["input-frame-height"],
+            input_frame_width=cfg["dataset"]["input-frame-width"],
+            output_frame_height=cfg["dataset"]["output-frame-height"],
+            output_frame_width=cfg["dataset"]["output-frame-width"],
             use_jitter=cfg["setup"]["jitter"]
         )
 
@@ -273,9 +276,6 @@ def train(cfg: DictConfig) -> None:
 
         # Save the model after each epoch
         torch.save(model.state_dict(), Path(cfg["paths"]["saved-models-path"]))
-
-    # Log the config
-    writer.add_text("hyperparams", OmegaConf.to_yaml(cfg))
 
     writer.flush()
     writer.close()
