@@ -49,13 +49,13 @@ class QualcommDataset(Dataset):
         self.ground_truth_path_suffix = ground_truth_path_suffix
 
         if use_jitter:
-            self.colour_path_suffix = colour_path_suffix
-            self.depth_path_suffix = depth_path_suffix
-            self.motion_vector_path_suffix = motion_vector_path_suffix
-        else:
             self.colour_path_suffix = colour_jittered_path_suffix
             self.depth_path_suffix = depth_jittered_path_suffix
             self.motion_vector_path_suffix = motion_vector_jittered_path_suffix
+        else:
+            self.colour_path_suffix = colour_path_suffix
+            self.depth_path_suffix = depth_path_suffix
+            self.motion_vector_path_suffix = motion_vector_path_suffix
 
         self.use_jitter = use_jitter
         self.dilation_block_size = dilation_block_size
