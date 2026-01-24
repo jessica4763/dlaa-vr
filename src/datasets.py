@@ -22,8 +22,6 @@ class QualcommDataset(Dataset):
         output_imgs_path: str,
         input_frame_height: int,
         input_frame_width: int,
-        output_frame_height: int,
-        output_frame_width: int,
         camera_data_path_suffix: str,
         ground_truth_path_suffix: str,
         colour_path_suffix: str,
@@ -33,6 +31,7 @@ class QualcommDataset(Dataset):
         depth_jittered_path_suffix: str,
         motion_vector_jittered_path_suffix: str,
         scene_names: list[str],
+        scale_factor: int = 1,
         use_jitter: bool = False,
         dilation_block_size: int = 8,
         transform=None,
@@ -43,8 +42,6 @@ class QualcommDataset(Dataset):
         self.output_imgs_path = output_imgs_path
         self.input_frame_height = input_frame_height
         self.input_frame_width = input_frame_width
-        self.output_frame_height = output_frame_height
-        self.output_frame_width = output_frame_width
         self.camera_data_path_suffix = camera_data_path_suffix
         self.ground_truth_path_suffix = ground_truth_path_suffix
 
@@ -56,14 +53,6 @@ class QualcommDataset(Dataset):
             self.colour_path_suffix = colour_path_suffix
             self.depth_path_suffix = depth_path_suffix
             self.motion_vector_path_suffix = motion_vector_path_suffix
-
-        self.use_jitter = use_jitter
-        self.dilation_block_size = dilation_block_size
-        self.transform = transform
-        self.target_transform = target_transform
-        self.mode = mode
-
-        self.scale_factor = self.output_frame_height // self.input_frame_height
 
         self.scenes = []
         for scene_name in scene_names:
@@ -78,6 +67,13 @@ class QualcommDataset(Dataset):
         scene_num_frames = [scene.num_frames for scene in self.scenes]
         self.frame_boundaries = cumsum(scene_num_frames)
         self.total_frames = sum(scene_num_frames)
+
+        self.scale_factor = scale_factor
+        self.use_jitter = use_jitter
+        self.dilation_block_size = dilation_block_size
+        self.transform = transform
+        self.target_transform = target_transform
+        self.mode = mode
 
     def get_jitter_offsets(
         self,

@@ -116,6 +116,11 @@ def train(cfg: DictConfig) -> None:
     writer.add_text("hyperparams", OmegaConf.to_yaml(cfg))
 
     # -------------------------------------------------------------------------
+    # ------------------------------- Constants -------------------------------
+    # -------------------------------------------------------------------------
+    scale_factor = cfg["dataset"]["output-frame-height"] // cfg["dataset"]["input-frame-height"]
+
+    # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
     training_data = QualcommDataset(
@@ -123,8 +128,6 @@ def train(cfg: DictConfig) -> None:
         output_imgs_path=cfg["dataset"]["training-output-img-path"],
         input_frame_height=cfg["dataset"]["input-frame-height"],
         input_frame_width=cfg["dataset"]["input-frame-width"],
-        output_frame_height=cfg["dataset"]["output-frame-height"],
-        output_frame_width=cfg["dataset"]["output-frame-width"],
         camera_data_path_suffix=cfg["dataset"]["camera-data-path-suffix"],
         ground_truth_path_suffix=cfg["dataset"]["ground-truth-path-suffix"],
         colour_path_suffix=cfg["dataset"]["colour-path-suffix"],
@@ -134,6 +137,7 @@ def train(cfg: DictConfig) -> None:
         depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
         motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
         scene_names=cfg["dataset"]["scene_names"],
+        scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"],
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
@@ -151,8 +155,7 @@ def train(cfg: DictConfig) -> None:
         clip_size=cfg["optimiser"]["clip-size"],
         input_frame_height=cfg["dataset"]["input-frame-height"],
         input_frame_width=cfg["dataset"]["input-frame-width"],
-        output_frame_height=cfg["dataset"]["output-frame-height"],
-        output_frame_width=cfg["dataset"]["output-frame-width"],
+        scale_factor=scale_factor,
         high_res_patch_size=cfg["optimiser"]["patch-size"]
     )
 
@@ -170,10 +173,7 @@ def train(cfg: DictConfig) -> None:
     model = QualcommNetwork(
         hidden_channels=cfg["model"]["hidden-channels"],
         num_blocks=cfg["model"]["num-blocks"],
-        input_frame_height=cfg["dataset"]["input-frame-height"],
-        input_frame_width=cfg["dataset"]["input-frame-width"],
-        output_frame_height=cfg["dataset"]["output-frame-height"],
-        output_frame_width=cfg["dataset"]["output-frame-width"],
+        scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"]
     ).to(device)
 
@@ -267,8 +267,7 @@ def train(cfg: DictConfig) -> None:
             epoch=epoch,
             input_frame_height=cfg["dataset"]["input-frame-height"],
             input_frame_width=cfg["dataset"]["input-frame-width"],
-            output_frame_height=cfg["dataset"]["output-frame-height"],
-            output_frame_width=cfg["dataset"]["output-frame-width"],
+            scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"]
         )
 
@@ -293,8 +292,7 @@ def checkpoint(
     epoch: int,
     input_frame_height: int,
     input_frame_width: int,
-    output_frame_height: int,
-    output_frame_width: int,
+    scale_factor: int,
     use_jitter: bool = False
 ) -> None:
     # Strictly a training diagnostic, so it's OK if
@@ -304,7 +302,6 @@ def checkpoint(
         inputs, motion_vectors, jitter, output = training_data[(0, 0, 0, input_frame_width, input_frame_height)]
 
         # Verify input to the network
-        scale_factor = output_frame_height // input_frame_height
         save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
 
         # Verify the goal of the network

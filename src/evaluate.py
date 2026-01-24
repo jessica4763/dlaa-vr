@@ -24,7 +24,7 @@ def evaluate(
     device: str,
     model: nn.Module,
     test_dataloader: DataLoader,
-    loss_fn: nn.Module,
+    loss_function: nn.Module,
     metrics: Metrics,
     eval_output_path: Path,
     use_jitter: bool = False
@@ -57,7 +57,7 @@ def evaluate(
 
             pred_frame, features = model(inputs, motion_vectors, jitter)
             pred_frame = pred_frame.view(-1, 3, output_H, output_W)
-            loss = loss_fn(pred_frame, target)
+            loss = loss_function(pred_frame, target)
 
             prev_pred_frame = F.pixel_unshuffle(pred_frame, downscale_factor=2)
             prev_features = features.squeeze(0)
@@ -106,24 +106,28 @@ def main(cfg: DictConfig) -> None:
     writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
 
     # -------------------------------------------------------------------------
+    # ------------------------------- Constants -------------------------------
+    # -------------------------------------------------------------------------
+    scale_factor = cfg["dataset"]["output-frame-height"] // cfg["dataset"]["input-frame-height"]
+
+    # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
     test_data = QualcommDataset(
-        cfg["dataset"]["test-input-img-path"],
-        cfg["dataset"]["test-output-img-path"],
-        cfg["dataset"]["input-frame-height"],
-        cfg["dataset"]["input-frame-width"],
-        cfg["dataset"]["output-frame-height"],
-        cfg["dataset"]["output-frame-width"],
-        cfg["dataset"]["camera-data-path-suffix"],
-        cfg["dataset"]["ground-truth-path-suffix"],
-        cfg["dataset"]["colour-path-suffix"],
-        cfg["dataset"]["depth-path-suffix"],
-        cfg["dataset"]["motion-vector-path-suffix"],
-        cfg["dataset"]["colour-jittered-path-suffix"],
-        cfg["dataset"]["depth-jittered-path-suffix"],
-        cfg["dataset"]["motion-vector-jittered-path-suffix"],
-        cfg["dataset"]["scene_names"],
+        input_imgs_path=cfg["dataset"]["test-input-img-path"],
+        output_imgs_path=cfg["dataset"]["test-output-img-path"],
+        input_frame_height=cfg["dataset"]["input-frame-height"],
+        input_frame_width=cfg["dataset"]["input-frame-width"],
+        camera_data_path_suffix=cfg["dataset"]["camera-data-path-suffix"],
+        ground_truth_path_suffix=cfg["dataset"]["ground-truth-path-suffix"],
+        colour_path_suffix=cfg["dataset"]["colour-path-suffix"],
+        depth_path_suffix=cfg["dataset"]["depth-path-suffix"],
+        motion_vector_path_suffix=cfg["dataset"]["motion-vector-path-suffix"],
+        colour_jittered_path_suffix=cfg["dataset"]["colour-jittered-path-suffix"],
+        depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
+        motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
+        scene_names=cfg["dataset"]["scene_names"],
+        scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"],
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
@@ -141,10 +145,7 @@ def main(cfg: DictConfig) -> None:
     model = QualcommNetwork(
         hidden_channels=cfg["model"]["hidden-channels"],
         num_blocks=cfg["model"]["num-blocks"],
-        input_frame_height=cfg["dataset"]["input-frame-height"],
-        input_frame_width=cfg["dataset"]["input-frame-width"],
-        output_frame_height=cfg["dataset"]["output-frame-height"],
-        output_frame_width=cfg["dataset"]["output-frame-width"],
+        scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"]
     ).to(device)
 
@@ -161,34 +162,37 @@ def main(cfg: DictConfig) -> None:
     jitter = jitter.to(device).unsqueeze(0).unsqueeze(0)  # if use_jitter is None, this is a zero tensor, and is ignored during inference
     writer.add_graph(model, input_to_model=(inputs, motion_vectors, jitter))
 
-    print_parameters(Path(cfg["paths"]["evaluation-output-path"]), model.state_dict())
+    print_parameters(
+        eval_output_path=Path(cfg["paths"]["evaluation-output-path"]),
+        parameters=model.state_dict()
+    )
 
     # -------------------------------------------------------------------------
     # ------------------------------ Evaluation -------------------------------
     # -------------------------------------------------------------------------
-    loss_fn = nn.L1Loss()
+    loss_function = nn.L1Loss()
 
     metrics = Metrics(
-        len(test_dataloader.dataset),  # The total number of frames in the dataset
-        display_name=cfg["setup"]["display-name"], 
+        dataset_size=len(test_dataloader.dataset),  # The total number of frames in the dataset
+        display_name=cfg["setup"]["display-name"],
         writer=writer
     )
 
     evaluate(
-        device,
-        model,
-        test_dataloader,
-        loss_fn,
-        metrics,
-        Path(cfg["paths"]["evaluation-output-path"]),
+        device=device,
+        model=model,
+        test_dataloader=test_dataloader,
+        loss_function=loss_function,
+        metrics=metrics,
+        eval_output_path=Path(cfg["paths"]["evaluation-output-path"]),
         use_jitter=cfg["setup"]["jitter"]
     )
 
     metrics.report()
 
     write_video(
-        Path(cfg["paths"]["evaluation-output-path"]),
-        "evaluation_output.mp4",
+        imgs_path=Path(cfg["paths"]["evaluation-output-path"]),
+        filename="evaluation_output.mp4",
         fps=24
     )
 

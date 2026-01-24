@@ -5,12 +5,12 @@ import torch.nn.functional as F
 
 class JitterConditionedConv(nn.Module):
     def __init__(
-        self, 
+        self,
         out_channels: int,
         in_channels: int,
         kernel_height: int,
         kernel_width: int,
-        num_hidden_features: int = 2048, 
+        num_hidden_features: int = 2048,
         num_blocks: int = 7
     ) -> None:
         super().__init__()
@@ -33,42 +33,37 @@ class JitterConditionedConv(nn.Module):
             )
             body_layers.append(nn.ReLU())
         self.body = nn.Sequential(*body_layers)
-        
+
         self.output_layer = nn.Sequential(
             nn.Linear(num_hidden_features, num_outputs),
             nn.ReLU()
         )
-        
+
     def forward(self, x: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
         h = self.input_layer(jitter)
         h = self.body(h)
         kernel = self.output_layer(h)
         kernel = kernel.view(
-            self.out_channels, 
-            self.in_channels, 
-            self.kernel_height, 
+            self.out_channels,
+            self.in_channels,
+            self.kernel_height,
             self.kernel_width
         )
 
-        # The network doesn't directly update the kernel weights, but instead 
-        # updates the weights of the MLP used to calculate the kernel weights 
+        # The network doesn't directly update the kernel weights, but instead
+        # updates the weights of the MLP used to calculate the kernel weights
         return F.conv2d(x, kernel, padding=1)
 
 
 class QualcommNetwork(nn.Module):
     def __init__(
-        self, 
-        hidden_channels: int, 
+        self,
+        hidden_channels: int,
         num_blocks: int,
-        input_frame_height: int,
-        input_frame_width: int,
-        output_frame_height: int,
-        output_frame_width: int,
+        scale_factor: int,
         use_jitter: bool = False
     ) -> None:
         super().__init__()
-
-        scale_factor = output_frame_height // input_frame_height
 
         self.num_curr_colour = 3
         self.num_curr_depth = 1
@@ -90,13 +85,13 @@ class QualcommNetwork(nn.Module):
 
         hidden_channels *= (scale_factor ** 2)
 
-        if use_jitter: 
+        if use_jitter:
             self.input_conv = JitterConditionedConv(
                 hidden_channels,
                 self.in_channels,
                 3,
                 3,
-                num_hidden_features=2048, 
+                num_hidden_features=2048,
                 num_blocks=7
             )
         else:
@@ -127,13 +122,13 @@ class QualcommNetwork(nn.Module):
         self.body = nn.Sequential(*body_layers)
 
         # Feature head
-        if use_jitter: 
+        if use_jitter:
             self.feature_head = JitterConditionedConv(
                 self.num_prev_feature,
                 hidden_channels,
                 3,
                 3,
-                num_hidden_features=2048, 
+                num_hidden_features=2048,
                 num_blocks=7
             )
         else:
@@ -202,7 +197,7 @@ class QualcommNetwork(nn.Module):
             padding_mode='zeros'  # To mean no corresponding pixel in the previous frame
         )
 
-        # Space to depth 
+        # Space to depth
         warped_input_tensor = self.space_to_depth(input_tensor)
 
         return warped_input_tensor

@@ -19,8 +19,7 @@ class QualcommDatasetSampler(Sampler[list[tuple[int, int, int, int, int]]]):
         clip_size: int,
         input_frame_height: int,
         input_frame_width: int,
-        output_frame_height: int,
-        output_frame_width: int,
+        scale_factor: int,
         high_res_patch_size: int,
     ) -> None:
         self.scenes = scenes
@@ -32,10 +31,7 @@ class QualcommDatasetSampler(Sampler[list[tuple[int, int, int, int, int]]]):
         self.clip_size = clip_size
         self.input_frame_height = input_frame_height
         self.input_frame_width = input_frame_width
-        self.output_frame_height = output_frame_height
-        self.output_frame_width = output_frame_width
-
-        scale_factor = output_frame_height // input_frame_height
+        self.scale_factor = scale_factor
         self.patch_size = high_res_patch_size // scale_factor
 
     def __len__(self) -> int:
