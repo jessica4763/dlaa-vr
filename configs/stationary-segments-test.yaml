@@ -1,0 +1,3 @@
+defaults:
+  - test
+  - override /datasets: stationary-segments-test-upscale.yaml

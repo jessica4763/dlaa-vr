@@ -1,6 +1,5 @@
----
-test-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
-test-output-img-path: ../data/test_data/QRISP/TestSet/*/540p
+training-input-img-path: ../data/training_data/QRISP/*/540p
+training-output-img-path: ../data/training_data/QRISP/*/540p
 
 input-frame-height: 540
 input-frame-width: 960
@@ -21,4 +20,4 @@ colour-jittered-path-suffix: MipBiasMinus1Jittered
 depth-jittered-path-suffix: DepthMipBiasMinus1Jittered
 motion-vector-jittered-path-suffix: MotionVectorsMipBiasMinus1Jittered
 
-scene_names: [AbandonedSchool]
+scene_names: [CBApocalypse, FloodedGrounds, FloodedGroundsBridges, ScifiBase, ScifiBaseNightStartStop, ScifiBaseStartStop, ScifiFacility, SunTemple, SunTempleBush, SunTempleLamps]

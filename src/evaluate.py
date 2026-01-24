@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from datasets import QualcommDataset
 from model import QualcommNetwork
@@ -72,8 +72,7 @@ def evaluate(
             write_frames(eval_output_path / "target", gamma_target_frame, batch)
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="test")
-def main(cfg: DictConfig) -> None:
+def run(cfg: DictConfig) -> None:
     device = (
         torch.accelerator.current_accelerator().type
         if torch.accelerator.is_available()
@@ -196,6 +195,13 @@ def main(cfg: DictConfig) -> None:
         fps=24
     )
 
+@hydra.main(version_base=None, config_path="../configs", config_name="test")
+def main(cfg: DictConfig) -> None:
+    run(cfg)
+
+    print("\n --------------------- Stationary Segments Evaluation -------------------- \n")
+    stationary_segments_cfg = OmegaConf.load("../configs/stationary-segments-test.yaml")
+    run(stationary_segments_cfg)
 
 if __name__ == "__main__":
     main()

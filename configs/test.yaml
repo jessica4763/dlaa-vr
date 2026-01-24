@@ -1,6 +1,6 @@
----
 defaults:
-  - dataset: toy-test-upscale
+  - datasets: toy-test-upscale
+  - _self_
 
 setup:
   seed: 42
@@ -8,9 +8,9 @@ setup:
   jitter: true
 
 paths: 
-  saved-models-path: ../saved/logs/runs/2x/exp2/full_model.pt
   evaluation-output-path: evaluation_outputs
   tensorboard-path: ../saved/logs/runs
+  saved-models-path: ../saved/logs/runs/2x/exp2/full_model.pt
 
 model:
   hidden-channels: 64

@@ -1,14 +1,13 @@
----
 training-input-img-path: ../data/training_data/QRISP/*/540p
-training-output-img-path: ../data/training_data/QRISP/*/1080p
+training-output-img-path: ../data/training_data/QRISP/*/540p
 
 input-frame-height: 540
 input-frame-width: 960
 
-output-frame-height: 1080
-output-frame-width: 1920
+output-frame-height: 540
+output-frame-width: 960
 
-dilation-block-size: 4
+dilation-block-size: 8
 
 camera-data-path-suffix: CameraData
 ground-truth-path-suffix: Enhanced
@@ -21,4 +20,4 @@ colour-jittered-path-suffix: MipBiasMinus1Jittered
 depth-jittered-path-suffix: DepthMipBiasMinus1Jittered
 motion-vector-jittered-path-suffix: MotionVectorsMipBiasMinus1Jittered
 
-scene_names: [CBApocalypse, FloodedGrounds, FloodedGroundsBridges, ScifiBase, ScifiBaseNightStartStop, ScifiBaseStartStop, ScifiFacility, SunTemple, SunTempleBush, SunTempleLamps]
+scene_names: [CBApocalypse, FloodedGrounds, ScifiBase, ScifiFacility, SunTemple]

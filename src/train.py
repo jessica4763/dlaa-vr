@@ -1,5 +1,3 @@
-import hydra
-from omegaconf import DictConfig, OmegaConf
 import os
 from pathlib import Path
 import sys
@@ -8,6 +6,9 @@ from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
+
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 from datasets import QualcommDataset
 from loss import CVVDPLoss, L1LossWithCVVDP
