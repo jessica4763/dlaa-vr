@@ -8,7 +8,7 @@ setup:
   jitter: true
 
 paths: 
-  saved-models-path: ../saved/logs/runs/2x/exp4/full_model.pt
+  saved-models-path: ../saved/logs/runs/2x/exp2/full_model.pt
   evaluation-output-path: evaluation_outputs
   tensorboard-path: ../saved/logs/runs
 

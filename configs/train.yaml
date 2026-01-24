@@ -1,6 +1,6 @@
 ---
 defaults:
-  - dataset: full-train-upscale
+  - dataset: scale-train-upscale
   - optimiser: adamw
 
 setup:
@@ -12,7 +12,7 @@ paths:
   checkpoints-path: checkpoints
   sanity-checks-output-path: sanity_checks_output
   tensorboard-path: ../saved/logs/runs
-  saved-models-path: ../saved/models/full_model.pt
+  saved-models-path: ../saved/models/scale_model.pt
 
 model:
   hidden-channels: 64  # 16, 32, 64
