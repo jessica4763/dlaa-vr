@@ -9,6 +9,8 @@ output-frame-width: 960
 
 dilation-block-size: 8
 
+scene_names: [CBApocalypse, FloodedGrounds, FloodedGroundsBridges, ScifiBase, ScifiBaseNightStartStop, ScifiBaseStartStop, ScifiFacility, SunTemple, SunTempleBush, SunTempleLamps]
+
 camera-data-path-suffix: CameraData
 ground-truth-path-suffix: Enhanced
 
@@ -19,5 +21,3 @@ motion-vector-path-suffix: MotionVectorsMipBiasMinus1
 colour-jittered-path-suffix: MipBiasMinus1Jittered
 depth-jittered-path-suffix: DepthMipBiasMinus1Jittered
 motion-vector-jittered-path-suffix: MotionVectorsMipBiasMinus1Jittered
-
-scene_names: [CBApocalypse, FloodedGrounds, FloodedGroundsBridges, ScifiBase, ScifiBaseNightStartStop, ScifiBaseStartStop, ScifiFacility, SunTemple, SunTempleBush, SunTempleLamps]

@@ -60,7 +60,7 @@ class QualcommNetwork(nn.Module):
         self,
         hidden_channels: int,
         num_blocks: int,
-        scale_factor: int,
+        scale_factor: int = 1,
         use_jitter: bool = False
     ) -> None:
         super().__init__()

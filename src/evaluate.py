@@ -27,6 +27,7 @@ def evaluate(
     loss_function: nn.Module,
     metrics: Metrics,
     eval_output_path: Path,
+    scale_factor: int = 1,
     use_jitter: bool = False
 ) -> None:
     model.eval()
@@ -59,7 +60,7 @@ def evaluate(
             pred_frame = pred_frame.view(-1, 3, output_H, output_W)
             loss = loss_function(pred_frame, target)
 
-            prev_pred_frame = F.pixel_unshuffle(pred_frame, downscale_factor=2)
+            prev_pred_frame = F.pixel_unshuffle(pred_frame, downscale_factor=scale_factor)
             prev_features = features.squeeze(0)
 
             loss, current_img = loss.item(), (batch + 1) * len(inputs)
@@ -173,8 +174,9 @@ def run(cfg: DictConfig) -> None:
 
     metrics = Metrics(
         dataset_size=len(test_dataloader.dataset),  # The total number of frames in the dataset
+        writer=writer,
+        is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
         display_name=cfg["setup"]["display-name"],
-        writer=writer
     )
 
     evaluate(
@@ -184,6 +186,7 @@ def run(cfg: DictConfig) -> None:
         loss_function=loss_function,
         metrics=metrics,
         eval_output_path=Path(cfg["paths"]["evaluation-output-path"]),
+        scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"]
     )
 

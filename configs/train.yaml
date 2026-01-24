@@ -1,6 +1,6 @@
 defaults:
-  - datasets: scale-train-upscale
-  - optimisers: adamw
+  - dataset: scale-train-upscale
+  - optimiser: adamw
 
 setup:
   seed: 42

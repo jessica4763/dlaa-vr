@@ -9,6 +9,9 @@ output-frame-width: 1920
 
 dilation-block-size: 4
 
+scene_names: [SeaPort]
+is-stationary-segment: false
+
 camera-data-path-suffix: CameraData
 ground-truth-path-suffix: Enhanced
 
@@ -19,5 +22,3 @@ motion-vector-path-suffix: MotionVectorsMipBiasMinus1
 colour-jittered-path-suffix: MipBiasMinus1Jittered
 depth-jittered-path-suffix: DepthMipBiasMinus1Jittered
 motion-vector-jittered-path-suffix: MotionVectorsMipBiasMinus1Jittered
-
-scene_names: [SeaPortStationary]

@@ -156,8 +156,8 @@ def train(cfg: DictConfig) -> None:
         clip_size=cfg["optimiser"]["clip-size"],
         input_frame_height=cfg["dataset"]["input-frame-height"],
         input_frame_width=cfg["dataset"]["input-frame-width"],
-        scale_factor=scale_factor,
-        high_res_patch_size=cfg["optimiser"]["patch-size"]
+        high_res_patch_size=cfg["optimiser"]["patch-size"],
+        scale_factor=scale_factor
     )
 
     training_dataloader = DataLoader(

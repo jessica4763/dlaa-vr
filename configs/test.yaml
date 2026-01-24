@@ -1,5 +1,5 @@
 defaults:
-  - datasets: toy-test-upscale
+  - dataset: toy-test-upscale
   - _self_
 
 setup:

@@ -14,12 +14,13 @@ class Metrics:
     def __init__(
         self, 
         dataset_size: int,
-        display_name: str = "standard_fhd", 
         writer: SummaryWriter = None, 
+        is_stationary_segment: bool = False,
+        display_name: str = "standard_fhd", 
     ) -> None:
-        self.writer = writer
-
         self.dataset_size = dataset_size
+        self.writer = writer
+        self.is_stationary_segment = is_stationary_segment
 
         self.norm_rmse_sum = 0
         self.psnr_sum = 0
@@ -85,7 +86,9 @@ class Metrics:
         self.record_ssim(pred_ndarray, target_ndarray)
         self.record_lpips(pred, target)
         self.record_cvvdp_jod(pred_ndarray, target_ndarray)
-        self.record_pixel_wise_std(pred_ndarray)
+
+        if self.is_stationary_segment:
+            self.record_pixel_wise_std(pred_ndarray)
 
     def report(self) -> None:
         self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
@@ -94,9 +97,10 @@ class Metrics:
         self.metrics["avg_lpips"] = self.lpips_sum.item() / self.dataset_size
         self.metrics["avg_cvvdp_jod"] = self.cvvdp_jod_sum / self.dataset_size
 
-        pixel_mean = self.pixel_sum / self.dataset_size
-        pixel_squared_mean = self.pixel_squared_sum / self.dataset_size
-        self.metrics["avg_pixel_wise_std"] = np.mean(np.sqrt(np.maximum(pixel_squared_mean - np.square(pixel_mean), 0)))
+        if self.is_stationary_segment:
+            pixel_mean = self.pixel_sum / self.dataset_size
+            pixel_squared_mean = self.pixel_squared_sum / self.dataset_size
+            self.metrics["avg_pixel_wise_std"] = np.mean(np.sqrt(np.maximum(pixel_squared_mean - np.square(pixel_mean), 0)))
 
         reported_metrics_strings = []
         for metric_name in self.metrics:
@@ -105,6 +109,7 @@ class Metrics:
         reported_metrics = "\n".join(reported_metrics_strings)
 
         print(reported_metrics)
+
         if self.writer is not None:
             self.writer.add_text(
                 "reported metrics", 
