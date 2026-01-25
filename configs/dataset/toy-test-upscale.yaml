@@ -9,7 +9,8 @@ output-frame-width: 1920
 
 dilation-block-size: 4
 
-scene_names: [SeaPort]
+scene-names: [SeaPort]
+is-vr: false
 is-stationary-segment: false
 
 camera-data-path-suffix: CameraData

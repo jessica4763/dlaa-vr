@@ -126,7 +126,7 @@ def run(cfg: DictConfig) -> None:
         colour_jittered_path_suffix=cfg["dataset"]["colour-jittered-path-suffix"],
         depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
         motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
-        scene_names=cfg["dataset"]["scene_names"],
+        scene_names=cfg["dataset"]["scene-names"],
         scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"],
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
@@ -175,6 +175,7 @@ def run(cfg: DictConfig) -> None:
     metrics = Metrics(
         dataset_size=len(test_dataloader.dataset),  # The total number of frames in the dataset
         writer=writer,
+        is_vr=cfg["dataset"]["is-vr"],
         is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
         display_name=cfg["setup"]["display-name"],
     )

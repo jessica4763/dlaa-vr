@@ -31,6 +31,7 @@ class QualcommDataset(Dataset):
         depth_jittered_path_suffix: str,
         motion_vector_jittered_path_suffix: str,
         scene_names: list[str],
+        is_vr: bool = False,
         scale_factor: int = 1,
         use_jitter: bool = False,
         dilation_block_size: int = 8,
@@ -68,6 +69,7 @@ class QualcommDataset(Dataset):
         self.frame_boundaries = cumsum(scene_num_frames)
         self.total_frames = sum(scene_num_frames)
 
+        self.is_vr = is_vr
         self.scale_factor = scale_factor
         self.use_jitter = use_jitter
         self.dilation_block_size = dilation_block_size
@@ -430,3 +432,12 @@ class QualcommDataset(Dataset):
             )
 
         return input_imgs, motion_vectors, jitter, curr_output_img
+
+
+class VRDataset(QualcommDataset):
+    def __init__(self, camera_baseline: float, focal_length: float, *args, **kwargs):
+        self.camera_baseline = camera_baseline
+        self.focal_length = focal_length
+
+        super().__init__(*args, **kwargs)
+        

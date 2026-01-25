@@ -9,7 +9,8 @@ output-frame-width: 960
 
 dilation-block-size: 8
 
-scene_names: [CBApocalypse, FloodedGrounds, ScifiBase, ScifiFacility, SunTemple]
+scene-names: [CBApocalypse, FloodedGrounds, ScifiBase, ScifiFacility, SunTemple]
+is-vr: false
 
 camera-data-path-suffix: CameraData
 ground-truth-path-suffix: Enhanced

@@ -137,7 +137,7 @@ def train(cfg: DictConfig) -> None:
         colour_jittered_path_suffix=cfg["dataset"]["colour-jittered-path-suffix"],
         depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
         motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
-        scene_names=cfg["dataset"]["scene_names"],
+        scene_names=cfg["dataset"]["scene-names"],
         scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"],
         dilation_block_size=cfg["dataset"]["dilation-block-size"],

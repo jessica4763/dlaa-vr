@@ -9,7 +9,8 @@ output-frame-width: 960
 
 dilation-block-size: 8
 
-scene_names: [ScifiBaseStartStop]
+scene-names: [ScifiBaseStartStop]
+is-vr: false
 
 camera-data-path-suffix: CameraData
 ground-truth-path-suffix: Enhanced

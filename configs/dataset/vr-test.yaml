@@ -1,16 +1,17 @@
-training-input-img-path: ../data/training_data/QRISP/*/540p
-training-output-img-path: ../data/training_data/QRISP/*/1080p
+test-input-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
+test-output-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
 
 input-frame-height: 540
 input-frame-width: 960
 
-output-frame-height: 1080
-output-frame-width: 1920
+output-frame-height: 540
+output-frame-width: 960
 
-dilation-block-size: 4
+dilation-block-size: 8
 
-scene-names: [CBApocalypse, FloodedGrounds, ScifiBase, ScifiFacility, SunTemple]
-is-vr: false
+scene-names: [SeaPortVR]
+is-vr: true
+is-stationary-segment: false
 
 camera-data-path-suffix: CameraData
 ground-truth-path-suffix: Enhanced
