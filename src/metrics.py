@@ -9,19 +9,21 @@ from skimage.metrics import (
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from utils import VRConfig
+
 
 class Metrics:
     def __init__(
         self, 
         dataset_size: int,
         writer: SummaryWriter = None, 
-        is_vr: bool = False,
+        vr_config: VRConfig = None,
         is_stationary_segment: bool = False,
         display_name: str = "standard_fhd", 
     ) -> None:
         self.dataset_size = dataset_size
         self.writer = writer
-        self.is_vr = is_vr
+        self.vr_config = vr_config
         self.is_stationary_segment = is_stationary_segment
 
         self.norm_rmse_sum = 0
@@ -116,14 +118,14 @@ class Metrics:
 
         return warped_frame, valid_mask
     
-    def record_photometric_residual(self, left_pred: np.ndarray, right_pred: np.ndarray) -> float:
+    def record_photometric_residual(self, left_pred: np.ndarray, left_depth: np.ndarray, right_pred: np.ndarray) -> float:
         warped_frame, valid_mask = self.left_to_right_warp(
             left_pred,
             left_depth,
+            self.vr_config.camera_baseline,
+            self.vr_config.focal_length
         )
-
-        # Calculate RMSE
-        rmse = np.sqrt(np.mean((left_pred[valid_mask] - right_pred[valid_mask]) ** 2))
+        rmse = np.sqrt(np.mean((warped_frame[valid_mask] - right_pred[valid_mask]) ** 2))
         return rmse
 
     def record(self, pred: torch.Tensor, target: torch.Tensor) -> None:

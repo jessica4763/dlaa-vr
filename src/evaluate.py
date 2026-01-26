@@ -15,7 +15,8 @@ from utils import (
     gamma_to_linear,
     linear_to_gamma,
     write_frames,
-    write_video
+    write_video,
+    VRConfig
 )
 from sanity_checks import print_parameters
 
@@ -127,8 +128,8 @@ def run(cfg: DictConfig) -> None:
         depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
         motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
         scene_names=cfg["dataset"]["scene-names"],
-        scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"],
+        scale_factor=scale_factor,
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
@@ -171,11 +172,20 @@ def run(cfg: DictConfig) -> None:
     # ------------------------------ Evaluation -------------------------------
     # -------------------------------------------------------------------------
     loss_function = nn.L1Loss()
+    
+    vr_config = None
+    if cfg["dataset"]["is-vr"]:
+        vr_config = VRConfig(
+            cfg["dataset"]["camera-baseline"], 
+            cfg["dataset"]["diagonal-fov"],
+            cfg["dataset"]["output-frame-width"],
+            cfg["dataset"]["output-frame-height"]
+        )
 
     metrics = Metrics(
         dataset_size=len(test_dataloader.dataset),  # The total number of frames in the dataset
         writer=writer,
-        is_vr=cfg["dataset"]["is-vr"],
+        vr_config=vr_config,
         is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
         display_name=cfg["setup"]["display-name"],
     )

@@ -1,4 +1,6 @@
+from dataclasses import dataclass, field
 import imageio.v3
+import math
 from natsort import natsorted
 import os
 from pathlib import Path
@@ -22,6 +24,29 @@ class Scene:
         self.num_instances = len(instances)
         self.num_frames_per_instance = len(frames)
         self.num_frames = self.num_instances * self.num_frames_per_instance
+
+
+@dataclass
+class VRConfig:
+    camera_baseline: float = 0.065
+    diagonal_fov: float = 110.0
+    horizontal_resolution: int = 1440
+    vertical_resolution: int = 1600
+    focal_length: float = field(init=False)
+
+    @staticmethod
+    def get_focal_length(
+        diagonal_fov: float, 
+        horizontal_resolution: int, 
+        vertical_resolution: int
+    ) -> float:
+        diagonal_fov_rad = math.radians(diagonal_fov)
+        diagonal = math.sqrt(horizontal_resolution ** 2, vertical_resolution ** 2)
+        focal_length = diagonal / (2 * math.tan(diagonal_fov_rad / 2))
+        return focal_length
+
+    def __post_init__(self):
+        self.focal_length = VRConfig.get_focal_length(self.diagonal_fov, self.horizontal_resolution, self.vertical_resolution)
 
 
 def gamma_to_linear(image: torch.Tensor) -> torch.Tensor:

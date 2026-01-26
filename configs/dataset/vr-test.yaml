@@ -1,16 +1,18 @@
 test-input-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
 test-output-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
 
-input-frame-height: 540
-input-frame-width: 960
+input-frame-height: 1440
+input-frame-width: 1600
 
-output-frame-height: 540
-output-frame-width: 960
+output-frame-height: 1440
+output-frame-width: 1600
 
 dilation-block-size: 8
 
 scene-names: [SeaPortVR]
 is-vr: true
+camera-baseline: 0.065  # metres
+diagonal-fov: 110.0  # degrees
 is-stationary-segment: false
 
 camera-data-path-suffix: CameraData
