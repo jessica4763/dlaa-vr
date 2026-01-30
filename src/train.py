@@ -308,12 +308,18 @@ def validate(
     validation_cfg: str,
 ) -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        validation_cfg = hydra.compose(config_name="validation")
-
-    if iterations % validation_cfg["validation"]["primary-validation-interval"] == 0:
-        run(validation_cfg)
-    elif iterations % validation_cfg["validation"]["proxy-validation-interval"] == 0:
-        run(validation_cfg)
+        if iterations % validation_cfg["validation"]["primary-validation-interval"] == 0:
+            validation_cfg = hydra.compose(
+                config_name="validation", 
+                overrides=[""]
+            )
+            run(validation_cfg)
+        elif iterations % validation_cfg["validation"]["proxy-validation-interval"] == 0:
+            validation_cfg = hydra.compose(
+                config_name="validation", 
+                overrides=[""]
+            )
+            run(validation_cfg)
 
     # TODO: Stationary segments
 
