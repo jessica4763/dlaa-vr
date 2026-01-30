@@ -84,12 +84,12 @@ def cumsum(xs):
 
 
 def write_frames(
-    eval_output_path: Path,
+    evaluation_output_path: Path,
     frames: torch.Tensor,
     batch: int
 ) -> None:
     for idx, frame in enumerate(frames):
-        save_image(frame, eval_output_path / f"{batch + idx}.png")
+        save_image(frame, evaluation_output_path / f"{batch + idx}.png")
 
 
 def write_video(

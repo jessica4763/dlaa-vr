@@ -24,17 +24,17 @@ from sanity_checks import print_parameters
 def evaluate(
     device: str,
     model: nn.Module,
-    test_dataloader: DataLoader,
+    evaluation_dataloader: DataLoader,
     loss_function: nn.Module,
     metrics: Metrics,
-    eval_output_path: Path,
+    evaluation_output_path: Path,
     scale_factor: int = 1,
     use_jitter: bool = False
 ) -> None:
     model.eval()
     with torch.no_grad():
         prev_pred_frame = prev_features = None
-        for batch, (inputs, motion_vectors, jitter, target) in enumerate(test_dataloader):
+        for batch, (inputs, motion_vectors, jitter, target) in enumerate(evaluation_dataloader):
             inputs = inputs.to(device)
             inputs = inputs.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
@@ -50,7 +50,7 @@ def evaluate(
 
             target = target.to(device)
 
-            # Use the previously predicted frame and features during test
+            # Use the previously predicted frame and features during evaluation
             if prev_pred_frame is not None and prev_features is not None:
                 c0 = model.in_channels - (model.num_prev_colour + model.num_prev_feature)
                 c1 = model.in_channels - model.num_prev_feature
@@ -65,13 +65,13 @@ def evaluate(
             prev_features = features.squeeze(0)
 
             loss, current_img = loss.item(), (batch + 1) * len(inputs)
-            print(f"Loss: {loss:>7f}  [{current_img:>5d}/{len(test_dataloader.dataset):>5d}]")
+            print(f"Loss: {loss:>7f}  [{current_img:>5d}/{len(evaluation_dataloader.dataset):>5d}]")
 
             gamma_pred_frame = linear_to_gamma(pred_frame)
             gamma_target_frame = linear_to_gamma(target)
             metrics.record(gamma_pred_frame, gamma_target_frame)
-            write_frames(eval_output_path / "pred", gamma_pred_frame, batch)
-            write_frames(eval_output_path / "target", gamma_target_frame, batch)
+            write_frames(evaluation_output_path / "pred", gamma_pred_frame, batch)
+            write_frames(evaluation_output_path / "target", gamma_target_frame, batch)
 
 
 def run(cfg: DictConfig) -> None:
@@ -114,9 +114,9 @@ def run(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
-    test_data = QualcommDataset(
-        input_imgs_path=cfg["dataset"]["test-input-img-path"],
-        output_imgs_path=cfg["dataset"]["test-output-img-path"],
+    evaluation_data = QualcommDataset(
+        input_imgs_path=cfg["dataset"]["validation-input-img-path"],
+        output_imgs_path=cfg["dataset"]["validation-output-img-path"],
         input_frame_height=cfg["dataset"]["input-frame-height"],
         input_frame_width=cfg["dataset"]["input-frame-width"],
         camera_data_path_suffix=cfg["dataset"]["camera-data-path-suffix"],
@@ -133,11 +133,11 @@ def run(cfg: DictConfig) -> None:
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
-        mode="test"
+        mode="evaluation"
     )
 
-    test_dataloader = DataLoader(
-        test_data
+    evaluation_dataloader = DataLoader(
+        evaluation_data
     )
 
     # -------------------------------------------------------------------------
@@ -158,13 +158,13 @@ def run(cfg: DictConfig) -> None:
         )
     )
 
-    inputs, motion_vectors, jitter, _ = test_data[0]
+    inputs, motion_vectors, jitter, _ = evaluation_data[0]
     inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
     jitter = jitter.to(device).unsqueeze(0).unsqueeze(0)  # if use_jitter is None, this is a zero tensor, and is ignored during inference
     writer.add_graph(model, input_to_model=(inputs, motion_vectors, jitter))
 
     print_parameters(
-        eval_output_path=Path(cfg["paths"]["evaluation-output-path"]),
+        evaluation_output_path=Path(cfg["paths"]["evaluation-output-path"]),
         parameters=model.state_dict()
     )
 
@@ -183,7 +183,7 @@ def run(cfg: DictConfig) -> None:
         )
 
     metrics = Metrics(
-        dataset_size=len(test_dataloader.dataset),  # The total number of frames in the dataset
+        dataset_size=len(evaluation_dataloader.dataset),  # The total number of frames in the dataset
         writer=writer,
         vr_config=vr_config,
         is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
@@ -193,10 +193,10 @@ def run(cfg: DictConfig) -> None:
     evaluate(
         device=device,
         model=model,
-        test_dataloader=test_dataloader,
+        evaluation_dataloader=evaluation_dataloader,
         loss_function=loss_function,
         metrics=metrics,
-        eval_output_path=Path(cfg["paths"]["evaluation-output-path"]),
+        evaluation_output_path=Path(cfg["paths"]["evaluation-output-path"]),
         scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"]
     )
@@ -209,13 +209,16 @@ def run(cfg: DictConfig) -> None:
         fps=24
     )
 
-@hydra.main(version_base=None, config_path="../configs", config_name="test")
-def main(cfg: DictConfig) -> None:
-    run(cfg)
 
-    print("\n --------------------- Stationary Segments Evaluation -------------------- \n")
-    stationary_segments_cfg = OmegaConf.load("../configs/stationary-segments-test.yaml")
-    run(stationary_segments_cfg)
+def main() -> None:
+    with hydra.initialize(version_base=None, config_path="../configs"):
+        cfg = hydra.compose(config_name="validation")
+        run(cfg)
+
+        print("\n --------------------- Stationary Segments Evaluation -------------------- \n")
+        stationary_segments_cfg = hydra.compose(config_name="validation", overrides=["dataset=stationary-segments-validation-upscale"])
+        run(stationary_segments_cfg)
+
 
 if __name__ == "__main__":
     main()

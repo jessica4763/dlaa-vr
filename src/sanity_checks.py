@@ -64,8 +64,8 @@ def save_output(
     save_image(output, sanity_checks_output_path / "ground_truth.png")
 
 
-def print_parameters(eval_output_path: Path, parameters: dict[str, Any]) -> None:
-    with open(eval_output_path / "model_parameters.txt", "a") as a_writer:
+def print_parameters(evaluation_output_path: Path, parameters: dict[str, Any]) -> None:
+    with open(evaluation_output_path / "model_parameters.txt", "a") as a_writer:
         for layer in parameters:
             a_writer.write(f"\n----------------------{layer}----------------------\n")
             a_writer.write(str(parameters[layer]))

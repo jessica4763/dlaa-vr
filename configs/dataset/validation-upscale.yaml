@@ -1,15 +1,15 @@
-test-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
-test-output-img-path: ../data/test_data/QRISP/TestSet/*/540p
+validation-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
+validation-output-img-path: ../data/test_data/QRISP/TestSet/*/1080p
 
 input-frame-height: 540
 input-frame-width: 960
 
-output-frame-height: 540
-output-frame-width: 960
+output-frame-height: 1080
+output-frame-width: 1920
 
-dilation-block-size: 8
+dilation-block-size: 4
 
-scene-names: [SeaPort]
+scene-names: [AbandonedSchool, SeaPort, SpaceShipDemo]
 is-vr: false
 is-stationary-segment: false
 

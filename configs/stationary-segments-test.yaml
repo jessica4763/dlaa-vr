@@ -1,3 +1,3 @@
 defaults:
-  - test
-  - override /dataset: stationary-segments-test-upscale.yaml
+  - validation
+  - override /dataset: stationary-segments-validation-upscale.yaml

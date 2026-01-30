@@ -1,5 +1,5 @@
-test-input-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
-test-output-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
+validation-input-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
+validation-output-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
 
 input-frame-height: 1440
 input-frame-width: 1600

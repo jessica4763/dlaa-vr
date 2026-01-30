@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import math
 import sys
 import torch
 from torch import nn, optim
@@ -8,9 +9,10 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 
 from datasets import QualcommDataset
+from evaluate import run
 from loss import CVVDPLoss, L1LossWithCVVDP
 from model import QualcommNetwork
 from samplers import QualcommDatasetSampler
@@ -29,6 +31,8 @@ def train_epoch(
     optimiser: optim.Optimizer,
     writer: SummaryWriter,
     epoch: int,
+    iterations: int,
+    validation_cfg: str,
     use_jitter: bool = False
 ) -> None:
     total_instances = training_dataloader.dataset.total_instances
@@ -79,9 +83,19 @@ def train_epoch(
 
             total_loss = 0
 
+        # Perform validation if validation is supposed to happen this iteration
+        # Proxy validation happens every 1000 iterations
+        # Primary validation happens every 1000000 iterations
+        validate(
+            iterations=(iterations + batch),
+            validation_cfg=validation_cfg
+        )
 
-@hydra.main(version_base=None, config_path="../configs", config_name="train")
-def train(cfg: DictConfig) -> None:
+
+def train() -> None:
+    with hydra.initialize(version_base=None, config_path="../configs"):
+        cfg = hydra.compose(config_name="train")
+
     device = (
         torch.accelerator.current_accelerator().type
         if torch.accelerator.is_available()
@@ -241,8 +255,12 @@ def train(cfg: DictConfig) -> None:
     # -------------------------------------------------------------------------
     # ----------------------------- Training loop -----------------------------
     # -------------------------------------------------------------------------
+    iterations_per_epoch = math.ceil(training_dataloader.dataset.total_instances / cfg["optimiser"]["batch-size"])
+
     for epoch in range(cfg["optimiser"]["epochs"]):
-        print(f"Epoch {epoch + 1}\n-------------------------------")
+        iterations = epoch * iterations_per_epoch
+
+        print(f"Epoch {epoch + 1:<10} | Iteration {iterations + 1} \n-------------------------------")
 
         train_epoch(
             device=device,
@@ -255,22 +273,24 @@ def train(cfg: DictConfig) -> None:
             optimiser=optimiser,
             writer=writer,
             epoch=epoch,
+            iterations=iterations,
+            validation_cfg=cfg["setup"]["validation-cfg"],
             use_jitter=cfg["setup"]["jitter"]
         )
 
-        checkpoint(
-            checkpoint_path=checkpoints_path,
-            sanity_checks_output_path=sanity_checks_output_path,
-            device=device,
-            model=model,
-            training_data=training_data,
-            writer=writer,
-            epoch=epoch,
-            input_frame_height=cfg["dataset"]["input-frame-height"],
-            input_frame_width=cfg["dataset"]["input-frame-width"],
-            scale_factor=scale_factor,
-            use_jitter=cfg["setup"]["jitter"]
-        )
+        # checkpoint(
+        #     checkpoint_path=checkpoints_path,
+        #     sanity_checks_output_path=sanity_checks_output_path,
+        #     device=device,
+        #     model=model,
+        #     training_data=training_data,
+        #     writer=writer,
+        #     epoch=epoch,
+        #     input_frame_height=cfg["dataset"]["input-frame-height"],
+        #     input_frame_width=cfg["dataset"]["input-frame-width"],
+        #     scale_factor=scale_factor,
+        #     use_jitter=cfg["setup"]["jitter"]
+        # )
 
         scheduler.step()
 
@@ -283,46 +303,61 @@ def train(cfg: DictConfig) -> None:
     print("Done.")
 
 
-def checkpoint(
-    checkpoint_path: Path,
-    sanity_checks_output_path: Path,
-    device: str,
-    model: nn.Module,
-    training_data: Dataset,
-    writer: SummaryWriter,
-    epoch: int,
-    input_frame_height: int,
-    input_frame_width: int,
-    scale_factor: int,
-    use_jitter: bool = False
+def validate(
+    iterations: int,
+    validation_cfg: str,
 ) -> None:
-    # Strictly a training diagnostic, so it's OK if
-    # training data is used here
-    model.eval()
-    with torch.no_grad():
-        inputs, motion_vectors, jitter, output = training_data[(0, 0, 0, input_frame_width, input_frame_height)]
+    with hydra.initialize(version_base=None, config_path="../configs"):
+        validation_cfg = hydra.compose(config_name="validation")
 
-        # Verify input to the network
-        save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
+    if iterations % validation_cfg["validation"]["primary-validation-interval"] == 0:
+        run(validation_cfg)
+    elif iterations % validation_cfg["validation"]["proxy-validation-interval"] == 0:
+        run(validation_cfg)
 
-        # Verify the goal of the network
-        output = linear_to_gamma(output)
-        save_output(sanity_checks_output_path, output)
+    # TODO: Stationary segments
 
-        inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
-        motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
-        jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
-        anti_aliased_img, _ = model(inputs, motion_vectors, jitter)
-        anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
-        anti_aliased_img = linear_to_gamma(anti_aliased_img)
 
-        save_image(anti_aliased_img, checkpoint_path / f"{epoch}.png")
-        if (epoch + 1) % 10 == 0:
-            writer.add_image(
-                "checkpoint images",
-                anti_aliased_img,
-                global_step=(epoch + 1)
-            )
+# def checkpoint(
+#     checkpoint_path: Path,
+#     sanity_checks_output_path: Path,
+#     device: str,
+#     model: nn.Module,
+#     training_data: Dataset,
+#     writer: SummaryWriter,
+#     epoch: int,
+#     input_frame_height: int,
+#     input_frame_width: int,
+#     scale_factor: int,
+#     use_jitter: bool = False
+# ) -> None:
+#     # Strictly a training diagnostic, so it's OK if
+#     # training data is used here
+#     model.eval()
+#     with torch.no_grad():
+#         inputs, motion_vectors, jitter, output = training_data[(0, 0, 0, input_frame_width, input_frame_height)]
+
+#         # Verify input to the network
+#         save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
+
+#         # Verify the goal of the network
+#         output = linear_to_gamma(output)
+#         save_output(sanity_checks_output_path, output)
+
+#         inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
+#         motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
+#         jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+#         anti_aliased_img, _ = model(inputs, motion_vectors, jitter)
+#         anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
+#         anti_aliased_img = linear_to_gamma(anti_aliased_img)
+
+#         save_image(anti_aliased_img, checkpoint_path / f"{epoch}.png")
+#         if (epoch + 1) % 10 == 0:
+#             writer.add_image(
+#                 "checkpoint images",
+#                 anti_aliased_img,
+#                 global_step=(epoch + 1)
+#             )
 
 
 if __name__ == "__main__":

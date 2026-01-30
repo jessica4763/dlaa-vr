@@ -130,17 +130,17 @@ if __name__ == "__main__":
     #         output_dimensions
     #     )
 
-    # test_data_scenes = [
+    # validation_data_scenes = [
     #     "AbandonedSchool",
     #     "SeaPort",
     #     "SpaceShipDemo"
     # ]
-    # test_data_prefix = Path("../data/test_data/QRISP/TestSet")
-    # test_data_input_suffix = Path("1080p/Enhanced")
-    # test_data_output_suffix = Path("540p/Enhanced")
-    # for test_data_scene in test_data_scenes:
+    # validation_data_prefix = Path("../data/test_data/QRISP/TestSet")
+    # validation_data_input_suffix = Path("1080p/Enhanced")
+    # validation_data_output_suffix = Path("540p/Enhanced")
+    # for validation_data_scene in validation_data_scenes:
     #     downsample(
-    #         test_data_prefix / test_data_scene / test_data_input_suffix,
-    #         test_data_prefix / test_data_scene / test_data_output_suffix,
+    #         validation_data_prefix / validation_data_scene / validation_data_input_suffix,
+    #         validation_data_prefix / validation_data_scene / validation_data_output_suffix,
     #         output_dimensions
     #     )

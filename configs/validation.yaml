@@ -1,5 +1,5 @@
 defaults:
-  - dataset: toy-test-upscale
+  - dataset: validation-upscale
 
 setup:
   seed: 42
@@ -14,6 +14,10 @@ paths:
 model:
   hidden-channels: 64
   num-blocks: 5
+
+validation:
+  proxy-validation-interval: 1000
+  primary-validation-interval: 100000
 
 hydra:
   run:

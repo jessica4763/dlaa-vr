@@ -1,5 +1,5 @@
-test-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
-test-output-img-path: ../data/test_data/QRISP/TestSet/*/1080p
+validation-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
+validation-output-img-path: ../data/test_data/QRISP/TestSet/*/1080p
 
 input-frame-height: 540
 input-frame-width: 960
