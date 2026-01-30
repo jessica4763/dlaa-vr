@@ -37,7 +37,7 @@ class QualcommDataset(Dataset):
         transform=None,
         target_transform=None,
         mode: str = "training",
-        primary_validation: str = "primary",
+        validation_mode: str = "primary",
     ) -> None:
         self.input_imgs_path = input_imgs_path
         self.output_imgs_path = output_imgs_path
@@ -75,7 +75,7 @@ class QualcommDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.mode = mode
-        self.primary_validation = primary_validation
+        self.validation_mode = validation_mode
 
     def get_jitter_offsets(
         self,

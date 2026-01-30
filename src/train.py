@@ -3,7 +3,8 @@ from pathlib import Path
 import math
 import sys
 import torch
-from torch import nn, optim
+from torch import nn
+from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import save_image
@@ -28,7 +29,8 @@ def train_epoch(
     virtual_batch_size: int,
     clip_size: int,
     loss_function: nn.Module,
-    optimiser: optim.Optimizer,
+    optimiser: MultiStepLR | CosineAnnealingLR,
+    scheduler: torch.optim.lr_scheduler.MultiStepLR,
     writer: SummaryWriter,
     iterations: int,
     use_jitter: bool
@@ -79,6 +81,8 @@ def train_epoch(
             print(f"Loss: {total_loss:>7f}  [{batch + 1:>5d} / {total_instances:>5d}]")
 
             total_loss = 0
+
+            scheduler.step()
 
 
 def train() -> None:
@@ -237,7 +241,7 @@ def train() -> None:
     elif cfg["optimiser"]["lr-scheduler"] == "cosine-annealing":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimiser,
-            cfg["optimiser"]["epochs"],
+            cfg["optimiser"]["iterations"],
             cfg["optimiser"]["learning-rate-eta-min"]
         )
 
@@ -246,7 +250,8 @@ def train() -> None:
     # -------------------------------------------------------------------------
     iterations_per_epoch = math.ceil(training_dataloader.dataset.total_instances / cfg["optimiser"]["virtual-batch-size"])
 
-    for epoch in range(cfg["optimiser"]["epochs"]):
+    iterations = epoch = 0
+    while iterations < cfg["optimiser"]["iterations"]:
         iterations = epoch * iterations_per_epoch + 1
 
         # -------------------------------------------------------------------------
@@ -264,6 +269,7 @@ def train() -> None:
             clip_size=cfg["optimiser"]["clip-size"],
             loss_function=loss_function,
             optimiser=optimiser,
+            scheduler=scheduler,
             writer=writer,
             iterations=iterations,
             use_jitter=cfg["setup"]["jitter"]
@@ -281,9 +287,6 @@ def train() -> None:
             scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"]
         )
-        
-        # Update the learning rate scheduler
-        scheduler.step()
 
         # Save the model after each epoch
         torch.save(model.state_dict(), cfg["paths"]["saved-models-path"])
@@ -298,6 +301,11 @@ def train() -> None:
             writer=writer,
             saved_models_path=cfg["paths"]["saved-models-path"]
         )
+
+        # -------------------------------------------------------------------------
+        # ------------------------- Update training state -------------------------
+        # -------------------------------------------------------------------------
+        epoch += 1
 
     writer.flush()
     writer.close()
@@ -320,18 +328,18 @@ def validate(
         )
         if iterations % validation_cfg["validation"]["primary-validation-interval"] == 0:
             run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
+
+            # Stationary segement validation
+            validation_cfg = hydra.compose(
+                config_name="validation", 
+                overrides=[
+                    "dataset=stationary-segments-validation-upscale",
+                    f"paths.saved-models-path={saved_models_path}"
+                ]
+            )
+            run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
         elif iterations % validation_cfg["validation"]["proxy-validation-interval"] == 0:
             run(cfg=validation_cfg, validation_mode="proxy", writer=writer, iterations=iterations)
-
-        # Stationary segement validation
-        validation_cfg = hydra.compose(
-            config_name="validation", 
-            overrides=[
-                "dataset=stationary-segments-validation-upscale",
-                f"paths.saved-models-path={saved_models_path}"
-            ]
-        )
-        run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
 
 
 def checkpoint(
