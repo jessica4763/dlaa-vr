@@ -75,7 +75,7 @@ def evaluate(
             write_frames(evaluation_output_path / "target", gamma_target_frame, batch)
 
 
-def run(cfg: DictConfig, validation_mode: str) -> None:
+def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations: int) -> None:
     device = (
         torch.accelerator.current_accelerator().type
         if torch.accelerator.is_available()
@@ -101,11 +101,6 @@ def run(cfg: DictConfig, validation_mode: str) -> None:
 
     # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = False
-
-    # -------------------------------------------------------------------------
-    # ------------------------------ Diagnostics ------------------------------
-    # -------------------------------------------------------------------------
-    writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
 
     # -------------------------------------------------------------------------
     # ------------------------------- Constants -------------------------------
@@ -163,11 +158,6 @@ def run(cfg: DictConfig, validation_mode: str) -> None:
         )
     )
 
-    inputs, motion_vectors, jitter, _ = evaluation_data[0]
-    inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
-    jitter = jitter.to(device).unsqueeze(0).unsqueeze(0)  # if use_jitter is None, this is a zero tensor, and is ignored during inference
-    writer.add_graph(model, input_to_model=(inputs, motion_vectors, jitter))
-
     print_parameters(
         evaluation_output_path=Path(cfg["paths"]["evaluation-output-path"]),
         parameters=model.state_dict()
@@ -189,6 +179,7 @@ def run(cfg: DictConfig, validation_mode: str) -> None:
 
     metrics = Metrics(
         dataset_size=len(evaluation_dataloader.dataset),  # The total number of frames in the dataset
+        iterations=iterations,
         writer=writer,
         vr_config=vr_config,
         is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
@@ -218,11 +209,12 @@ def run(cfg: DictConfig, validation_mode: str) -> None:
 def main() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
         cfg = hydra.compose(config_name="validation")
-        run(cfg)
+        writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
+        run(cfg=cfg, validation_mode="primary", writer=writer)
 
         print("\n --------------------- Stationary Segments Evaluation -------------------- \n")
         stationary_segments_cfg = hydra.compose(config_name="validation", overrides=["dataset=stationary-segments-validation-upscale"])
-        run(stationary_segments_cfg)
+        run(cfg=stationary_segments_cfg, validation_mode="primary", writer=writer)
 
 
 if __name__ == "__main__":

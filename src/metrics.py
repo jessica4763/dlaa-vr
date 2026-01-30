@@ -16,12 +16,15 @@ class Metrics:
     def __init__(
         self, 
         dataset_size: int,
+        iterations: int,
         writer: SummaryWriter = None, 
         vr_config: VRConfig = None,
         is_stationary_segment: bool = False,
         display_name: str = "standard_fhd", 
+        
     ) -> None:
         self.dataset_size = dataset_size
+        self.iterations = iterations
         self.writer = writer
         self.vr_config = vr_config
         self.is_stationary_segment = is_stationary_segment
@@ -131,6 +134,7 @@ class Metrics:
     def record(self, pred: torch.Tensor, target: torch.Tensor) -> None:
         target_ndarray = np.squeeze(target.cpu().numpy())
         pred_ndarray = np.squeeze(pred.cpu().numpy())
+
         self.record_rmse(pred_ndarray, target_ndarray)
         self.record_psnr(pred_ndarray, target_ndarray)
         self.record_ssim(pred_ndarray, target_ndarray)
@@ -154,6 +158,11 @@ class Metrics:
 
         reported_metrics_strings = []
         for metric_name in self.metrics:
+            self.writer.add_scalar(
+                metric_name,
+                self.metrics[metric_name],
+                self.iterations
+            )
             reported_metrics_strings.append(f"{metric_name}: {self.metrics[metric_name]}")
 
         reported_metrics = "\n".join(reported_metrics_strings)
@@ -163,5 +172,6 @@ class Metrics:
         if self.writer is not None:
             self.writer.add_text(
                 "reported metrics", 
-                reported_metrics
+                reported_metrics,
+                self.iterations
             )

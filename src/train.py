@@ -30,7 +30,7 @@ def train_epoch(
     loss_function: nn.Module,
     optimiser: optim.Optimizer,
     writer: SummaryWriter,
-    epoch: int,
+    iterations: int,
     use_jitter: bool
 ) -> None:
     total_instances = training_dataloader.dataset.total_instances
@@ -74,7 +74,7 @@ def train_epoch(
             writer.add_scalar(
                 "loss/train",
                 total_loss,
-                epoch * total_instances + batch
+                iterations + (batch + 1) // accumulation_steps
             )
             print(f"Loss: {total_loss:>7f}  [{batch + 1:>5d} / {total_instances:>5d}]")
 
@@ -112,7 +112,7 @@ def train() -> None:
     torch.utils.deterministic.fill_uninitialized_memory = False
 
     # -------------------------------------------------------------------------
-    # ------------------------------ Diagnostics ------------------------------
+    # ------------------- Training + validation diagnostics -------------------
     # -------------------------------------------------------------------------
     writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
     
@@ -242,12 +242,16 @@ def train() -> None:
         )
 
     # -------------------------------------------------------------------------
-    # ----------------------------- Training loop -----------------------------
+    # ---------------------- Training + validation loop -----------------------
     # -------------------------------------------------------------------------
     iterations_per_epoch = math.ceil(training_dataloader.dataset.total_instances / cfg["optimiser"]["virtual-batch-size"])
 
     for epoch in range(cfg["optimiser"]["epochs"]):
         iterations = epoch * iterations_per_epoch + 1
+
+        # -------------------------------------------------------------------------
+        # ------------------------------- Training --------------------------------
+        # -------------------------------------------------------------------------
 
         print(f"Epoch {epoch + 1} | Iteration {iterations} \n-------------------------------")
 
@@ -261,7 +265,7 @@ def train() -> None:
             loss_function=loss_function,
             optimiser=optimiser,
             writer=writer,
-            epoch=epoch,
+            iterations=iterations,
             use_jitter=cfg["setup"]["jitter"]
         )
 
@@ -271,25 +275,29 @@ def train() -> None:
             device=device,
             model=model,
             training_data=training_data,
-            writer=writer,
-            epoch=epoch,
+            iterations=iterations,
             input_frame_height=cfg["dataset"]["input-frame-height"],
             input_frame_width=cfg["dataset"]["input-frame-width"],
             scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"]
         )
-
-        # Proxy validation happens every 1000 iterations
-        # Primary validation happens every 1000000 iterations
-        validate(
-            iterations=iterations,
-            saved_models_path=cfg["paths"]["saved-models-path"]
-        )
         
+        # Update the learning rate scheduler
         scheduler.step()
 
         # Save the model after each epoch
         torch.save(model.state_dict(), cfg["paths"]["saved-models-path"])
+
+        # -------------------------------------------------------------------------
+        # ------------------------------ Validation -------------------------------
+        # -------------------------------------------------------------------------
+
+        # Proxy validation happens every 1000 iterations, whereas primary validation happens every 1000000 iterations
+        validate(
+            iterations=iterations + iterations_per_epoch,
+            writer=writer,
+            saved_models_path=cfg["paths"]["saved-models-path"]
+        )
 
     writer.flush()
     writer.close()
@@ -299,22 +307,23 @@ def train() -> None:
 
 def validate(
     iterations: int,
+    writer: SummaryWriter,
     saved_models_path: str
 ) -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
+        # Validation
         validation_cfg = hydra.compose(
             config_name="validation", 
             overrides=[
                 f"paths.saved-models-path={saved_models_path}"
             ]
         )
-
         if iterations % validation_cfg["validation"]["primary-validation-interval"] == 0:
-            run(validation_cfg, "primary")
+            run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
         elif iterations % validation_cfg["validation"]["proxy-validation-interval"] == 0:
-            run(validation_cfg, "proxy")
-        
-        # Stationary segments
+            run(cfg=validation_cfg, validation_mode="proxy", writer=writer, iterations=iterations)
+
+        # Stationary segement validation
         validation_cfg = hydra.compose(
             config_name="validation", 
             overrides=[
@@ -322,7 +331,7 @@ def validate(
                 f"paths.saved-models-path={saved_models_path}"
             ]
         )
-        run(validation_cfg, "primary")
+        run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
 
 
 def checkpoint(
@@ -331,8 +340,7 @@ def checkpoint(
     device: str,
     model: nn.Module,
     training_data: Dataset,
-    writer: SummaryWriter,
-    epoch: int,
+    iterations: int,
     input_frame_height: int,
     input_frame_width: int,
     scale_factor: int,
@@ -351,20 +359,14 @@ def checkpoint(
         output = linear_to_gamma(output)
         save_output(sanity_checks_output_path, output)
 
+        # Verify the output of the network
         inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
         motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
         jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
         anti_aliased_img, _ = model(inputs, motion_vectors, jitter)
         anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
-
-        save_image(anti_aliased_img, checkpoint_path / f"{epoch}.png")
-        if (epoch + 1) % 10 == 0:
-            writer.add_image(
-                "checkpoint images",
-                anti_aliased_img,
-                global_step=(epoch + 1)
-            )
+        save_image(anti_aliased_img, checkpoint_path / f"{iterations}.png")
 
 
 if __name__ == "__main__":
