@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import torch
 from torch import nn
@@ -6,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 from datasets import QualcommDataset
 from model import QualcommNetwork
@@ -35,20 +36,20 @@ def evaluate(
     with torch.no_grad():
         prev_pred_frame = prev_features = None
         for batch, (inputs, motion_vectors, jitter, target) in enumerate(evaluation_dataloader):
-            inputs = inputs.to(device)
+            inputs = inputs.to(device, non_blocking=True)
             inputs = inputs.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
             output_N, output_C, output_H, output_W = motion_vectors.shape
-            motion_vectors = motion_vectors.to(device)
+            motion_vectors = motion_vectors.to(device, non_blocking=True)
             motion_vectors = motion_vectors.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
             if use_jitter:
-                jitter = jitter.to(device)
+                jitter = jitter.to(device, non_blocking=True)
                 jitter = jitter.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
             else:
                 jitter = None
 
-            target = target.to(device)
+            target = target.to(device, non_blocking=True)
 
             # Use the previously predicted frame and features during evaluation
             if prev_pred_frame is not None and prev_features is not None:
@@ -74,7 +75,7 @@ def evaluate(
             write_frames(evaluation_output_path / "target", gamma_target_frame, batch)
 
 
-def run(cfg: DictConfig) -> None:
+def run(cfg: DictConfig, validation_mode: str) -> None:
     device = (
         torch.accelerator.current_accelerator().type
         if torch.accelerator.is_available()
@@ -133,11 +134,15 @@ def run(cfg: DictConfig) -> None:
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
-        mode="evaluation"
+        mode="evaluation",
+        validation_mode=validation_mode
     )
 
     evaluation_dataloader = DataLoader(
-        evaluation_data
+        evaluation_data,
+        num_workers=os.cpu_count() // 2,
+        pin_memory=True,
+        persistent_workers=True
     )
 
     # -------------------------------------------------------------------------

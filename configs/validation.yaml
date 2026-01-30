@@ -9,7 +9,7 @@ setup:
 paths: 
   evaluation-output-path: evaluation_outputs
   tensorboard-path: ../saved/logs/runs
-  saved-models-path: ../saved/logs/runs/2x/exp3/scale_model.pt
+  saved-models-path: null
 
 model:
   hidden-channels: 64

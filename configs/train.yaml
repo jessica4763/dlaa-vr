@@ -6,7 +6,6 @@ setup:
   seed: 42
   display-name: standard_fhd  # standard_fhd, standard_hmd
   jitter: true
-  validation-cfg: validation-upscale
 
 paths:
   checkpoints-path: checkpoints

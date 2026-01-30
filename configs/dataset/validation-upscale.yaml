@@ -9,7 +9,7 @@ output-frame-width: 1920
 
 dilation-block-size: 4
 
-scene-names: [AbandonedSchool, SeaPort, SpaceShipDemo]
+scene-names: [SeaPort, AbandonedSchool, SpaceShipDemo]
 is-vr: false
 is-stationary-segment: false
 

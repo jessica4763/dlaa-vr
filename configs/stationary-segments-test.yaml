@@ -1,3 +1,0 @@
-defaults:
-  - validation
-  - override /dataset: stationary-segments-validation-upscale.yaml
