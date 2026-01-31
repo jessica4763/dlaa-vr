@@ -298,6 +298,7 @@ def train() -> None:
         # Proxy validation happens every 1000 iterations, whereas primary validation happens every 1000000 iterations
         validate(
             iterations=iterations + iterations_per_epoch,
+            iterations_per_epoch=iterations_per_epoch,
             writer=writer,
             saved_models_path=cfg["paths"]["saved-models-path"]
         )
@@ -315,6 +316,7 @@ def train() -> None:
 
 def validate(
     iterations: int,
+    iterations_per_epoch: int,
     writer: SummaryWriter,
     saved_models_path: str
 ) -> None:
@@ -326,7 +328,7 @@ def validate(
                 f"paths.saved-models-path={saved_models_path}"
             ]
         )
-        if iterations % validation_cfg["validation"]["primary-validation-interval"] == 0:
+        if iterations % validation_cfg["validation"]["primary-validation-interval"] <= iterations_per_epoch:
             run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
 
             # Stationary segement validation
@@ -338,7 +340,7 @@ def validate(
                 ]
             )
             run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
-        elif iterations % validation_cfg["validation"]["proxy-validation-interval"] == 0:
+        elif iterations % validation_cfg["validation"]["proxy-validation-interval"] <= iterations_per_epoch:
             run(cfg=validation_cfg, validation_mode="proxy", writer=writer, iterations=iterations)
 
 
