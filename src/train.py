@@ -248,9 +248,15 @@ def train() -> None:
     # -------------------------------------------------------------------------
     # ---------------------- Training + validation loop -----------------------
     # -------------------------------------------------------------------------
+    for _ in range(cfg["model"]["saved-iteration"]):
+        scheduler.step()
+
+    print(f"Resuming at LR: {scheduler.get_last_lr()}")
+
     iterations_per_epoch = math.ceil(training_dataloader.dataset.total_instances / cfg["optimiser"]["virtual-batch-size"])
 
-    iterations = epoch = 0
+    iterations = cfg["model"]["saved-iteration"]
+    epoch = cfg["model"]["saved-epoch"]
     while iterations < cfg["optimiser"]["iterations"]:
         iterations = epoch * iterations_per_epoch + 1
 
