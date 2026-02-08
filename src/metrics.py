@@ -17,14 +17,15 @@ class Metrics:
         self, 
         dataset_size: int,
         iterations: int,
+        validation_mode: str = "primary",
         writer: SummaryWriter = None, 
         vr_config: VRConfig = None,
         is_stationary_segment: bool = False,
-        display_name: str = "standard_fhd", 
-        
+        display_name: str = "standard_fhd"
     ) -> None:
         self.dataset_size = dataset_size
         self.iterations = iterations
+        self.validation_mode = validation_mode
         self.writer = writer
         self.vr_config = vr_config
         self.is_stationary_segment = is_stationary_segment
@@ -159,16 +160,14 @@ class Metrics:
         reported_metrics_strings = []
         for metric_name in self.metrics:
             self.writer.add_scalar(
-                metric_name,
+                f"{self.validation_mode}/{metric_name}",
                 self.metrics[metric_name],
                 self.iterations
             )
-            reported_metrics_strings.append(f"{metric_name}: {self.metrics[metric_name]}")
+            reported_metrics_strings.append(f"{self.validation_mode}/{metric_name}: {self.metrics[metric_name]}")
 
         reported_metrics = "\n".join(reported_metrics_strings)
-
         print(reported_metrics)
-
         if self.writer is not None:
             self.writer.add_text(
                 "reported metrics", 

@@ -180,6 +180,7 @@ def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations
     metrics = Metrics(
         dataset_size=len(evaluation_dataloader.dataset),  # The total number of frames in the dataset
         iterations=iterations,
+        validation_mode=validation_mode,
         writer=writer,
         vr_config=vr_config,
         is_stationary_segment=cfg["dataset"]["is-stationary-segment"],

@@ -62,21 +62,21 @@ def train_epoch(
 
         targets = targets.to(device, non_blocking=True)
 
-        # Enabled mixed precision for training speed
+        # Mixed precision floating point for speed
         with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
             # Pass in motion vectors as well, for warping
             pred_frame, _ = model(inputs, motion_vectors, jitter)
             pred_frame = pred_frame.view(-1, 3, output_H, output_W)
             loss = loss_function(pred_frame, targets) / accumulation_steps
         
-        # Scales the loss to prevent underflow for precision's sake, but scale.step() 
-        # internally unscales the gradients
+        # Scales the loss to prevent underflow
         scaler.scale(loss).backward()
 
         # For reporting
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
+            # scaler.step() internally unscales the gradients
             scaler.step(optimiser)
             scaler.update()
 
@@ -256,6 +256,7 @@ def train() -> None:
             cfg["optimiser"]["learning-rate-eta-min"]
         )
 
+    # Train in mixed precision floating point for speed
     scaler = torch.amp.GradScaler()
 
     # -------------------------------------------------------------------------
