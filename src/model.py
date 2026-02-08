@@ -40,19 +40,29 @@ class JitterConditionedConv(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
+        batch_size, _ = jitter.shape
+
         h = self.input_layer(jitter)
         h = self.body(h)
         kernel = self.output_layer(h)
         kernel = kernel.view(
+            batch_size,
             self.out_channels,
             self.in_channels,
             self.kernel_height,
             self.kernel_width
         )
 
-        # The network doesn't directly update the kernel weights, but instead
-        # updates the weights of the MLP used to calculate the kernel weights
-        return F.conv2d(x, kernel, padding=1)
+        # 1. The network doesn't directly update the kernel weights, but instead
+        #    updates the weights of the MLP used to calculate the kernel weights
+        # 2. The network applies a separate convolutional kernel to each of the frames 
+        #    in the batch because they are associated with different camera jitter values.
+        #    While for loops are generally slow, I use them here for readability. 
+
+        outputs = []
+        for batch in range(batch_size):
+            outputs.append(F.conv2d(x[batch:batch + 1], kernel[batch], padding=1))
+        return torch.cat(outputs, dim=0)
 
 
 class QualcommNetwork(nn.Module):
@@ -71,7 +81,6 @@ class QualcommNetwork(nn.Module):
         self.num_prev_colour = self.num_curr_colour * (scale_factor ** 2)
         self.num_prev_feature = 1 * (scale_factor ** 2)
 
-        # * 2 to include the previous frame ground truth
         self.in_channels = (
             self.num_curr_colour +
             self.num_curr_depth +
@@ -87,10 +96,10 @@ class QualcommNetwork(nn.Module):
 
         if use_jitter:
             self.input_conv = JitterConditionedConv(
-                hidden_channels,
-                self.in_channels,
-                3,
-                3,
+                out_channels=hidden_channels,
+                in_channels=self.in_channels,
+                kernel_height=3,
+                kernel_width=3,
                 num_hidden_features=2048,
                 num_blocks=7
             )
@@ -169,7 +178,7 @@ class QualcommNetwork(nn.Module):
         input_tensor: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
-        # Depth to space: (1, 12, 264, 264) -> (1, 3, 584, 584)
+        # Depth to space: (B, 12, 264, 264) -> (B, 3, 584, 584)
         input_tensor = self.depth_to_space(input_tensor)
 
         H = motion_vectors.shape[2]
@@ -188,7 +197,7 @@ class QualcommNetwork(nn.Module):
             indexing='ij'
         )
         base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
-        warped_grid = base_grid + motion_vectors
+        warped_grid = base_grid + motion_vectors  # base_grid is broadcasted
 
         warped_input_tensor = F.grid_sample(
             input_tensor,
@@ -282,7 +291,8 @@ class QualcommNetwork(nn.Module):
             # ------------------------------------------------------------
             # ---------------------- Depth to space ----------------------
             # ------------------------------------------------------------
-            outputs.append(self.depth_to_space(blended_colour))
+            full_res_colour = self.depth_to_space(blended_colour)  # (B, 3, H, W)
+            outputs.append(full_res_colour)
 
             # Save recurrent colour frame and features
             prev_pred_colour = blended_colour.detach()

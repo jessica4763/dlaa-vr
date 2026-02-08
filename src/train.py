@@ -87,7 +87,7 @@ def train_epoch(
                 total_loss,
                 iterations + (batch + 1) // accumulation_steps
             )
-            print(f"Loss: {total_loss:>7f}  [{batch + 1:>5d} / {total_instances:>5d}]")
+            print(f"Loss: {total_loss:>7f}  [{(batch + 1) * actual_batch_size:>5d} / {total_instances:>5d}]")
 
             total_loss = 0
 
@@ -194,7 +194,7 @@ def train() -> None:
         num_blocks=cfg["model"]["num-blocks"],
         scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"]
-    ).to(device)
+    )
 
     # Initialise with parameters from a previously trained model if desired
     parameters_path = cfg["model"]["parameters"]
@@ -207,7 +207,6 @@ def train() -> None:
             )
         )
 
-    # model = torch.compile(model)
 
     # -------------------------------------------------------------------------
     # ----------------------------- Optimisation ------------------------------
@@ -282,6 +281,9 @@ def train() -> None:
         epoch = iterations = 0
         print("No training checkpoint.")
 
+    model = torch.compile(model.to(device))
+    # model = model.to(device)
+
     while iterations < cfg["optimiser"]["iterations"]:
         iterations = epoch * iterations_per_epoch + 1
 
@@ -331,7 +333,7 @@ def train() -> None:
             "scheduler": scheduler.state_dict(),
             "scaler": scaler.state_dict(),
             "rng_state": torch.get_rng_state(),
-            "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda().is_avaliable() else None
+            "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None
         }
         torch.save(training_checkpoint, cfg["paths"]["training-checkpoint-path"])
 
