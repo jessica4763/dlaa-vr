@@ -2,7 +2,7 @@
 name: adamw
 loss: l1loss  # l1loss, mseloss, cvvdploss, l1loss_with_cvvdp
 cvvdp-weight: 0.005
-actual-batch-size: 1
+actual-batch-size: 2
 virtual-batch-size: 8
 clip-size: 16
 patch-size: 256
@@ -19,4 +19,4 @@ learning-rate-eta-min: 1e-5
 
 betas: [0.9, 0.999]
 epsilon: 1e-8
-weight-decay: 1e-4
+weight-decay: 0

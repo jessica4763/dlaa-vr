@@ -30,6 +30,7 @@ def train_epoch(
     clip_size: int,
     loss_function: nn.Module,
     optimiser: MultiStepLR | CosineAnnealingLR,
+    scaler: torch.amp.GradScaler,
     scheduler: torch.optim.lr_scheduler.MultiStepLR,
     writer: SummaryWriter,
     iterations: int,
@@ -61,17 +62,25 @@ def train_epoch(
 
         targets = targets.to(device, non_blocking=True)
 
-        # Pass in motion vectors as well, for warping
-        pred_frame, _ = model(inputs, motion_vectors, jitter)
-        pred_frame = pred_frame.view(-1, 3, output_H, output_W)
-        loss = loss_function(pred_frame, targets) / accumulation_steps
-        loss.backward()
+        # Enabled mixed precision for training speed
+        with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
+            # Pass in motion vectors as well, for warping
+            pred_frame, _ = model(inputs, motion_vectors, jitter)
+            pred_frame = pred_frame.view(-1, 3, output_H, output_W)
+            loss = loss_function(pred_frame, targets) / accumulation_steps
+        
+        # Scales the loss to prevent underflow for precision's sake, but scale.step() 
+        # internally unscales the gradients
+        scaler.scale(loss).backward()
 
+        # For reporting
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
-            optimiser.step()
-            optimiser.zero_grad()
+            scaler.step(optimiser)
+            scaler.update()
+
+            scheduler.step()
 
             writer.add_scalar(
                 "loss/train",
@@ -82,7 +91,7 @@ def train_epoch(
 
             total_loss = 0
 
-            scheduler.step()
+            optimiser.zero_grad()
 
 
 def train() -> None:
@@ -175,6 +184,8 @@ def train() -> None:
         persistent_workers=True
     )
 
+    iterations_per_epoch = math.ceil(training_data.total_instances / cfg["optimiser"]["virtual-batch-size"])
+
     # -------------------------------------------------------------------------
     # --------------------------------- Model ---------------------------------
     # -------------------------------------------------------------------------
@@ -245,25 +256,37 @@ def train() -> None:
             cfg["optimiser"]["learning-rate-eta-min"]
         )
 
+    scaler = torch.amp.GradScaler()
+
     # -------------------------------------------------------------------------
     # ---------------------- Training + validation loop -----------------------
     # -------------------------------------------------------------------------
-    for _ in range(cfg["model"]["saved-iteration"]):
-        scheduler.step()
 
-    print(f"Resuming at LR: {scheduler.get_last_lr()}")
+    # Load from a training checkpoint, if it exists 
+    if os.path.exists(cfg["paths"]["training-checkpoint-path"]):
+        training_checkpoint = torch.load(cfg["paths"]["training-checkpoint-path"])
 
-    iterations_per_epoch = math.ceil(training_dataloader.dataset.total_instances / cfg["optimiser"]["virtual-batch-size"])
+        epoch = training_checkpoint["epoch"] + 1
+        iterations = epoch * iterations_per_epoch + 1
+        model.load_state_dict(training_checkpoint["model"])
+        optimiser.load_state_dict(training_checkpoint["optimiser"])
+        scheduler.load_state_dict(training_checkpoint["scheduler"])
+        scaler.load_state_dict(training_checkpoint["scaler"])
 
-    iterations = cfg["model"]["saved-iteration"]
-    epoch = cfg["model"]["saved-epoch"]
+        torch.set_rng_state(training_checkpoint["rng_state"])
+        torch.cuda.set_rng_state(training_checkpoint["cuda_rng_state"])
+
+        print(f"Resuming from epoch {epoch} | iteration {iterations} at LR: {scheduler.get_last_lr()}")
+    else:
+        epoch = iterations = 0
+        print("No training checkpoint.")
+
     while iterations < cfg["optimiser"]["iterations"]:
         iterations = epoch * iterations_per_epoch + 1
 
         # -------------------------------------------------------------------------
         # ------------------------------- Training --------------------------------
         # -------------------------------------------------------------------------
-
         print(f"Epoch {epoch + 1} | Iteration {iterations} \n-------------------------------")
 
         train_epoch(
@@ -275,6 +298,7 @@ def train() -> None:
             clip_size=cfg["optimiser"]["clip-size"],
             loss_function=loss_function,
             optimiser=optimiser,
+            scaler=scaler,
             scheduler=scheduler,
             writer=writer,
             iterations=iterations,
@@ -294,8 +318,21 @@ def train() -> None:
             use_jitter=cfg["setup"]["jitter"]
         )
 
-        # Save the model after each epoch
+        # -------------------------------------------------------------------------
+        # ------------------------- Training checkpoint ---------------------------
+        # -------------------------------------------------------------------------
         torch.save(model.state_dict(), cfg["paths"]["saved-models-path"])
+
+        training_checkpoint = {
+            "epoch": epoch,
+            "model": model.state_dict(),
+            "optimiser": optimiser.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "scaler": scaler.state_dict(),
+            "rng_state": torch.get_rng_state(),
+            "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda().is_avaliable() else None
+        }
+        torch.save(training_checkpoint, cfg["paths"]["training-checkpoint-path"])
 
         # -------------------------------------------------------------------------
         # ------------------------------ Validation -------------------------------

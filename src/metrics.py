@@ -91,7 +91,7 @@ class Metrics:
         camera_baseline: float,
         focal_length: float
     ) -> tuple[np.ndarray, np.ndarray]:
-        H, W, C = left_frame.shape
+        C, H, W = left_frame.shape
 
         warped_frame = np.zeros((H, W, C), dtype=left_frame.dtype)
         z_buffer = np.full((H, W), np.inf, dtype=np.float32)
