@@ -68,7 +68,7 @@ def train_epoch(
             pred_frame, _ = model(inputs, motion_vectors, jitter)
             pred_frame = pred_frame.view(-1, 3, output_H, output_W)
             loss = loss_function(pred_frame, targets) / accumulation_steps
-        
+
         # Scales the loss to prevent underflow
         scaler.scale(loss).backward()
 
@@ -87,7 +87,7 @@ def train_epoch(
                 total_loss,
                 iterations + (batch + 1) // accumulation_steps
             )
-            print(f"Loss: {total_loss:>7f}  [{(batch + 1) * actual_batch_size:>5d} / {total_instances:>5d}]")
+            print(f"Loss: {total_loss:>7f}  [{(batch + 1) * actual_batch_size:>5d} / {total_instances:>5d}] | Current Scale: {scaler.get_scale()}")
 
             total_loss = 0
 
@@ -194,7 +194,7 @@ def train() -> None:
         num_blocks=cfg["model"]["num-blocks"],
         scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"]
-    )
+    ).to(device)
 
     # Initialise with parameters from a previously trained model if desired
     parameters_path = cfg["model"]["parameters"]
@@ -206,7 +206,6 @@ def train() -> None:
                 map_location=device
             )
         )
-
 
     # -------------------------------------------------------------------------
     # ----------------------------- Optimisation ------------------------------
@@ -264,7 +263,7 @@ def train() -> None:
 
     # Load from a training checkpoint, if it exists 
     if os.path.exists(cfg["paths"]["training-checkpoint-path"]):
-        training_checkpoint = torch.load(cfg["paths"]["training-checkpoint-path"])
+        training_checkpoint = torch.load(cfg["paths"]["training-checkpoint-path"], weights_only=False)
 
         epoch = training_checkpoint["epoch"] + 1
         iterations = epoch * iterations_per_epoch + 1
@@ -276,13 +275,12 @@ def train() -> None:
         torch.set_rng_state(training_checkpoint["rng_state"])
         torch.cuda.set_rng_state(training_checkpoint["cuda_rng_state"])
 
-        print(f"Resuming from epoch {epoch} | iteration {iterations} at LR: {scheduler.get_last_lr()}")
+        print(f"Resuming from epoch {epoch} / iteration {iterations} at learning rate: {scheduler.get_last_lr()[0]}")
     else:
         epoch = iterations = 0
         print("No training checkpoint.")
 
-    model = torch.compile(model.to(device))
-    # model = model.to(device)
+    model = torch.compile(model)
 
     while iterations < cfg["optimiser"]["iterations"]:
         iterations = epoch * iterations_per_epoch + 1
@@ -324,11 +322,11 @@ def train() -> None:
         # -------------------------------------------------------------------------
         # ------------------------- Training checkpoint ---------------------------
         # -------------------------------------------------------------------------
-        torch.save(model.state_dict(), cfg["paths"]["saved-models-path"])
+        torch.save(model._orig_mod.state_dict(), cfg["paths"]["saved-models-path"])
 
         training_checkpoint = {
             "epoch": epoch,
-            "model": model.state_dict(),
+            "model": model._orig_mod.state_dict(),
             "optimiser": optimiser.state_dict(),
             "scheduler": scheduler.state_dict(),
             "scaler": scaler.state_dict(),

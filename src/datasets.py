@@ -186,6 +186,9 @@ class QualcommDataset(Dataset):
         depth: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
+        # (C, H / self.scale_factor, W / self.scale_factor) -> (C, H, W) (identity if self.scale_factor = 1)
+        depth, motion_vectors = self.upscale_buffer(depth), self.upscale_buffer(motion_vectors)
+
         # (C, H, W) -> (1, C, H, W)
         depth, motion_vectors = depth.unsqueeze(0), motion_vectors.unsqueeze(0)
 
@@ -225,9 +228,9 @@ class QualcommDataset(Dataset):
 
         return output_motion_vectors.squeeze(0)
     
-    def upscale_motion_vectors(self, motion_vectors: torch.Tensor) -> torch.Tensor:
+    def upscale_buffer(self, buffer: torch.Tensor) -> torch.Tensor:
         return F.interpolate(
-            motion_vectors.unsqueeze(0), 
+            buffer.unsqueeze(0), 
             scale_factor=self.scale_factor, 
             mode='nearest'
         ).squeeze(0)
@@ -401,7 +404,6 @@ class QualcommDataset(Dataset):
             curr_depth,
             motion_vectors
         )
-        motion_vectors = self.upscale_motion_vectors(motion_vectors)  # Identity if self.scale_factor = 1
 
         prev_features = torch.zeros((self.scale_factor ** 2, patch_height, patch_width))
 

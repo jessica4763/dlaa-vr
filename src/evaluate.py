@@ -148,7 +148,8 @@ def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations
         num_blocks=cfg["model"]["num-blocks"],
         scale_factor=scale_factor,
         use_jitter=cfg["setup"]["jitter"]
-    ).to(device)
+    )
+    
 
     model.load_state_dict(
         torch.load(
@@ -157,6 +158,8 @@ def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations
             map_location=device
         )
     )
+
+    model = model.to(device)
 
     print_parameters(
         evaluation_output_path=Path(cfg["paths"]["evaluation-output-path"]),
