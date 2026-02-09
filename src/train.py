@@ -30,7 +30,6 @@ def train_epoch(
     clip_size: int,
     loss_function: nn.Module,
     optimiser: MultiStepLR | CosineAnnealingLR,
-    scaler: torch.amp.GradScaler,
     scheduler: torch.optim.lr_scheduler.MultiStepLR,
     writer: SummaryWriter,
     iterations: int,
@@ -69,16 +68,14 @@ def train_epoch(
             pred_frame = pred_frame.view(-1, 3, output_H, output_W)
             loss = loss_function(pred_frame, targets) / accumulation_steps
 
-        # Scales the loss to prevent underflow
-        scaler.scale(loss).backward()
+        loss.backward()
 
         # For reporting
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
-            # scaler.step() internally unscales the gradients
-            scaler.step(optimiser)
-            scaler.update()
+            optimiser.step()
+            optimiser.zero_grad()
 
             scheduler.step()
 
@@ -87,11 +84,9 @@ def train_epoch(
                 total_loss,
                 iterations + (batch + 1) // accumulation_steps
             )
-            print(f"Loss: {total_loss:>7f}  [{(batch + 1) * actual_batch_size:>5d} / {total_instances:>5d}] | Current Scale: {scaler.get_scale()}")
+            print(f"Loss: {total_loss:>7f}  [{(batch + 1) * actual_batch_size:>5d} / {total_instances:>5d}]")
 
             total_loss = 0
-
-            optimiser.zero_grad()
 
 
 def train() -> None:
@@ -254,9 +249,6 @@ def train() -> None:
             cfg["optimiser"]["learning-rate-eta-min"]
         )
 
-    # Train in mixed precision floating point for speed
-    scaler = torch.amp.GradScaler()
-
     # -------------------------------------------------------------------------
     # ---------------------- Training + validation loop -----------------------
     # -------------------------------------------------------------------------
@@ -270,7 +262,6 @@ def train() -> None:
         model.load_state_dict(training_checkpoint["model"])
         optimiser.load_state_dict(training_checkpoint["optimiser"])
         scheduler.load_state_dict(training_checkpoint["scheduler"])
-        scaler.load_state_dict(training_checkpoint["scaler"])
 
         torch.set_rng_state(training_checkpoint["rng_state"])
         torch.cuda.set_rng_state(training_checkpoint["cuda_rng_state"])
@@ -299,7 +290,6 @@ def train() -> None:
             clip_size=cfg["optimiser"]["clip-size"],
             loss_function=loss_function,
             optimiser=optimiser,
-            scaler=scaler,
             scheduler=scheduler,
             writer=writer,
             iterations=iterations,
@@ -329,7 +319,6 @@ def train() -> None:
             "model": model._orig_mod.state_dict(),
             "optimiser": optimiser.state_dict(),
             "scheduler": scheduler.state_dict(),
-            "scaler": scaler.state_dict(),
             "rng_state": torch.get_rng_state(),
             "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None
         }
