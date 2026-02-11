@@ -84,7 +84,7 @@ def train_epoch(
                 total_loss,
                 iterations + (batch + 1) // accumulation_steps
             )
-            print(f"Loss: {total_loss:>7f}  [{(batch + 1) * actual_batch_size:>5d} / {total_instances:>5d}]")
+            print(f"Loss: {total_loss:>7f}  [{min((batch + 1) * actual_batch_size, total_instances):>5d} / {total_instances:>5d}]")
 
             total_loss = 0
 
@@ -174,7 +174,7 @@ def train() -> None:
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
-        num_workers=os.cpu_count() // 2,
+        num_workers=16,
         pin_memory=True,
         persistent_workers=True
     )
