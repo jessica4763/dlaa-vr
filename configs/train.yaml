@@ -15,8 +15,8 @@ paths:
   training-checkpoint-path: ../saved/models/training_checkpoint.pt
 
 model:
-  hidden-channels: 64  # 16, 32, 64
-  num-blocks: 5  # 1, 3, 5
+  hidden-channels: 16  # 16, 32, 64
+  num-blocks: 1  # 1, 3, 5
   parameters: null  # ../saved/logs/runs/[category]/[exp]/[model]
 
 hydra:
