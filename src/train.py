@@ -361,7 +361,7 @@ def validate(
                 f"paths.saved-models-path={saved_models_path}"
             ]
         )
-        if iterations % validation_cfg["validation"]["primary-validation-interval"] <= iterations_per_epoch:
+        if iterations % validation_cfg["validation"]["primary-validation-interval"] < iterations_per_epoch:
             run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
 
             # Stationary segement validation
@@ -373,7 +373,7 @@ def validate(
                 ]
             )
             run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
-        elif iterations % validation_cfg["validation"]["proxy-validation-interval"] <= iterations_per_epoch:
+        elif iterations % validation_cfg["validation"]["proxy-validation-interval"] <    iterations_per_epoch:
             run(cfg=validation_cfg, validation_mode="proxy", writer=writer, iterations=iterations)
 
 
