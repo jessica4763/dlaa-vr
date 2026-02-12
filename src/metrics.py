@@ -149,9 +149,6 @@ class Metrics:
             self.record_pixel_wise_std(pred_ndarray)
 
     def report(self) -> None:
-        print(f"{self.dataset_size=}")
-        print(f"{self.count=}")
-
         self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
         self.metrics["avg_psnr"] = self.psnr_sum.item() / self.dataset_size
         self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size

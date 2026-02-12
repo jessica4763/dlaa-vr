@@ -36,7 +36,6 @@ class JitterConditionedConv(nn.Module):
 
         self.output_layer = nn.Sequential(
             nn.Linear(num_hidden_features, num_outputs),
-            nn.ReLU()
         )
 
     def forward(self, x: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
@@ -178,7 +177,7 @@ class QualcommNetwork(nn.Module):
         input_tensor: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
-        # Depth to space: (B, 12, 264, 264) -> (B, 3, 584, 584)
+        # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
         input_tensor = self.depth_to_space(input_tensor)
 
         H = motion_vectors.shape[2]
@@ -206,7 +205,7 @@ class QualcommNetwork(nn.Module):
             padding_mode='border'
         )
 
-        warped_input_tensor = self.space_to_depth(input_tensor)
+        warped_input_tensor = self.space_to_depth(warped_input_tensor)
 
         return warped_input_tensor
 

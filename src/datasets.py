@@ -1,8 +1,7 @@
 import os
-os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 
 from bisect import bisect_right
-import cv2
+import imageio.v3 as iio
 import json
 from pathlib import Path
 import torch
@@ -146,14 +145,14 @@ class QualcommDataset(Dataset):
 
         motion_vectors_path = scene.scene_input_imgs_path / self.motion_vector_path_suffix / instance / curr_frame
 
-        motion_vectors = cv2.imread(motion_vectors_path.resolve(), cv2.IMREAD_UNCHANGED)
+        motion_vectors = iio.imread(motion_vectors_path.resolve())
 
         # (H, W, C) --> (C, H, W)
         motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
 
-        # The vertical velocity is stored in the second channel and the
-        # horizontal velocity is stored in the third channel
-        motion_vectors = motion_vectors[1:3, ...]
+        # The vertical velocity is stored in the first channel and the
+        # horizontal velocity is stored in the second channel
+        motion_vectors = motion_vectors[0:2, ...]
 
         # Although Unity uses a Y-up coordinate system, this code
         # assumes a Y-down coordinate system
@@ -351,6 +350,7 @@ class QualcommDataset(Dataset):
             patch_end_x,
             patch_end_y
         )
+        
         
         jitter = torch.tensor((0, 0))
         if self.use_jitter:

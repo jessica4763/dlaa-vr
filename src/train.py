@@ -93,8 +93,6 @@ def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
         cfg = hydra.compose(config_name="train")
 
-    print("TRAINING")
-
     device = (
         torch.accelerator.current_accelerator().type
         if torch.accelerator.is_available()
@@ -273,7 +271,7 @@ def train() -> None:
         epoch = iterations = 0
         print("No training checkpoint.")
 
-    model = torch.compile(model)
+    # model = torch.compile(model)
 
     while iterations < cfg["optimiser"]["iterations"]:
         iterations = epoch * iterations_per_epoch + 1
@@ -314,11 +312,11 @@ def train() -> None:
         # -------------------------------------------------------------------------
         # ------------------------- Training checkpoint ---------------------------
         # -------------------------------------------------------------------------
-        torch.save(model._orig_mod.state_dict(), cfg["paths"]["saved-models-path"])
+        torch.save(model.state_dict(), cfg["paths"]["saved-models-path"])
 
         training_checkpoint = {
             "epoch": epoch,
-            "model": model._orig_mod.state_dict(),
+            "model": model.state_dict(),
             "optimiser": optimiser.state_dict(),
             "scheduler": scheduler.state_dict(),
             "rng_state": torch.get_rng_state(),
