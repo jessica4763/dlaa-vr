@@ -41,7 +41,7 @@ class VRConfig:
         vertical_resolution: int
     ) -> float:
         diagonal_fov_rad = math.radians(diagonal_fov)
-        diagonal = math.sqrt(horizontal_resolution ** 2, vertical_resolution ** 2)
+        diagonal = math.sqrt(horizontal_resolution ** 2 + vertical_resolution ** 2)
         focal_length = diagonal / (2 * math.tan(diagonal_fov_rad / 2))
         return focal_length
 

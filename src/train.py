@@ -74,6 +74,8 @@ def train_epoch(
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimiser.step()
             optimiser.zero_grad()
 

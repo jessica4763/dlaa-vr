@@ -40,9 +40,9 @@ def save_input(
         save_image(curr_jitter, sanity_checks_output_path / "curr_jitter.png")
 
     c0 = c1
-    c1 = c0 + model.num_curr_colour
+    c1 = c0 + model.num_prev_colour
     prev_colour = inputs[c0:c1]
-    save_image(linear_to_gamma(prev_colour), sanity_checks_output_path / "prev_colour.png")
+    save_image(linear_to_gamma(F.pixel_shuffle(prev_colour, upscale_factor=scale_factor)), sanity_checks_output_path / "prev_colour.png")
 
     c0 = c1
     c1 = c0 + model.num_prev_feature

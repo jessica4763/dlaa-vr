@@ -297,11 +297,10 @@ class QualcommDataset(Dataset):
         # -------------------------------------------------------------------
         # -------------------------- Previous frame -------------------------
         # -------------------------------------------------------------------
-
         prev_frame_num = max(0, curr_frame_num - 1)
 
         # This will be overwritten later, if there was a previous frame
-        prev_output_img = curr_input_img.clone().detach()
+        prev_output_img = torch.zeros_like(curr_input_img)
 
         # -------------------------------------------------------------------
         # ---------------------------- Transforms ---------------------------
@@ -399,8 +398,8 @@ class QualcommDataset(Dataset):
             jitter = torch.tensor((curr_jitter_offset_x, curr_jitter_offset_y))
 
         # Must scale motion vectors after taking a patch 
-        motion_vectors[0, ...] /= patch_width / self.input_frame_width
-        motion_vectors[1, ...] /= patch_height / self.input_frame_height
+        motion_vectors[0, ...] *= self.input_frame_width / patch_width
+        motion_vectors[1, ...] *= self.input_frame_height / patch_height
         motion_vectors = self.depth_informed_dilation(
             curr_depth,
             motion_vectors
