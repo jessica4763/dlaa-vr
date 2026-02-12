@@ -58,7 +58,7 @@ def evaluate(
                 inputs[:, :, c0:c1] = prev_pred_frame
                 inputs[:, :, c1:model.in_channels] = prev_features
 
-            pred_frame, features = model(inputs, motion_vectors, jitter)
+            pred_frame, features = model(inputs, motion_vectors, jitter, "evaluation")
             pred_frame = pred_frame.view(-1, 3, output_H, output_W)
             loss = loss_function(pred_frame, target)
 

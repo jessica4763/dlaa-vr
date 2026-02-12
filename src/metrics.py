@@ -77,7 +77,7 @@ class Metrics:
     def record_lpips(self, pred: torch.Tensor, target: torch.Tensor) -> None:
         # Display-encoded values in the range [-1, 1]
         pred, target = (pred * 2.0 - 1.0).squeeze(0), (target * 2.0 - 1.0).squeeze(0)
-        self.lpips_sum += self.loss_function_alex.forward(pred, target).item()
+        self.lpips_sum += self.loss_function_alex.forward(pred, target)
 
     def record_cvvdp_jod(self, pred: np.ndarray, target: np.ndarray) -> None:
         # sRGB frames and display-encoded values in the range [0, 1] 

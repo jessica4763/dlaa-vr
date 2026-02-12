@@ -213,7 +213,8 @@ class QualcommNetwork(nn.Module):
         self,
         x: torch.Tensor,
         motion_vectors: torch.Tensor,
-        jitter: torch.Tensor = None
+        jitter: torch.Tensor = None,
+        mode: str = "training"
     ) -> tuple[torch.Tensor, torch.Tensor]:
         batch_size, clip_size, C, H, W = x.shape
 
@@ -231,21 +232,34 @@ class QualcommNetwork(nn.Module):
             # Use recurrent colour frame
             c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter
             c1 = c0 + self.num_prev_colour
-            if prev_pred_colour is not None:
-                # Warp recurrent colour frame
+            if mode == "training":
+                if prev_pred_colour is not None:
+                    # Warp recurrent colour frame
+                    clip_frames[:, c0:c1] = self.warp(
+                        prev_pred_colour,
+                        motion_vector_frames
+                    )
+            else:
                 clip_frames[:, c0:c1] = self.warp(
-                    prev_pred_colour,
+                    clip_frames[:, c0:c1],
                     motion_vector_frames
                 )
+
             prev_colour = clip_frames[:, c0:c1]  # Save for the blend step
 
             # Use recurrent features
             c0 = c1
             c1 = c0 + self.num_prev_feature
-            if prev_pred_features is not None:
-                # Warp recurrent features
+            if mode == "training":
+                if prev_pred_features is not None:
+                    # Warp recurrent features
+                    clip_frames[:, c0:c1] = self.warp(
+                        prev_pred_features,
+                        motion_vector_frames
+                    )
+            else:
                 clip_frames[:, c0:c1] = self.warp(
-                    prev_pred_features,
+                    clip_frames[:, c0:c1],
                     motion_vector_frames
                 )
 

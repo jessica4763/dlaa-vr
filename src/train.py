@@ -64,7 +64,7 @@ def train_epoch(
         # Mixed precision floating point for speed
         with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
             # Pass in motion vectors as well, for warping
-            pred_frame, _ = model(inputs, motion_vectors, jitter)
+            pred_frame, _ = model(inputs, motion_vectors, jitter, "training")
             pred_frame = pred_frame.view(-1, 3, output_H, output_W)
             loss = loss_function(pred_frame, targets) / accumulation_steps
 
@@ -408,7 +408,7 @@ def checkpoint(
         inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
         motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
         jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
-        anti_aliased_img, _ = model(inputs, motion_vectors, jitter)
+        anti_aliased_img, _ = model(inputs, motion_vectors, jitter, "training")
         anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
         save_image(anti_aliased_img, checkpoint_path / f"{iterations}.png")
