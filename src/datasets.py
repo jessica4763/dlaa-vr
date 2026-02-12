@@ -151,9 +151,9 @@ class QualcommDataset(Dataset):
         # (H, W, C) --> (C, H, W)
         motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
 
-        # The vertical velocity is stored in the first channel and the
-        # horizontal velocity is stored in the second channel
-        motion_vectors = motion_vectors[0:2, ...]
+        # The vertical velocity is stored in the second channel and the
+        # horizontal velocity is stored in the third channel
+        motion_vectors = motion_vectors[1:3, ...]
 
         # Although Unity uses a Y-up coordinate system, this code
         # assumes a Y-down coordinate system
@@ -161,7 +161,7 @@ class QualcommDataset(Dataset):
 
         # Let the horizontal velocity be stored in the first channel and the
         # vertical velocity in the second channel
-        motion_vectors[0, ...], motion_vectors[1, ...] = motion_vectors[1, ...], motion_vectors[0, ...]
+        motion_vectors = motion_vectors[[1, 0], ...]
 
         return motion_vectors
 
@@ -299,16 +299,10 @@ class QualcommDataset(Dataset):
         # -------------------------- Previous frame -------------------------
         # -------------------------------------------------------------------
 
-        prev_frame_num = 0 if curr_frame_num == 0 else curr_frame_num - 1
+        prev_frame_num = max(0, curr_frame_num - 1)
 
         # This will be overwritten later, if there was a previous frame
         prev_output_img = curr_input_img.clone().detach()
-        prev_output_img = F.interpolate(
-            prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
-            scale_factor=self.scale_factor, 
-            mode='nearest'
-        ).squeeze(0)  # Remove the batch dimension
-        prev_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(prev_output_img)
 
         # -------------------------------------------------------------------
         # ---------------------------- Transforms ---------------------------
@@ -320,6 +314,13 @@ class QualcommDataset(Dataset):
 
         if self.target_transform:
             curr_output_img = self.target_transform(curr_output_img)
+
+        prev_output_img = F.interpolate(
+            prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
+            scale_factor=self.scale_factor, 
+            mode='bicubic'
+        ).squeeze(0)  # Remove the batch dimension
+        prev_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(prev_output_img)
 
         # -------------------------------------------------------------------
         # ----------------------------- Features ----------------------------

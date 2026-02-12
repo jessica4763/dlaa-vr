@@ -93,6 +93,8 @@ def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
         cfg = hydra.compose(config_name="train")
 
+    print("TRAINING")
+
     device = (
         torch.accelerator.current_accelerator().type
         if torch.accelerator.is_available()

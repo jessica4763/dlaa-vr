@@ -44,6 +44,8 @@ class Metrics:
         self.pixel_sum = 0
         self.pixel_squared_sum = 0
 
+        self.count = 0
+
         self.metrics = {
             "avg_norm_rmse": 0,
             "avg_psnr": 0,
@@ -59,6 +61,7 @@ class Metrics:
 
     def record_psnr(self, pred: np.ndarray, target: np.ndarray) -> None:
         # Display-encoded values in the range [0, 1]
+        self.count += 1
         self.psnr_sum += peak_signal_noise_ratio(target, pred, data_range=1.0)
 
     def record_ssim(self, pred: np.ndarray, target: np.ndarray) -> None:
@@ -146,6 +149,9 @@ class Metrics:
             self.record_pixel_wise_std(pred_ndarray)
 
     def report(self) -> None:
+        print(f"{self.dataset_size=}")
+        print(f"{self.count=}")
+
         self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
         self.metrics["avg_psnr"] = self.psnr_sum.item() / self.dataset_size
         self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size
