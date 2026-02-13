@@ -56,8 +56,7 @@ class JitterConditionedConv(nn.Module):
         #    updates the weights of the MLP used to calculate the kernel weights
         # 2. The network applies a separate convolutional kernel to each of the frames 
         #    in the batch because they are associated with different camera jitter values.
-        #    While for loops are generally slow, I use them here for readability. 
-
+        #    Although for loops are generally slow, I use them here for readability. 
         outputs = []
         for batch in range(batch_size):
             outputs.append(F.conv2d(x[batch:batch + 1], kernel[batch], padding=1))
@@ -90,8 +89,6 @@ class QualcommNetwork(nn.Module):
 
         self.depth_to_space = nn.PixelShuffle(upscale_factor=scale_factor)
         self.space_to_depth = nn.PixelUnshuffle(downscale_factor=scale_factor)
-
-        hidden_channels *= (scale_factor ** 2)
 
         if use_jitter:
             self.input_conv = JitterConditionedConv(
@@ -307,8 +304,8 @@ class QualcommNetwork(nn.Module):
             outputs.append(full_res_colour)
 
             # Save recurrent colour frame and features
-            prev_pred_colour = blended_colour.detach()
-            prev_pred_features = out_features.detach()
+            prev_pred_colour = blended_colour
+            prev_pred_features = out_features
 
         # prev_pred_features is only used by evaluation
         return torch.stack(outputs, dim=1), prev_pred_features

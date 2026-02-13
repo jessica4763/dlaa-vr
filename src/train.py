@@ -71,8 +71,6 @@ def train_epoch(
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            
             optimiser.step()
             optimiser.zero_grad()
 
@@ -372,7 +370,7 @@ def validate(
                 ]
             )
             run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
-        elif iterations % validation_cfg["validation"]["proxy-validation-interval"] <    iterations_per_epoch:
+        elif iterations % validation_cfg["validation"]["proxy-validation-interval"] < iterations_per_epoch:
             run(cfg=validation_cfg, validation_mode="proxy", writer=writer, iterations=iterations)
 
 

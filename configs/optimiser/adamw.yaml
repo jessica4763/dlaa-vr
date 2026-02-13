@@ -1,7 +1,7 @@
 ---
 name: adamw
 loss: l1loss  # l1loss, mseloss, cvvdploss, l1loss_with_cvvdp
-cvvdp-weight: 0.005
+cvvdp-weight: 0.01
 actual-batch-size: 8
 virtual-batch-size: 8
 clip-size: 16
