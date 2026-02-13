@@ -114,10 +114,3 @@ def write_video(
 
     writer.close()
 
-
-if __name__ == "__main__":
-    write_video(
-        Path("evaluation_outputs"),
-        "540pEnhanced.mp4",
-        fps=24
-    )

@@ -220,8 +220,8 @@ class QualcommNetwork(nn.Module):
 
         outputs = []
         for clip in range(clip_size):
-            clip_frames = x[:, clip].clone()
-            motion_vector_frames = motion_vectors[:, clip].clone()
+            clip_frames = x[:, clip]
+            motion_vector_frames = motion_vectors[:, clip]
             if self.num_curr_jitter != 0:
                 assert jitter is not None
                 jitter_frames = jitter[:, clip].clone()

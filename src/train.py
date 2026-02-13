@@ -29,6 +29,7 @@ def train_epoch(
     virtual_batch_size: int,
     clip_size: int,
     loss_function: nn.Module,
+    padding: int,
     optimiser: MultiStepLR | CosineAnnealingLR,
     scheduler: torch.optim.lr_scheduler.MultiStepLR,
     writer: SummaryWriter,
@@ -64,6 +65,10 @@ def train_epoch(
         # Pass in motion vectors as well, for warping
         pred_frame, _ = model(inputs, motion_vectors, jitter, "training")
         pred_frame = pred_frame.view(-1, output_C, output_H, output_W)
+
+        # Compute loss on only the centre of the patch
+        pred_frame = pred_frame[:, :, padding:output_H - padding, padding:output_W - padding]
+        targets = targets[:, :, padding:output_H - padding, padding:output_W - padding]
         loss = loss_function(pred_frame, targets) / accumulation_steps
         loss.backward()
 
@@ -165,6 +170,7 @@ def train() -> None:
         input_frame_height=cfg["dataset"]["input-frame-height"],
         input_frame_width=cfg["dataset"]["input-frame-width"],
         high_res_patch_size=cfg["optimiser"]["patch-size"],
+        padding=cfg["optimiser"]["padding"],
         scale_factor=scale_factor
     )
 
@@ -286,6 +292,7 @@ def train() -> None:
             virtual_batch_size=cfg["optimiser"]["virtual-batch-size"],
             clip_size=cfg["optimiser"]["clip-size"],
             loss_function=loss_function,
+            padding=cfg["optimiser"]["padding"],
             optimiser=optimiser,
             scheduler=scheduler,
             writer=writer,

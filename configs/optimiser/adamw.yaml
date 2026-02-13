@@ -6,6 +6,7 @@ actual-batch-size: 8
 virtual-batch-size: 8
 clip-size: 16
 patch-size: 264
+padding: 32
 iterations: 500000
 lr-scheduler: multi-step  # multi-step, cosine-annealing
 
