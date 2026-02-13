@@ -39,7 +39,6 @@ def evaluate(
             inputs = inputs.to(device, non_blocking=True)
             inputs = inputs.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
-            output_N, output_C, output_H, output_W = motion_vectors.shape
             motion_vectors = motion_vectors.to(device, non_blocking=True)
             motion_vectors = motion_vectors.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
@@ -58,12 +57,13 @@ def evaluate(
                 inputs[:, :, c0:c1] = prev_pred_frame
                 inputs[:, :, c1:model.in_channels] = prev_features
 
+            output_N, output_C, output_H, output_W = target.shape
             pred_frame, features = model(inputs, motion_vectors, jitter, "evaluation")
-            pred_frame = pred_frame.view(-1, 3, output_H, output_W)
+            pred_frame = pred_frame.view(-1, output_C, output_H, output_W)
             loss = loss_function(pred_frame, target)
 
-            prev_pred_frame = F.pixel_unshuffle(pred_frame, downscale_factor=scale_factor)
-            prev_features = features.squeeze(0)
+            prev_pred_frame = F.pixel_unshuffle(pred_frame, downscale_factor=scale_factor).unsqueeze(0)
+            prev_features = features.unsqueeze(0)
 
             loss, current_img = loss.item(), (batch + 1) * len(inputs)
             print(f"Loss: {loss:>7f}  [{current_img:>5d}/{len(evaluation_dataloader.dataset):>5d}]")

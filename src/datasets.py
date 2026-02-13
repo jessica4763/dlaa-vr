@@ -300,7 +300,7 @@ class QualcommDataset(Dataset):
         prev_frame_num = max(0, curr_frame_num - 1)
 
         # This will be overwritten later, if there was a previous frame
-        prev_output_img = torch.zeros_like(curr_input_img)
+        prev_output_img = curr_input_img.clone().detach()
 
         # -------------------------------------------------------------------
         # ---------------------------- Transforms ---------------------------

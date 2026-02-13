@@ -49,9 +49,9 @@ def train_epoch(
         inputs = inputs.view(-1, clip_size, input_C, input_H, input_W)
 
         # output_N = num_batches * clip_size. output_H == input_H and output_W == input_W with no upscaling
-        output_N, output_C, output_H, output_W = motion_vectors.shape
+        output_N, output_C, output_H, output_W = targets.shape
         motion_vectors = motion_vectors.to(device, non_blocking=True)
-        motion_vectors = motion_vectors.view(-1, clip_size, output_C, output_H, output_W)
+        motion_vectors = motion_vectors.view(-1, clip_size, 2, output_H, output_W)
 
         if use_jitter: 
             jitter = jitter.to(device, non_blocking=True)
@@ -61,20 +61,17 @@ def train_epoch(
 
         targets = targets.to(device, non_blocking=True)
 
-        # Mixed precision floating point for speed
-        with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
-            # Pass in motion vectors as well, for warping
-            pred_frame, _ = model(inputs, motion_vectors, jitter, "training")
-            pred_frame = pred_frame.view(-1, 3, output_H, output_W)
-            loss = loss_function(pred_frame, targets) / accumulation_steps
-
+        # Pass in motion vectors as well, for warping
+        pred_frame, _ = model(inputs, motion_vectors, jitter, "training")
+        pred_frame = pred_frame.view(-1, output_C, output_H, output_W)
+        loss = loss_function(pred_frame, targets) / accumulation_steps
         loss.backward()
 
         # For reporting
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             
             optimiser.step()
             optimiser.zero_grad()
@@ -86,7 +83,7 @@ def train_epoch(
                 total_loss,
                 iterations + (batch + 1) // accumulation_steps
             )
-            print(f"Loss: {total_loss:>7f}  [{min((batch + 1) * actual_batch_size, total_instances):>5d} / {total_instances:>5d}]")
+            print(f"Loss: {total_loss:>7f} [{min((batch + 1) * actual_batch_size, total_instances):>5d} / {total_instances:>5d}]")
 
             total_loss = 0
 

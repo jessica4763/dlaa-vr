@@ -109,7 +109,7 @@ class QualcommNetwork(nn.Module):
                 hidden_channels,
                 kernel_size=3,
                 padding=1,
-                padding_mode="reflect"
+                padding_mode="replicate"
             )
 
         self.input_relu = nn.ReLU()
@@ -123,7 +123,7 @@ class QualcommNetwork(nn.Module):
                     hidden_channels,
                     kernel_size=3,
                     padding=1,
-                    padding_mode="reflect"
+                    padding_mode="replicate"
                 )
             )
             body_layers.append(nn.ReLU())
@@ -145,7 +145,7 @@ class QualcommNetwork(nn.Module):
                 self.num_prev_feature,
                 kernel_size=3,
                 padding=1,
-                padding_mode="reflect"
+                padding_mode="replicate"
             )
 
         # Colour head
@@ -155,7 +155,7 @@ class QualcommNetwork(nn.Module):
                 self.num_prev_colour,
                 kernel_size=3,
                 padding=1,
-                padding_mode="reflect"
+                padding_mode="replicate"
             ),
             nn.ReLU()
         )
@@ -167,7 +167,7 @@ class QualcommNetwork(nn.Module):
                 1,
                 kernel_size=3,
                 padding=1,
-                padding_mode="reflect"
+                padding_mode="replicate"
             ),
             nn.Sigmoid()
         )
@@ -196,13 +196,13 @@ class QualcommNetwork(nn.Module):
             indexing='ij'
         )
         base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
-        warped_grid = base_grid + motion_vectors * 2.0  # base_grid is broadcasted
+        warped_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
 
         warped_input_tensor = F.grid_sample(
             input_tensor,
             warped_grid,
             mode='bilinear',
-            padding_mode='border'
+            padding_mode='zeros'
         )
 
         warped_input_tensor = self.space_to_depth(warped_input_tensor)
@@ -307,8 +307,8 @@ class QualcommNetwork(nn.Module):
             outputs.append(full_res_colour)
 
             # Save recurrent colour frame and features
-            prev_pred_colour = blended_colour
-            prev_pred_features = out_features
+            prev_pred_colour = blended_colour.detach()
+            prev_pred_features = out_features.detach()
 
         # prev_pred_features is only used by evaluation
         return torch.stack(outputs, dim=1), prev_pred_features
