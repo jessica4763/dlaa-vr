@@ -150,17 +150,14 @@ class QualcommDataset(Dataset):
         # (H, W, C) --> (C, H, W)
         motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
 
-        # The vertical velocity is stored in the first channel and the
-        # horizontal velocity is stored in the second channel
+        # The horizontal velocity is stored in the first channel and the
+        # vertical velocity is stored in the second channel, despite what 
+        # the paper says; could be an artifact of iio.imread
         motion_vectors = motion_vectors[0:2, ...]
 
         # Although Unity uses a Y-up coordinate system, this code
         # assumes a Y-down coordinate system
-        motion_vectors[0, ...] *= -1
-
-        # Let the horizontal velocity be stored in the first channel and the
-        # vertical velocity in the second channel
-        motion_vectors = motion_vectors[[1, 0], ...]
+        motion_vectors[1, ...] *= -1
 
         return motion_vectors
 
@@ -245,7 +242,7 @@ class QualcommDataset(Dataset):
         return patch.clone()
 
     def __len__(self) -> int:
-        return self.total_frames if self.validation_mode == "primary" else 300
+        return self.total_frames if self.validation_mode == "primary" else 3
 
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.mode == "training":
@@ -347,7 +344,6 @@ class QualcommDataset(Dataset):
             patch_end_x,
             patch_end_y
         )
-        
         
         jitter = torch.tensor((0, 0))
         if self.use_jitter:

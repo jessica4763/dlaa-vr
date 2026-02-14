@@ -7,6 +7,8 @@ setup:
   jitter: true
 
 paths: 
+  checkpoints-path: checkpoints
+  sanity-checks-output-path: sanity_checks_output
   evaluation-output-path: evaluation_outputs
   tensorboard-path: ../saved/logs/runs
   saved-models-path: ../saved/models/scale_model.pt

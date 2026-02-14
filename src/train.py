@@ -299,7 +299,7 @@ def train() -> None:
         )
 
         checkpoint(
-            checkpoint_path=checkpoints_path,
+            checkpoints_path=checkpoints_path,
             sanity_checks_output_path=sanity_checks_output_path,
             device=device,
             model=model,
@@ -308,7 +308,8 @@ def train() -> None:
             input_frame_height=cfg["dataset"]["input-frame-height"],
             input_frame_width=cfg["dataset"]["input-frame-width"],
             scale_factor=scale_factor,
-            use_jitter=cfg["setup"]["jitter"]
+            use_jitter=cfg["setup"]["jitter"],
+            mode="training"
         )
 
         # -------------------------------------------------------------------------

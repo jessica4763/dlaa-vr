@@ -227,7 +227,8 @@ def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations
         input_frame_height=cfg["dataset"]["input-frame-height"],
         input_frame_width=cfg["dataset"]["input-frame-width"],
         scale_factor=scale_factor,
-        use_jitter=cfg["setup"]["jitter"]
+        use_jitter=cfg["setup"]["jitter"],
+        mode="evaluation"
     )
 
 
@@ -235,11 +236,11 @@ def main() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
         cfg = hydra.compose(config_name="validation")
         writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
-        run(cfg=cfg, validation_mode="primary", writer=writer)
+        run(cfg=cfg, validation_mode="primary", writer=writer, iterations=0)
 
         print("\n --------------------- Stationary Segments Evaluation -------------------- \n")
         stationary_segments_cfg = hydra.compose(config_name="validation", overrides=["dataset=stationary-segments-validation-upscale"])
-        run(cfg=stationary_segments_cfg, validation_mode="primary", writer=writer)
+        run(cfg=stationary_segments_cfg, validation_mode="primary", writer=writer, iterations=0)
 
 
 if __name__ == "__main__":

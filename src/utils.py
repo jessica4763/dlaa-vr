@@ -64,37 +64,33 @@ def checkpoint(
     input_frame_height: int,
     input_frame_width: int,
     scale_factor: int,
-    use_jitter: bool
+    use_jitter: bool,
+    mode: str = "training",
 ) -> None:
     # Strictly a training diagnostic, so it's OK if
     # training data is used here
     model.eval()
     with torch.no_grad():
-        inputs, motion_vectors, jitter, output = data[(0, 0, 0, input_frame_width, input_frame_height)]
+        if mode == "training":
+            inputs, motion_vectors, jitter, output = data[(0, 0, 0, input_frame_width, input_frame_height)]
+        else:
+            inputs, motion_vectors, jitter, output = data[0]
 
         # Verify input to the network
         save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
 
         # Verify warping 
-        c0 = 0
-        c1 = model.num_curr_colour
-        current_colour = inputs[c0:c1]
-        upscaled_current_colour = F.interpolate(
-            current_colour,
-            scale_factor=2.0,
-            mode="bicubic",
-            align_corners=False
-        )
+        if mode == "training":
+            _, motion_vectors_next, _, output_next = data[(1, 0, 0, input_frame_width, input_frame_height)]
+        else:
+            _, motion_vectors_next, _, output_next = data[1]
 
-        c0 = model.num_curr_colour + model.num_curr_depth + model.num_curr_jitter
-        c1 = c0 + model.num_prev_colour
-        prev_colour = inputs[c0:c1]
-        warped_previous_colour = model.warp(
-            prev_colour,
-            motion_vectors
-        )
+        warped_prev = model.warp(
+            output.unsqueeze(0),
+            motion_vectors_next.unsqueeze(0)
+        ).squeeze(0)
 
-        diff = linear_to_gamma(torch.abs(upscaled_current_colour - warped_previous_colour))
+        diff = linear_to_gamma(torch.abs(output_next - warped_prev))
         save_image(diff, sanity_checks_output_path / "diff.png")
 
         # Verify the goal of the network

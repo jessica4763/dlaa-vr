@@ -174,8 +174,12 @@ class QualcommNetwork(nn.Module):
         input_tensor: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
-        # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
-        input_tensor = self.depth_to_space(input_tensor)
+        input_tensor_B, input_tensor_C, input_tensor_H, input_tensor_W = input_tensor.shape
+        motion_vectors_B, motion_vectors_C, motion_vectors_H, motion_vectors_W = motion_vectors.shape
+
+        if input_tensor_H != motion_vectors_H:
+            # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
+            input_tensor = self.depth_to_space(input_tensor)
 
         H = motion_vectors.shape[2]
         W = motion_vectors.shape[3]
@@ -202,7 +206,8 @@ class QualcommNetwork(nn.Module):
             padding_mode='zeros'  # border
         )
 
-        warped_input_tensor = self.space_to_depth(warped_input_tensor)
+        if input_tensor_H != motion_vectors_H:
+            warped_input_tensor = self.space_to_depth(warped_input_tensor)
 
         return warped_input_tensor
 

@@ -5,8 +5,6 @@ import torch.nn.functional as F
 from torchvision.utils import save_image
 from typing import Any
 
-from utils import linear_to_gamma
-
 
 def save_input(
     sanity_checks_output_path: Path,
@@ -15,6 +13,8 @@ def save_input(
     motion_vectors: torch.Tensor,
     scale_factor: int
 ) -> None:
+    from utils import linear_to_gamma
+    
     c0 = 0
     c1 = c0 + model.num_curr_colour
     curr_colour = inputs[c0:c1]
