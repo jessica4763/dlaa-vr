@@ -1,6 +1,5 @@
 import numpy as np
 from skimage.metrics import peak_signal_noise_ratio
-import torch
 
 # Create a random RGB image, values in [0,1]
 H, W, C = 128, 128, 3

@@ -5,9 +5,8 @@ import sys
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.utils import save_image
 
 import hydra
 from omegaconf import OmegaConf
@@ -17,8 +16,7 @@ from evaluate import run
 from loss import CVVDPLoss, L1LossWithCVVDP
 from model import QualcommNetwork
 from samplers import QualcommDatasetSampler
-from sanity_checks import save_input, save_output
-from utils import gamma_to_linear, linear_to_gamma
+from utils import checkpoint, gamma_to_linear
 
 
 def train_epoch(
@@ -305,7 +303,7 @@ def train() -> None:
             sanity_checks_output_path=sanity_checks_output_path,
             device=device,
             model=model,
-            training_data=training_data,
+            data=training_data,
             iterations=iterations,
             input_frame_height=cfg["dataset"]["input-frame-height"],
             input_frame_width=cfg["dataset"]["input-frame-width"],
@@ -379,41 +377,6 @@ def validate(
             run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
         elif iterations % validation_cfg["validation"]["proxy-validation-interval"] < iterations_per_epoch:
             run(cfg=validation_cfg, validation_mode="proxy", writer=writer, iterations=iterations)
-
-
-def checkpoint(
-    checkpoint_path: Path,
-    sanity_checks_output_path: Path,
-    device: str,
-    model: nn.Module,
-    training_data: Dataset,
-    iterations: int,
-    input_frame_height: int,
-    input_frame_width: int,
-    scale_factor: int,
-    use_jitter: bool
-) -> None:
-    # Strictly a training diagnostic, so it's OK if
-    # training data is used here
-    model.eval()
-    with torch.no_grad():
-        inputs, motion_vectors, jitter, output = training_data[(0, 0, 0, input_frame_width, input_frame_height)]
-
-        # Verify input to the network
-        save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
-
-        # Verify the goal of the network
-        output = linear_to_gamma(output)
-        save_output(sanity_checks_output_path, output)
-
-        # Verify the output of the network
-        inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
-        motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
-        jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
-        anti_aliased_img, _ = model(inputs, motion_vectors, jitter, "training")
-        anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
-        anti_aliased_img = linear_to_gamma(anti_aliased_img)
-        save_image(anti_aliased_img, checkpoint_path / f"{iterations}.png")
 
 
 if __name__ == "__main__":

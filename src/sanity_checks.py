@@ -57,13 +57,6 @@ def save_input(
     save_image(motion_vectors, sanity_checks_output_path / "motion_vectors.png")
 
 
-def save_output(
-    sanity_checks_output_path: Path,
-    output: torch.Tensor
-) -> None:
-    save_image(output, sanity_checks_output_path / "ground_truth.png")
-
-
 def print_parameters(evaluation_output_path: Path, parameters: dict[str, Any]) -> None:
     with open(evaluation_output_path / "model_parameters.txt", "a") as a_writer:
         for layer in parameters:

@@ -13,6 +13,7 @@ from datasets import QualcommDataset
 from model import QualcommNetwork
 from metrics import Metrics
 from utils import (
+    checkpoint,
     gamma_to_linear,
     linear_to_gamma,
     write_frames,
@@ -88,6 +89,12 @@ def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations
 
     eval_output_y_path = Path(cfg["paths"]["evaluation-output-path"]) / "target"
     eval_output_y_path.mkdir(parents=True, exist_ok=True)
+
+    checkpoints_path = Path(cfg["paths"]["checkpoints-path"])
+    checkpoints_path.mkdir(parents=True, exist_ok=True)
+
+    sanity_checks_output_path = Path(cfg["paths"]["sanity-checks-output-path"])
+    sanity_checks_output_path.mkdir(parents=True, exist_ok=True)
 
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
@@ -207,6 +214,19 @@ def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations
         imgs_path=Path(cfg["paths"]["evaluation-output-path"]),
         filename="evaluation_output.mp4",
         fps=24
+    )
+
+    checkpoint(
+        checkpoints_path=checkpoints_path,
+        sanity_checks_output_path=sanity_checks_output_path,
+        device=device,
+        model=model,
+        data=evaluation_data,
+        iterations=0,
+        input_frame_height=cfg["dataset"]["input-frame-height"],
+        input_frame_width=cfg["dataset"]["input-frame-width"],
+        scale_factor=scale_factor,
+        use_jitter=cfg["setup"]["jitter"]
     )
 
 

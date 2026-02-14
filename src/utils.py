@@ -5,7 +5,12 @@ from natsort import natsorted
 import os
 from pathlib import Path
 import torch
+from torch import nn
+from torch.utils.data import Dataset
+import torch.nn.functional as F
 from torchvision.utils import save_image
+
+from sanity_checks import save_input
 
 
 class Scene:
@@ -47,6 +52,63 @@ class VRConfig:
 
     def __post_init__(self):
         self.focal_length = VRConfig.get_focal_length(self.diagonal_fov, self.horizontal_resolution, self.vertical_resolution)
+
+
+def checkpoint(
+    checkpoints_path: Path,
+    sanity_checks_output_path: Path,
+    device: str,
+    model: nn.Module,
+    data: Dataset,
+    iterations: int,
+    input_frame_height: int,
+    input_frame_width: int,
+    scale_factor: int,
+    use_jitter: bool
+) -> None:
+    # Strictly a training diagnostic, so it's OK if
+    # training data is used here
+    model.eval()
+    with torch.no_grad():
+        inputs, motion_vectors, jitter, output = data[(0, 0, 0, input_frame_width, input_frame_height)]
+
+        # Verify input to the network
+        save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
+
+        # Verify warping 
+        c0 = 0
+        c1 = model.num_curr_colour
+        current_colour = inputs[c0:c1]
+        upscaled_current_colour = F.interpolate(
+            current_colour,
+            scale_factor=2.0,
+            mode="bicubic",
+            align_corners=False
+        )
+
+        c0 = model.num_curr_colour + model.num_curr_depth + model.num_curr_jitter
+        c1 = c0 + model.num_prev_colour
+        prev_colour = inputs[c0:c1]
+        warped_previous_colour = model.warp(
+            prev_colour,
+            motion_vectors
+        )
+
+        diff = linear_to_gamma(torch.abs(upscaled_current_colour - warped_previous_colour))
+        save_image(diff, sanity_checks_output_path / "diff.png")
+
+        # Verify the goal of the network
+        output = linear_to_gamma(output)
+        save_image(output, sanity_checks_output_path / "ground_truth.png")
+
+        # Verify the output of the network
+        inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
+        motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
+        jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+        anti_aliased_img, _ = model(inputs, motion_vectors, jitter, "training")
+        anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
+        anti_aliased_img = linear_to_gamma(anti_aliased_img)
+        save_image(anti_aliased_img, checkpoints_path / f"{iterations}.png")
 
 
 def gamma_to_linear(image: torch.Tensor) -> torch.Tensor:
@@ -113,4 +175,3 @@ def write_video(
         writer.append_data(img)
 
     writer.close()
-
