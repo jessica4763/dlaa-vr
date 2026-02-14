@@ -174,10 +174,8 @@ class QualcommDataset(Dataset):
         height: int,
         width: int
     ) -> torch.Tensor:
-        # Multiply by 2 and divide by the dimensions of the frame because 
-        # motion vectors are stored as values between -1 and 1
-        motion_vectors[[0], ...] += 2.0 * (prev_jitter_x - curr_jitter_x) / width
-        motion_vectors[[1], ...] += 2.0 * (prev_jitter_y - curr_jitter_y) / height
+        motion_vectors[[0], ...] += (prev_jitter_x - curr_jitter_x) / width
+        motion_vectors[[1], ...] += (prev_jitter_y - curr_jitter_y) / height
         return motion_vectors
 
     def depth_informed_dilation(

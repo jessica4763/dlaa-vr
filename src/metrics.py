@@ -16,6 +16,7 @@ class Metrics:
     def __init__(
         self, 
         dataset_size: int,
+        padding: int,
         iterations: int,
         validation_mode: str = "primary",
         writer: SummaryWriter = None, 
@@ -24,6 +25,7 @@ class Metrics:
         display_name: str = "standard_fhd"
     ) -> None:
         self.dataset_size = dataset_size
+        self.padding = padding
         self.iterations = iterations
         self.validation_mode = validation_mode
         self.writer = writer
@@ -136,8 +138,12 @@ class Metrics:
         return rmse
 
     def record(self, pred: torch.Tensor, target: torch.Tensor) -> None:
+        pred_ndarray =  np.squeeze(pred.cpu().numpy())
         target_ndarray = np.squeeze(target.cpu().numpy())
-        pred_ndarray = np.squeeze(pred.cpu().numpy())
+
+        # C, H, W = target_ndarray.shape
+        # pred_ndarray = pred_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
+        # target_ndarray = target_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
 
         self.record_rmse(pred_ndarray, target_ndarray)
         self.record_psnr(pred_ndarray, target_ndarray)

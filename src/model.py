@@ -199,7 +199,7 @@ class QualcommNetwork(nn.Module):
             input_tensor,
             warped_grid,
             mode='bilinear',
-            padding_mode='zeros'
+            padding_mode='zeros'  # border
         )
 
         warped_input_tensor = self.space_to_depth(warped_input_tensor)
@@ -220,8 +220,8 @@ class QualcommNetwork(nn.Module):
 
         outputs = []
         for clip in range(clip_size):
-            clip_frames = x[:, clip]
-            motion_vector_frames = motion_vectors[:, clip]
+            clip_frames = x[:, clip].clone()
+            motion_vector_frames = motion_vectors[:, clip].clone()
             if self.num_curr_jitter != 0:
                 assert jitter is not None
                 jitter_frames = jitter[:, clip].clone()
