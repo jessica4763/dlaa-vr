@@ -138,12 +138,12 @@ class Metrics:
         return rmse
 
     def record(self, pred: torch.Tensor, target: torch.Tensor) -> None:
-        pred_ndarray = np.squeeze(pred.cpu().numpy())
+        pred_ndarray =  np.squeeze(pred.cpu().numpy())
         target_ndarray = np.squeeze(target.cpu().numpy())
 
-        C, H, W = target.shape
-        pred_ndarray = pred_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
-        target_ndarray = target_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
+        # C, H, W = target_ndarray.shape
+        # pred_ndarray = pred_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
+        # target_ndarray = target_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
 
         self.record_rmse(pred_ndarray, target_ndarray)
         self.record_psnr(pred_ndarray, target_ndarray)

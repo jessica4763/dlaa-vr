@@ -199,7 +199,7 @@ class QualcommNetwork(nn.Module):
             input_tensor,
             warped_grid,
             mode='bilinear',
-            padding_mode='zeros'
+            padding_mode='zeros'  # border
         )
 
         warped_input_tensor = self.space_to_depth(warped_input_tensor)
