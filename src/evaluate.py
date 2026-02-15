@@ -236,11 +236,11 @@ def main() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
         cfg = hydra.compose(config_name="validation")
         writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
-        run(cfg=cfg, validation_mode="primary", writer=writer, iterations=0)
+        run(cfg=cfg, validation_mode="proxy", writer=writer, iterations=0)
 
         print("\n --------------------- Stationary Segments Evaluation -------------------- \n")
         stationary_segments_cfg = hydra.compose(config_name="validation", overrides=["dataset=stationary-segments-validation-upscale"])
-        run(cfg=stationary_segments_cfg, validation_mode="primary", writer=writer, iterations=0)
+        run(cfg=stationary_segments_cfg, validation_mode="proxy", writer=writer, iterations=0)
 
 
 if __name__ == "__main__":
