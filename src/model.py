@@ -106,7 +106,7 @@ class QualcommNetwork(nn.Module):
                 hidden_channels,
                 kernel_size=3,
                 padding=1,
-                padding_mode="zeros"
+                padding_mode="replicate"
             )
         self.input_relu = nn.ReLU()
 
@@ -119,7 +119,7 @@ class QualcommNetwork(nn.Module):
                     hidden_channels,
                     kernel_size=3,
                     padding=1,
-                    padding_mode="zeros"
+                    padding_mode="replicate"
                 )
             )
             body_layers.append(nn.ReLU())
@@ -141,7 +141,7 @@ class QualcommNetwork(nn.Module):
                 self.num_prev_feature,
                 kernel_size=3,
                 padding=1,
-                padding_mode="zeros"
+                padding_mode="replicate"
             )
 
         # Colour head
@@ -151,7 +151,7 @@ class QualcommNetwork(nn.Module):
                 self.num_prev_colour,
                 kernel_size=3,
                 padding=1,
-                padding_mode="zeros"
+                padding_mode="replicate"
             ),
             nn.ReLU()
         )
@@ -163,7 +163,7 @@ class QualcommNetwork(nn.Module):
                 1,
                 kernel_size=3,
                 padding=1,
-                padding_mode="zeros"
+                padding_mode="replicate"
             ),
             nn.Sigmoid()
         )

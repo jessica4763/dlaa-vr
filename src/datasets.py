@@ -393,11 +393,11 @@ class QualcommDataset(Dataset):
         # Must scale motion vectors after taking a patch 
         motion_vectors[0, ...] *= self.input_frame_width / patch_width
         motion_vectors[1, ...] *= self.input_frame_height / patch_height
-        # motion_vectors = self.depth_informed_dilation(
-        #     curr_depth,
-        #     motion_vectors
-        # )
-        motion_vectors = self.upscale_buffer(motion_vectors)
+        motion_vectors = self.depth_informed_dilation(
+            curr_depth,
+            motion_vectors
+        )
+        # motion_vectors = self.upscale_buffer(motion_vectors)
 
         prev_features = torch.zeros((self.scale_factor ** 2, patch_height, patch_width))
 
