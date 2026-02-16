@@ -41,7 +41,7 @@ def train_epoch(
     accumulation_steps = virtual_batch_size // actual_batch_size
 
     model.train()
-    for batch, (inputs, motion_vectors, jitter, targets) in enumerate(training_dataloader):
+    for batch, (inputs, motion_vectors, jitter, targets, _) in enumerate(training_dataloader):
         # input_N = num_batches * clip_size
         input_N, input_C, input_H, input_W = inputs.shape
         inputs = inputs.to(device, non_blocking=True)  # non_blocking=True requires pin_memory=True

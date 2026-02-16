@@ -36,7 +36,7 @@ def evaluate(
     model.eval()
     with torch.no_grad():
         prev_pred_frame = prev_features = None
-        for batch, (inputs, motion_vectors, jitter, target) in enumerate(evaluation_dataloader):
+        for batch, (inputs, motion_vectors, jitter, target, curr_frame_num) in enumerate(evaluation_dataloader):
             inputs = inputs.to(device, non_blocking=True)
             inputs = inputs.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
@@ -52,7 +52,7 @@ def evaluate(
             target = target.to(device, non_blocking=True)
 
             # Use the previously predicted frame and features during evaluation
-            if prev_pred_frame is not None and prev_features is not None:
+            if prev_pred_frame is not None and prev_features is not None and curr_frame_num > 0:
                 c0 = model.in_channels - (model.num_prev_colour + model.num_prev_feature)
                 c1 = model.in_channels - model.num_prev_feature
                 inputs[:, :, c0:c1] = prev_pred_frame
