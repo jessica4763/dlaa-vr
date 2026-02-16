@@ -240,7 +240,7 @@ class QualcommDataset(Dataset):
         return patch.clone()
 
     def __len__(self) -> int:
-        return self.total_frames if self.validation_mode == "primary" else 300
+        return self.total_frames if self.mode == "training" or self.validation_mode == "primary" else 300
 
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.mode == "training":

@@ -71,11 +71,11 @@ def checkpoint(
     model.eval()
     with torch.no_grad():
         if mode == "training":
-            inputs, motion_vectors, jitter, output = data[(0, 0, 0, input_frame_width, input_frame_height)]
-            _, motion_vectors_next, _, output_next = data[(1, 0, 0, input_frame_width, input_frame_height)]
+            inputs, motion_vectors, jitter, output, _ = data[(0, 0, 0, input_frame_width, input_frame_height)]
+            _, motion_vectors_next, _, output_next, _ = data[(1, 0, 0, input_frame_width, input_frame_height)]
         else:
-            inputs, motion_vectors, jitter, output = data[0]
-            _, motion_vectors_next, _, output_next = data[1]
+            inputs, motion_vectors, jitter, output, _ = data[0]
+            _, motion_vectors_next, _, output_next, _ = data[1]
 
         # Verify input to the network
         save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
