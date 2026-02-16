@@ -1,5 +1,3 @@
-import os
-
 from bisect import bisect_right
 import imageio.v3 as iio
 import json
@@ -126,9 +124,9 @@ class QualcommDataset(Dataset):
 
         depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
 
-        depth = decode_image(depth_path.resolve())
+        depth = decode_image(depth_path.resolve()).float()
         depth = torch.unsqueeze((
-            depth[0] / (255 ** 1) +
+            depth[0] / 255 +
             depth[1] / (255 ** 2) +
             depth[2] / (255 ** 3) +
             depth[3] / (255 ** 4)
@@ -242,7 +240,7 @@ class QualcommDataset(Dataset):
         return patch.clone()
 
     def __len__(self) -> int:
-        return self.total_frames if self.validation_mode == "primary" else 300
+        return self.total_frames if self.validation_mode == "primary" else 3
 
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.mode == "training":
@@ -308,6 +306,7 @@ class QualcommDataset(Dataset):
         if self.target_transform:
             curr_output_img = self.target_transform(curr_output_img)
 
+        # Interpolate in linear space
         prev_output_img = F.interpolate(
             prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
             scale_factor=self.scale_factor, 
@@ -394,10 +393,11 @@ class QualcommDataset(Dataset):
         # Must scale motion vectors after taking a patch 
         motion_vectors[0, ...] *= self.input_frame_width / patch_width
         motion_vectors[1, ...] *= self.input_frame_height / patch_height
-        motion_vectors = self.depth_informed_dilation(
-            curr_depth,
-            motion_vectors
-        )
+        # motion_vectors = self.depth_informed_dilation(
+        #     curr_depth,
+        #     motion_vectors
+        # )
+        motion_vectors = self.upscale_buffer(motion_vectors)
 
         prev_features = torch.zeros((self.scale_factor ** 2, patch_height, patch_width))
 

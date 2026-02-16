@@ -23,7 +23,7 @@ def save_input(
     c0 = c1
     c1 = c0 + model.num_curr_depth
     curr_depth = inputs[c0:c1]
-    save_image(curr_depth, sanity_checks_output_path / "curr_depth.png")
+    save_image(linear_to_gamma(curr_depth), sanity_checks_output_path / "curr_depth.png")
 
     if model.num_curr_jitter != 0:
         c0 = c1

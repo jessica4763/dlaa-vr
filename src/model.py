@@ -106,9 +106,8 @@ class QualcommNetwork(nn.Module):
                 hidden_channels,
                 kernel_size=3,
                 padding=1,
-                padding_mode="replicate"
+                padding_mode="zeros"
             )
-
         self.input_relu = nn.ReLU()
 
         # num_blocks × (3 × 3 Conv + ReLU) blocks
@@ -120,7 +119,7 @@ class QualcommNetwork(nn.Module):
                     hidden_channels,
                     kernel_size=3,
                     padding=1,
-                    padding_mode="replicate"
+                    padding_mode="zeros"
                 )
             )
             body_layers.append(nn.ReLU())
@@ -142,7 +141,7 @@ class QualcommNetwork(nn.Module):
                 self.num_prev_feature,
                 kernel_size=3,
                 padding=1,
-                padding_mode="replicate"
+                padding_mode="zeros"
             )
 
         # Colour head
@@ -152,7 +151,7 @@ class QualcommNetwork(nn.Module):
                 self.num_prev_colour,
                 kernel_size=3,
                 padding=1,
-                padding_mode="replicate"
+                padding_mode="zeros"
             ),
             nn.ReLU()
         )
@@ -164,7 +163,7 @@ class QualcommNetwork(nn.Module):
                 1,
                 kernel_size=3,
                 padding=1,
-                padding_mode="replicate"
+                padding_mode="zeros"
             ),
             nn.Sigmoid()
         )
@@ -203,7 +202,8 @@ class QualcommNetwork(nn.Module):
             input_tensor,
             warped_grid,
             mode='bilinear',
-            padding_mode='zeros'  # border
+            padding_mode='zeros',
+            align_corners=False
         )
 
         if input_tensor_H != motion_vectors_H:

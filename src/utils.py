@@ -7,7 +7,6 @@ from pathlib import Path
 import torch
 from torch import nn
 from torch.utils.data import Dataset
-import torch.nn.functional as F
 from torchvision.utils import save_image
 
 from sanity_checks import save_input
@@ -73,18 +72,15 @@ def checkpoint(
     with torch.no_grad():
         if mode == "training":
             inputs, motion_vectors, jitter, output = data[(0, 0, 0, input_frame_width, input_frame_height)]
+            _, motion_vectors_next, _, output_next = data[(1, 0, 0, input_frame_width, input_frame_height)]
         else:
             inputs, motion_vectors, jitter, output = data[0]
+            _, motion_vectors_next, _, output_next = data[1]
 
         # Verify input to the network
         save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
 
         # Verify warping 
-        if mode == "training":
-            _, motion_vectors_next, _, output_next = data[(1, 0, 0, input_frame_width, input_frame_height)]
-        else:
-            _, motion_vectors_next, _, output_next = data[1]
-
         warped_prev = model.warp(
             output.unsqueeze(0),
             motion_vectors_next.unsqueeze(0)
