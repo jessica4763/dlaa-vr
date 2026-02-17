@@ -296,7 +296,7 @@ class QualcommDataset(Dataset):
         prev_output_img = curr_input_img.clone().detach()
 
         # # prev_output_img will be overwritten later, if there was a previous frame output from the model
-        # if curr_frame_num > 0:
+        # if curr_frame_num == 0:
         #     prev_frame = str(prev_frame_num).zfill(4) + ".png"
         #     prev_ground_truth_img_path = scene.scene_output_imgs_path / self.ground_truth_path_suffix / instance / prev_frame
         #     prev_output_img = decode_image(prev_ground_truth_img_path.resolve())[0:3, ...]
@@ -329,7 +329,7 @@ class QualcommDataset(Dataset):
         ).squeeze(0)  # Remove the batch dimension
     
         # # Interpolate in linear space
-        # if curr_frame_num == 0:
+        # if curr_frame_num > 0:
         #     prev_output_img = F.interpolate(
         #         prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
         #         scale_factor=self.scale_factor, 

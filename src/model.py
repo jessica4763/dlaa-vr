@@ -145,28 +145,44 @@ class QualcommNetwork(nn.Module):
             )
 
         # Colour head
-        self.colour_head = nn.Sequential(
-            nn.Conv2d(
+        if use_jitter:
+            self.colour_head = JitterConditionedConv(
+                self.num_prev_colour,
+                hidden_channels,
+                3,
+                3,
+                num_hidden_features=2048,
+                num_blocks=7
+            )
+        else:
+            self.colour_head = nn.Conv2d(
                 hidden_channels,
                 self.num_prev_colour,
                 kernel_size=3,
                 padding=1,
                 padding_mode="replicate"
-            ),
-            nn.ReLU()
-        )
+            )
+        self.colour_head_relu = nn.ReLU()
 
         # Blending mask head
-        self.blending_mask_head = nn.Sequential(
-            nn.Conv2d(
+        if use_jitter:
+            self.blending_mask_head = JitterConditionedConv(
+                scale_factor ** 2,
                 hidden_channels,
-                1,
+                3,
+                3,
+                num_hidden_features=2048,
+                num_blocks=7
+            )
+        else:
+            self.blending_mask_head = nn.Conv2d(
+                hidden_channels,
+                scale_factor ** 2,
                 kernel_size=3,
                 padding=1,
                 padding_mode="replicate"
-            ),
-            nn.Sigmoid()
-        )
+            )
+        self.blending_mask_sigmoid = nn.Sigmoid()
 
     def warp(
         self,
@@ -218,7 +234,7 @@ class QualcommNetwork(nn.Module):
         jitter: torch.Tensor = None,
         mode: str = "training"
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        batch_size, clip_size, C, H, W = x.shape
+        B, clip_size, C, H, W = x.shape
 
         # To hold the recurrent colour frame and features
         prev_pred_colour = prev_pred_features = None
@@ -269,7 +285,6 @@ class QualcommNetwork(nn.Module):
             # ---------------- Input convolution and ReLU ----------------
             # ------------------------------------------------------------
             if self.num_curr_jitter != 0:
-                assert jitter is not None
                 h = self.input_conv(clip_frames, jitter_frames)
             else:
                 h = self.input_conv(clip_frames)
@@ -282,25 +297,31 @@ class QualcommNetwork(nn.Module):
             h = self.body(h)
 
             # ------------------------------------------------------------
-            # ---------------------- Feature branch ----------------------
+            # -------- Feature, colour, and blending mask branches -------
             # ------------------------------------------------------------
             if self.num_curr_jitter != 0:
-                assert jitter is not None
                 out_features = self.feature_head(h, jitter_frames)
+                out_colour = self.colour_head(h, jitter_frames)
+                out_blending_mask = self.blending_mask_head(h, jitter_frames)
             else:
                 out_features = self.feature_head(h)
+                out_colour = self.colour_head(h)
+                out_blending_mask = self.blending_mask_head(h)
 
-            # ------------------------------------------------------------
-            # ------------ Colour and blending mask branches -------------
-            # ------------------------------------------------------------
-            out_colour = self.colour_head(h)
-            out_blending_mask = self.blending_mask_head(h)
+            out_colour = self.colour_head_relu(out_colour)
+            out_blending_mask = self.blending_mask_sigmoid(out_blending_mask)
 
             # ------------------------------------------------------------
             # -------------------------- Blend ---------------------------
             # ------------------------------------------------------------
+            out_colour = out_colour.view(B, 3, -1, H, W)
+            prev_colour = prev_colour.view(B, 3, -1, H, W)
+
+            out_blending_mask = out_blending_mask.view(B, 1, -1, H, W)
+
             blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
             blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
+            blended_colour = blended_colour.view(B, -1, H, W)
 
             # ------------------------------------------------------------
             # ---------------------- Depth to space ----------------------
