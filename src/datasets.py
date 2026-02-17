@@ -292,8 +292,23 @@ class QualcommDataset(Dataset):
         # -------------------------------------------------------------------
         prev_frame_num = max(0, curr_frame_num - 1)
 
-        # This will be overwritten later, if there was a previous frame
+        # prev_output_img will be overwritten later, if there was a previous frame output from the model
         prev_output_img = curr_input_img.clone().detach()
+
+        # # prev_output_img will be overwritten later, if there was a previous frame output from the model
+        # if curr_frame_num > 0:
+        #     prev_frame = str(prev_frame_num).zfill(4) + ".png"
+        #     prev_ground_truth_img_path = scene.scene_output_imgs_path / self.ground_truth_path_suffix / instance / prev_frame
+        #     prev_output_img = decode_image(prev_ground_truth_img_path.resolve())[0:3, ...]
+        #     prev_output_img = self.get_patch(
+        #         prev_output_img,
+        #         patch_start_x * self.scale_factor,
+        #         patch_start_y * self.scale_factor,
+        #         patch_end_x * self.scale_factor,
+        #         patch_end_y * self.scale_factor
+        #     )
+        # else:
+        #     prev_output_img = curr_input_img.clone().detach()
 
         # -------------------------------------------------------------------
         # ---------------------------- Transforms ---------------------------
@@ -312,6 +327,15 @@ class QualcommDataset(Dataset):
             scale_factor=self.scale_factor, 
             mode='bicubic'
         ).squeeze(0)  # Remove the batch dimension
+    
+        # # Interpolate in linear space
+        # if curr_frame_num == 0:
+        #     prev_output_img = F.interpolate(
+        #         prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
+        #         scale_factor=self.scale_factor, 
+        #         mode='bicubic'
+        #     ).squeeze(0)  # Remove the batch dimension
+
         prev_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(prev_output_img)
 
         # -------------------------------------------------------------------
