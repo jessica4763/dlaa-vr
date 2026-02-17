@@ -314,6 +314,7 @@ class QualcommNetwork(nn.Module):
             # ------------------------------------------------------------
             # -------------------------- Blend ---------------------------
             # ------------------------------------------------------------
+            # (B, 12, H, W)
             out_colour = out_colour.view(B, 3, -1, H, W)
             prev_colour = prev_colour.view(B, 3, -1, H, W)
 
@@ -334,7 +335,8 @@ class QualcommNetwork(nn.Module):
             prev_pred_features = out_features
 
         # prev_pred_features is only used by evaluation
-        return torch.stack(outputs, dim=1), prev_pred_features
+        # out_blending_mask is only used during evaluation for inspection
+        return torch.stack(outputs, dim=1), prev_pred_features, out_blending_mask.view(B, -1, H, W)
 
 
 class VRSpatialNetwork(nn.Module):

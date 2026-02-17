@@ -61,7 +61,7 @@ def train_epoch(
         targets = targets.to(device, non_blocking=True)
 
         # Pass in motion vectors as well, for warping
-        pred_frame, _ = model(inputs, motion_vectors, jitter, "training")
+        pred_frame, _, _ = model(inputs, motion_vectors, jitter, "training")
         pred_frame = pred_frame.view(-1, output_C, output_H, output_W)
 
         # Compute loss on only the centre of the patch
@@ -74,7 +74,7 @@ def train_epoch(
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float('inf'))
             if grad_norm > 1.0:
                 print(f"{grad_norm=}")
 

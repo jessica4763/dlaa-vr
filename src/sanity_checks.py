@@ -54,7 +54,7 @@ def save_input(
         torch.zeros((1, motion_vectors.shape[1], motion_vectors.shape[2])),
         motion_vectors
     ])
-    save_image(motion_vectors, sanity_checks_output_path / "motion_vectors.png")
+    save_image(linear_to_gamma(motion_vectors), sanity_checks_output_path / "motion_vectors.png")
 
 
 def print_parameters(evaluation_output_path: Path, parameters: dict[str, Any]) -> None:
