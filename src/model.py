@@ -3,6 +3,14 @@ from torch import nn
 import torch.nn.functional as F
 
 
+def kaiming_init_params(model):
+    if isinstance(model, (nn.Linear, nn.Conv2d)):
+        nn.init.kaiming_normal_(model.weight, mode='fan_out', nonlinearity='relu')
+
+        if model.bias is not None:
+            nn.init.constant_(model.bias, 0)
+
+
 class JitterConditionedConv(nn.Module):
     def __init__(
         self,
@@ -106,7 +114,7 @@ class QualcommNetwork(nn.Module):
                 hidden_channels,
                 kernel_size=3,
                 padding=1,
-                padding_mode="replicate"
+                padding_mode="zeros"
             )
         self.input_relu = nn.ReLU()
 
@@ -119,7 +127,7 @@ class QualcommNetwork(nn.Module):
                     hidden_channels,
                     kernel_size=3,
                     padding=1,
-                    padding_mode="replicate"
+                    padding_mode="zeros"
                 )
             )
             body_layers.append(nn.ReLU())
@@ -141,7 +149,7 @@ class QualcommNetwork(nn.Module):
                 self.num_prev_feature,
                 kernel_size=3,
                 padding=1,
-                padding_mode="replicate"
+                padding_mode="zeros"
             )
 
         # Colour head
@@ -160,7 +168,7 @@ class QualcommNetwork(nn.Module):
                 self.num_prev_colour,
                 kernel_size=3,
                 padding=1,
-                padding_mode="replicate"
+                padding_mode="zeros"
             )
         self.colour_head_relu = nn.ReLU()
 
@@ -180,9 +188,11 @@ class QualcommNetwork(nn.Module):
                 scale_factor ** 2,
                 kernel_size=3,
                 padding=1,
-                padding_mode="replicate"
+                padding_mode="zeros"
             )
         self.blending_mask_sigmoid = nn.Sigmoid()
+
+        self.apply(kaiming_init_params)
 
     def warp(
         self,

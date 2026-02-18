@@ -84,8 +84,10 @@ class QualcommDataset(Dataset):
         json_file_path = scene.scene_input_imgs_path / self.camera_data_path_suffix / instance / frame
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
             camera_data = json.load(json_file)
-            jitter_offset_x = camera_data["jitter_offset"]["x"]
-            jitter_offset_y = -camera_data["jitter_offset"]["y"]  # Note the minus, because Unity is Y-up
+            # Negate jitter_offset_y because Unity is Y-up
+            # Then, negate both jitter offsets because it's the projection matrices that are jittered
+            jitter_offset_x = -1 * camera_data["jitter_offset"]["x"]
+            jitter_offset_y = -1 * -camera_data["jitter_offset"]["y"]
             return jitter_offset_x, jitter_offset_y
 
     def get_jitter_tensors(
@@ -169,8 +171,8 @@ class QualcommDataset(Dataset):
         height: int,
         width: int
     ) -> torch.Tensor:
-        motion_vectors[[0], ...] -= (prev_jitter_x - curr_jitter_x) / width
-        motion_vectors[[1], ...] -= (prev_jitter_y - curr_jitter_y) / height
+        motion_vectors[[0], ...] += (prev_jitter_x - curr_jitter_x) / width
+        motion_vectors[[1], ...] += (prev_jitter_y - curr_jitter_y) / height
         return motion_vectors
 
     def depth_informed_dilation(
@@ -249,6 +251,10 @@ class QualcommDataset(Dataset):
             idx = item 
             patch_start_x, patch_start_y, patch_end_x, patch_end_y = (0, 0, self.input_frame_width, self.input_frame_height)
 
+        # Get patch dimensions
+        patch_height = patch_end_y - patch_start_y
+        patch_width = patch_end_x - patch_start_x
+
         # Get the scene associated with this index
         scene_idx = bisect_right(self.frame_boundaries, idx)
         scene = self.scenes[scene_idx - 1]
@@ -275,8 +281,6 @@ class QualcommDataset(Dataset):
             patch_end_x,
             patch_end_y
         )
-        patch_height = patch_end_y - patch_start_y
-        patch_width = patch_end_x - patch_start_x
 
         curr_output_img = decode_image(curr_output_img_path.resolve())[0:3, ...]
         curr_output_img = self.get_patch(
