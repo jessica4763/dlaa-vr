@@ -19,7 +19,7 @@ model:
 
 validation:
   proxy-validation-interval: 1000
-  primary-validation-interval: 100000
+  primary-validation-interval: 10000
   padding: 0
 
 hydra:

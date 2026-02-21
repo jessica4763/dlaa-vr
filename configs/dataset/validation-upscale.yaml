@@ -7,7 +7,7 @@ input-frame-width: 960
 output-frame-height: 1080
 output-frame-width: 1920
 
-dilation-block-size: 4
+dilation-block-size: 8
 
 scene-names: [SeaPort, AbandonedSchool, SpaceShipDemo]
 is-vr: false
