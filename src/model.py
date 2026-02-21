@@ -3,14 +3,6 @@ from torch import nn
 import torch.nn.functional as F
 
 
-def kaiming_init_params(model):
-    if isinstance(model, (nn.Linear, nn.Conv2d)):
-        nn.init.kaiming_normal_(model.weight, mode='fan_out', nonlinearity='relu')
-
-        if model.bias is not None:
-            nn.init.constant_(model.bias, 0)
-
-
 class JitterConditionedConv(nn.Module):
     def __init__(
         self,
@@ -192,7 +184,14 @@ class QualcommNetwork(nn.Module):
             )
         self.blending_mask_sigmoid = nn.Sigmoid()
 
-        self.apply(kaiming_init_params)
+        self.apply(self.kaiming_init_params)
+
+    def kaiming_init_params(self, model):
+        if isinstance(model, (nn.Linear, nn.Conv2d)):
+            nn.init.kaiming_normal_(model.weight, mode='fan_out', nonlinearity='relu')
+
+            if model.bias is not None:
+                nn.init.constant_(model.bias, 0)
 
     def warp(
         self,
@@ -241,6 +240,7 @@ class QualcommNetwork(nn.Module):
         self,
         x: torch.Tensor,
         motion_vectors: torch.Tensor,
+        curr_frame_num: int,
         jitter: torch.Tensor = None,
         mode: str = "training"
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -252,10 +252,10 @@ class QualcommNetwork(nn.Module):
         outputs = []
         for clip in range(clip_size):
             clip_frames = x[:, clip].clone()
-            motion_vector_frames = motion_vectors[:, clip].clone()
+            motion_vector_frames = motion_vectors[:, clip]
             if self.num_curr_jitter != 0:
                 assert jitter is not None
-                jitter_frames = jitter[:, clip].clone()
+                jitter_frames = jitter[:, clip]
 
             # Use recurrent colour frame
             c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter
@@ -268,10 +268,11 @@ class QualcommNetwork(nn.Module):
                         motion_vector_frames
                     )
             else:
-                clip_frames[:, c0:c1] = self.warp(
-                    clip_frames[:, c0:c1],
-                    motion_vector_frames
-                )
+                if curr_frame_num > 0:
+                    clip_frames[:, c0:c1] = self.warp(
+                        clip_frames[:, c0:c1],
+                        motion_vector_frames
+                    )
 
             prev_colour = clip_frames[:, c0:c1]  # Save for the blend step
 
@@ -286,10 +287,11 @@ class QualcommNetwork(nn.Module):
                         motion_vector_frames
                     )
             else:
-                clip_frames[:, c0:c1] = self.warp(
-                    clip_frames[:, c0:c1],
-                    motion_vector_frames
-                )
+                if curr_frame_num > 0:
+                    clip_frames[:, c0:c1] = self.warp(
+                        clip_frames[:, c0:c1],
+                        motion_vector_frames
+                    )
 
             # ------------------------------------------------------------
             # ---------------- Input convolution and ReLU ----------------

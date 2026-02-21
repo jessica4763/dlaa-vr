@@ -273,7 +273,10 @@ class QualcommDataset(Dataset):
         curr_input_img_path = scene.scene_input_imgs_path / self.colour_path_suffix / instance / curr_frame
         curr_output_img_path = scene.scene_output_imgs_path / self.ground_truth_path_suffix / instance / curr_frame
 
-        curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, ...]
+        curr_input_img = decode_image(curr_input_img_path.resolve())
+        alpha = curr_input_img[3:4, ...].float() / 255.0
+        rgb = curr_input_img[0:3, ...].float()
+        curr_input_img = (rgb * alpha).to(torch.uint8)
         curr_input_img = self.get_patch(
             curr_input_img,
             patch_start_x,
@@ -282,7 +285,10 @@ class QualcommDataset(Dataset):
             patch_end_y
         )
 
-        curr_output_img = decode_image(curr_output_img_path.resolve())[0:3, ...]
+        curr_output_img = decode_image(curr_output_img_path.resolve())
+        alpha = curr_output_img[3:4, ...].float() / 255.0
+        rgb = curr_output_img[0:3, ...].float()
+        curr_output_img = (rgb * alpha).to(torch.uint8)
         curr_output_img = self.get_patch(
             curr_output_img,
             patch_start_x * self.scale_factor,

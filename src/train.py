@@ -41,7 +41,7 @@ def train_epoch(
     accumulation_steps = virtual_batch_size // actual_batch_size
 
     model.train()
-    for batch, (inputs, motion_vectors, jitter, targets, _) in enumerate(training_dataloader):
+    for batch, (inputs, motion_vectors, jitter, targets, curr_frame_num) in enumerate(training_dataloader):
         # input_N = num_batches * clip_size
         input_N, input_C, input_H, input_W = inputs.shape
         inputs = inputs.to(device, non_blocking=True)  # non_blocking=True requires pin_memory=True
@@ -61,7 +61,7 @@ def train_epoch(
         targets = targets.to(device, non_blocking=True)
 
         # Pass in motion vectors as well, for warping
-        pred_frame, _, _ = model(inputs, motion_vectors, jitter, "training")
+        pred_frame, _, _ = model(inputs, motion_vectors, curr_frame_num, jitter, "training")
         pred_frame = pred_frame.view(-1, output_C, output_H, output_W)
 
         # Compute loss on only the centre of the patch

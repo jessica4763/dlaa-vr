@@ -67,47 +67,47 @@ def checkpoint(
     use_jitter: bool,
     mode: str = "training",
 ) -> None:
-    # Strictly a training diagnostic, so it's OK if
-    # training data is used here
     model.eval()
     with torch.no_grad():
         if mode == "training":
-            inputs, motion_vectors, jitter, output, _ = data[(0, 0, 0, input_frame_width, input_frame_height)]
-            inputs_next, motion_vectors_next, jitter_next, output_next, _ = data[(1, 0, 0, input_frame_width, input_frame_height)]
+            inputs, motion_vectors, jitter, output, curr_frame_num = data[(0, 0, 0, input_frame_width, input_frame_height)]
+            inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[(1, 0, 0, input_frame_width, input_frame_height)]
         else:
-            inputs, motion_vectors, jitter, output, _ = data[0]
-            inputs_next, motion_vectors_next, jitter_next, output_next, _ = data[1]
+            inputs, motion_vectors, jitter, output, curr_frame_num = data[0]
+            inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[1]
 
-        # Verify input to the network
-        save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
+        if curr_frame_num == 0:
+            # Verify input to the network
+            save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
 
-        # Verify warping 
-        warped_prev = model.warp(
-            output.unsqueeze(0),
-            motion_vectors_next.unsqueeze(0)
-        ).squeeze(0)
-        save_image(linear_to_gamma(warped_prev), sanity_checks_output_path / "warped_prev.png")
+            # Verify warping 
+            warped_prev = model.warp(
+                output.unsqueeze(0),
+                motion_vectors_next.unsqueeze(0)
+            ).squeeze(0)
+            save_image(linear_to_gamma(warped_prev), sanity_checks_output_path / "warped_prev.png")
 
-        save_image(linear_to_gamma(torch.abs(output_next - warped_prev)), sanity_checks_output_path / "diff.png")
+            save_image(linear_to_gamma(torch.abs(output_next - warped_prev)), sanity_checks_output_path / "diff.png")
 
-        # Verify the goal of the network
-        save_image(linear_to_gamma(output), sanity_checks_output_path / "ground_truth.png")
+            # Verify the goal of the network
+            save_image(linear_to_gamma(output), sanity_checks_output_path / "ground_truth.png")
 
-        # Verify the output of the network when history is invalid
+        # Strictly a training diagnostic, so it's OK if training data is used here
+
+        # Output of the network when history is invalid
         inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
         motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
         jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
-        anti_aliased_img, prev_pred_features, out_blending_mask = model(inputs, motion_vectors, jitter, "evaluation")
+        anti_aliased_img, prev_pred_features, out_blending_mask = model(inputs, motion_vectors, curr_frame_num, jitter, "evaluation")
         anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
-        save_image(anti_aliased_img, checkpoints_path / f"{iterations}.png")
-        save_image(anti_aliased_img, sanity_checks_output_path / "colour_invalid.png")
+        save_image(anti_aliased_img, checkpoints_path / f"colour_invalid_{iterations}.png")
         
-        # Verify blending mask when history is invalid
+        # Blending mask when history is invalid
         out_blending_mask = F.pixel_shuffle(out_blending_mask, upscale_factor=scale_factor)
-        save_image(out_blending_mask, sanity_checks_output_path / "blending_mask_invalid.png")
+        save_image(out_blending_mask, checkpoints_path / f"blending_mask_invalid_{iterations}.png")
 
-        # Verify the output of the network when history is valid
+        # Output of the network when history is valid
         inputs_next = inputs_next.to(device).unsqueeze(0).unsqueeze(0)
         motion_vectors_next = motion_vectors_next.to(device).unsqueeze(0).unsqueeze(0)
         jitter_next = jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
@@ -120,14 +120,15 @@ def checkpoint(
         c1 = c0 + model.num_prev_feature
         inputs_next[:, :, c0:c1] = prev_pred_features.squeeze(0)
 
-        anti_aliased_img, _, out_blending_mask = model(inputs_next, motion_vectors_next, jitter_next, "evaluation")
+        anti_aliased_img, _, out_blending_mask = model(inputs_next, motion_vectors_next, curr_frame_num_next, jitter_next, "evaluation")
 
         anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
         anti_aliased_img = linear_to_gamma(anti_aliased_img)
-        save_image(anti_aliased_img, sanity_checks_output_path / "colour_valid.png")
+        save_image(anti_aliased_img, checkpoints_path / f"colour_valid_{iterations}.png")
 
+        # Blending mask when history is valid
         out_blending_mask = F.pixel_shuffle(out_blending_mask.squeeze(0), upscale_factor=scale_factor)
-        save_image(out_blending_mask, sanity_checks_output_path / "blending_mask_valid.png")
+        save_image(out_blending_mask, checkpoints_path / f"blending_mask_valid_{iterations}.png")
 
 
 def gamma_to_linear(image: torch.Tensor) -> torch.Tensor:
