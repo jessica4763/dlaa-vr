@@ -76,21 +76,22 @@ def checkpoint(
             inputs, motion_vectors, jitter, output, curr_frame_num = data[0]
             inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[1]
 
-        # Verify input to the network
-        save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
+        if curr_frame_num == 0:
+            # Verify input to the network
+            save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
 
-        # Verify warping 
-        warped_prev = model.warp(
-            output.unsqueeze(0),
-            motion_vectors_next.unsqueeze(0)
-        ).squeeze(0)
-        save_image(linear_to_gamma(warped_prev), sanity_checks_output_path / "warped_prev.png")
+            # Verify warping 
+            warped_prev = model.warp(
+                output.unsqueeze(0),
+                motion_vectors_next.unsqueeze(0)
+            ).squeeze(0)
+            save_image(linear_to_gamma(warped_prev), sanity_checks_output_path / "warped_prev.png")
 
-        diff = torch.abs(output_next - warped_prev)
-        save_image(linear_to_gamma(diff), sanity_checks_output_path / "diff.png")
+            diff = torch.abs(output_next - warped_prev)
+            save_image(linear_to_gamma(diff), sanity_checks_output_path / "diff.png")
 
-        # Verify the goal of the network
-        save_image(linear_to_gamma(output), sanity_checks_output_path / "ground_truth.png")
+            # Verify the goal of the network
+            save_image(linear_to_gamma(output), sanity_checks_output_path / "ground_truth.png")
 
         # Strictly a training diagnostic, so it's OK if training data is used here
 
