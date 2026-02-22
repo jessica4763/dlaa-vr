@@ -94,7 +94,8 @@ class Metrics:
         camera_baseline: float,
         focal_length: float
     ) -> tuple[np.ndarray, np.ndarray]:
-        C, H, W = left_frame.shape
+        left_frame = torch.permute(left_frame, dims=(2, 0, 1))
+        H, W, C = left_frame.shape
 
         warped_frame = np.zeros((H, W, C), dtype=left_frame.dtype)
         z_buffer = np.full((H, W), np.inf, dtype=np.float32)
@@ -138,9 +139,9 @@ class Metrics:
         pred_ndarray =  np.squeeze(pred.cpu().numpy())
         target_ndarray = np.squeeze(target.cpu().numpy())
 
-        # C, H, W = target_ndarray.shape
-        # pred_ndarray = pred_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
-        # target_ndarray = target_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
+        # Quantise then unquantise to fairly calculate metrics
+        pred_ndarray = np.round(pred_ndarray * 255.0, decimals=0) / 255.0
+        target_ndarray = np.round(target_ndarray * 255.0, decimals=0) / 255.0
 
         self.record_rmse(pred_ndarray, target_ndarray)
         self.record_psnr(pred_ndarray, target_ndarray)
