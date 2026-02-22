@@ -142,21 +142,21 @@ class Metrics:
         # pred_ndarray = pred_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
         # target_ndarray = target_ndarray[:, self.padding:H - self.padding, self.padding:W - self.padding]
 
-        self.record_rmse(pred_ndarray, target_ndarray)
+        # self.record_rmse(pred_ndarray, target_ndarray)
         self.record_psnr(pred_ndarray, target_ndarray)
-        self.record_ssim(pred_ndarray, target_ndarray)
-        self.record_lpips(pred, target)
-        self.record_cvvdp_jod(pred_ndarray, target_ndarray)
+        # self.record_ssim(pred_ndarray, target_ndarray)
+        # self.record_lpips(pred, target)
+        # self.record_cvvdp_jod(pred_ndarray, target_ndarray)
 
         if self.is_stationary_segment:
             self.record_pixel_wise_std(pred_ndarray)
 
     def report(self) -> None:
-        self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
+        # self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
         self.metrics["avg_psnr"] = self.psnr_sum.item() / self.dataset_size
-        self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size
-        self.metrics["avg_lpips"] = self.lpips_sum.item() / self.dataset_size
-        self.metrics["avg_cvvdp_jod"] = self.cvvdp_jod_sum / self.dataset_size
+        # self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size
+        # self.metrics["avg_lpips"] = self.lpips_sum.item() / self.dataset_size
+        # self.metrics["avg_cvvdp_jod"] = self.cvvdp_jod_sum / self.dataset_size
 
         if self.is_stationary_segment:
             pixel_mean = self.pixel_sum / self.dataset_size

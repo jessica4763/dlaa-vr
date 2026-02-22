@@ -56,7 +56,7 @@ class QualcommDataset(Dataset):
         for scene_name in scene_names:
             scene_input_imgs_path = Path(self.input_imgs_path.replace("*", scene_name))
             scene_output_imgs_path = Path(self.output_imgs_path.replace("*", scene_name))
-            self.scenes.append(Scene(scene_input_imgs_path, scene_output_imgs_path, colour_path_suffix))
+            self.scenes.append(Scene(scene_input_imgs_path, scene_output_imgs_path, self.colour_path_suffix))
 
         scene_num_instances = [scene.num_instances for scene in self.scenes]
         self.instance_boundaries = cumsum(scene_num_instances)
@@ -242,7 +242,7 @@ class QualcommDataset(Dataset):
         return patch.clone()
 
     def __len__(self) -> int:
-        return self.total_frames if self.mode == "training" or self.validation_mode == "primary" else 300
+        return self.total_frames if self.mode == "training" or self.validation_mode == "primary" else 3
 
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.mode == "training":
@@ -273,10 +273,7 @@ class QualcommDataset(Dataset):
         curr_input_img_path = scene.scene_input_imgs_path / self.colour_path_suffix / instance / curr_frame
         curr_output_img_path = scene.scene_output_imgs_path / self.ground_truth_path_suffix / instance / curr_frame
 
-        curr_input_img = decode_image(curr_input_img_path.resolve())
-        alpha = curr_input_img[3:4, ...].float() / 255.0
-        rgb = curr_input_img[0:3, ...].float()
-        curr_input_img = (rgb * alpha).to(torch.uint8)
+        curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, ...].float()
         curr_input_img = self.get_patch(
             curr_input_img,
             patch_start_x,
@@ -285,10 +282,7 @@ class QualcommDataset(Dataset):
             patch_end_y
         )
 
-        curr_output_img = decode_image(curr_output_img_path.resolve())
-        alpha = curr_output_img[3:4, ...].float() / 255.0
-        rgb = curr_output_img[0:3, ...].float()
-        curr_output_img = (rgb * alpha).to(torch.uint8)
+        curr_output_img = decode_image(curr_output_img_path.resolve())[0:3, ...].float()
         curr_output_img = self.get_patch(
             curr_output_img,
             patch_start_x * self.scale_factor,
@@ -301,6 +295,9 @@ class QualcommDataset(Dataset):
         # -------------------------- Previous frame -------------------------
         # -------------------------------------------------------------------
         prev_frame_num = max(0, curr_frame_num - 1)
+
+        # # prev_output_img will be overwritten later, if there was a previous frame output from the model
+        # prev_output_img = torch.zeros_like(curr_input_img)
 
         # prev_output_img will be overwritten later, if there was a previous frame output from the model
         prev_output_img = curr_input_img.clone().detach()
