@@ -76,7 +76,7 @@ def evaluate(
             write_frames(evaluation_output_path / "target", gamma_target_frame, batch)
 
 
-def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations: int) -> None:
+def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     device = (
         torch.accelerator.current_accelerator().type
         if torch.accelerator.is_available()
@@ -136,8 +136,7 @@ def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations
         dilation_block_size=cfg["dataset"]["dilation-block-size"],
         transform=gamma_to_linear,
         target_transform=gamma_to_linear,
-        mode="evaluation",
-        validation_mode=validation_mode
+        mode="evaluation"
     )
 
     evaluation_dataloader = DataLoader(
@@ -191,7 +190,6 @@ def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations
         dataset_size=len(evaluation_dataloader.dataset),  # The total number of frames in the dataset
         padding=cfg["validation"]["padding"],
         iterations=iterations,
-        validation_mode=validation_mode,
         writer=writer,
         vr_config=vr_config,
         is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
@@ -209,7 +207,7 @@ def run(cfg: DictConfig, validation_mode: str, writer: SummaryWriter, iterations
         use_jitter=cfg["setup"]["jitter"]
     )
 
-    metrics.report()
+    metrics.report(scene_name=cfg["dataset"]["scene-names"][0])
 
     write_video(
         imgs_path=Path(cfg["paths"]["evaluation-output-path"]),
@@ -236,11 +234,12 @@ def main() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
         cfg = hydra.compose(config_name="validation")
         writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
-        run(cfg=cfg, validation_mode="proxy", writer=writer, iterations=0)
+
+        run(cfg=cfg, writer=writer, iterations=0)
 
         print("\n --------------------- Stationary Segments Evaluation -------------------- \n")
-        stationary_segments_cfg = hydra.compose(config_name="validation", overrides=["dataset=stationary-segments-validation-upscale"])
-        run(cfg=stationary_segments_cfg, validation_mode="proxy", writer=writer, iterations=0)
+        stationary_segments_cfg = hydra.compose(config_name="validation", overrides=["dataset=validation-upscale-stationary-segment"])
+        run(cfg=stationary_segments_cfg, writer=writer, iterations=0)
 
 
 if __name__ == "__main__":

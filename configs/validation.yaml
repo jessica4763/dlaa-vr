@@ -1,5 +1,5 @@
 defaults:
-  - dataset: validation-upscale
+  - dataset: validation-upscale-seaport
 
 setup:
   seed: 42
@@ -18,8 +18,6 @@ model:
   num-blocks: 1
 
 validation:
-  proxy-validation-interval: 1000
-  primary-validation-interval: 10000
   padding: 0
 
 hydra:

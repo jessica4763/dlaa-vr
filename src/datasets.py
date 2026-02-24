@@ -33,8 +33,7 @@ class QualcommDataset(Dataset):
         dilation_block_size: int = 8,
         transform=None,
         target_transform=None,
-        mode: str = "training",
-        validation_mode: str = "primary",
+        mode: str = "training"
     ) -> None:
         self.input_imgs_path = input_imgs_path
         self.output_imgs_path = output_imgs_path
@@ -72,7 +71,6 @@ class QualcommDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.mode = mode
-        self.validation_mode = validation_mode
 
     def get_jitter_offsets(
         self,
@@ -242,7 +240,7 @@ class QualcommDataset(Dataset):
         return patch.clone()
 
     def __len__(self) -> int:
-        return self.total_frames if self.mode == "training" or self.validation_mode == "primary" else 300
+        return self.total_frames
 
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.mode == "training":

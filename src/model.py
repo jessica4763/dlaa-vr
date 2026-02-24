@@ -189,7 +189,6 @@ class QualcommNetwork(nn.Module):
     def kaiming_init_params(self, model):
         if isinstance(model, (nn.Linear, nn.Conv2d)):
             nn.init.kaiming_normal_(model.weight, mode='fan_out', nonlinearity='relu')
-
             if model.bias is not None:
                 nn.init.constant_(model.bias, 0)
 

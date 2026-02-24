@@ -179,7 +179,7 @@ def train() -> None:
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
-        num_workers=16,
+        num_workers=8,
         pin_memory=True,
         persistent_workers=True
     )
@@ -335,10 +335,12 @@ def train() -> None:
         # ------------------------------ Validation -------------------------------
         # -------------------------------------------------------------------------
 
-        # Proxy validation happens every 1000 iterations, whereas primary validation happens every 1000000 iterations
+        # Proxy validation happens every 1000 iterations, whereas primary validation happens every 100000 iterations
         validate(
             iterations=iterations + iterations_per_epoch,
             iterations_per_epoch=iterations_per_epoch,
+            primary_validation_interval=cfg["validation"]["primary-validation-interval"],
+            proxy_validation_interval=cfg["validation"]["proxy-validation-interval"],
             writer=writer,
             saved_models_path=cfg["paths"]["saved-models-path"]
         )
@@ -357,31 +359,57 @@ def train() -> None:
 def validate(
     iterations: int,
     iterations_per_epoch: int,
+    primary_validation_interval: int,
+    proxy_validation_interval: int,
     writer: SummaryWriter,
     saved_models_path: str
 ) -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        # Validation
-        validation_cfg = hydra.compose(
-            config_name="validation", 
-            overrides=[
-                f"paths.saved-models-path={saved_models_path}"
-            ]
-        )
-        if iterations % validation_cfg["validation"]["primary-validation-interval"] < iterations_per_epoch:
-            run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
-
-            # Stationary segement validation
+        if iterations % primary_validation_interval < iterations_per_epoch:
             validation_cfg = hydra.compose(
                 config_name="validation", 
                 overrides=[
-                    "dataset=stationary-segments-validation-upscale",
+                    "dataset=validation-upscale-seaport",
                     f"paths.saved-models-path={saved_models_path}"
                 ]
             )
-            run(cfg=validation_cfg, validation_mode="primary", writer=writer, iterations=iterations)
-        elif iterations % validation_cfg["validation"]["proxy-validation-interval"] < iterations_per_epoch:
-            run(cfg=validation_cfg, validation_mode="proxy", writer=writer, iterations=iterations)
+            run(cfg=validation_cfg, writer=writer, iterations=iterations)
+
+            validation_cfg = hydra.compose(
+                config_name="validation", 
+                overrides=[
+                    "dataset=validation-upscale-abandonedschool",
+                    f"paths.saved-models-path={saved_models_path}"
+                ]
+            )
+            run(cfg=validation_cfg, writer=writer, iterations=iterations)
+
+            validation_cfg = hydra.compose(
+                config_name="validation", 
+                overrides=[
+                    "dataset=validation-upscale-spaceshipdemo",
+                    f"paths.saved-models-path={saved_models_path}"
+                ]
+            )
+            run(cfg=validation_cfg, writer=writer, iterations=iterations)
+
+            validation_cfg = hydra.compose(
+                config_name="validation", 
+                overrides=[
+                    "dataset=validation-upscale-stationary-segment",
+                    f"paths.saved-models-path={saved_models_path}"
+                ]
+            )
+            run(cfg=validation_cfg, writer=writer, iterations=iterations)
+        elif iterations % proxy_validation_interval < iterations_per_epoch:
+            validation_cfg = hydra.compose(
+                config_name="validation", 
+                overrides=[
+                    "dataset=validation-upscale-seaport",
+                    f"paths.saved-models-path={saved_models_path}"
+                ]
+            )
+            run(cfg=validation_cfg, writer=writer, iterations=iterations)
 
 
 if __name__ == "__main__":

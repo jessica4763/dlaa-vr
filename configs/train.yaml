@@ -19,6 +19,10 @@ model:
   num-blocks: 1  # 1, 3, 5
   parameters: null  # ../saved/logs/runs/[category]/[exp]/[model]
 
+validation:
+  proxy-validation-interval: 1000
+  primary-validation-interval: 10000
+
 hydra:
   run:
     dir: hydra_outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

@@ -18,7 +18,6 @@ class Metrics:
         dataset_size: int,
         padding: int,
         iterations: int,
-        validation_mode: str = "primary",
         writer: SummaryWriter = None, 
         vr_config: VRConfig = None,
         is_stationary_segment: bool = False,
@@ -27,7 +26,6 @@ class Metrics:
         self.dataset_size = dataset_size
         self.padding = padding
         self.iterations = iterations
-        self.validation_mode = validation_mode
         self.writer = writer
         self.vr_config = vr_config
         self.is_stationary_segment = is_stationary_segment
@@ -152,7 +150,7 @@ class Metrics:
         if self.is_stationary_segment:
             self.record_pixel_wise_std(pred_ndarray)
 
-    def report(self) -> None:
+    def report(self, scene_name) -> None:
         self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
         self.metrics["avg_psnr"] = self.psnr_sum.item() / self.dataset_size
         self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size
@@ -167,11 +165,11 @@ class Metrics:
         reported_metrics_strings = []
         for metric_name in self.metrics:
             self.writer.add_scalar(
-                f"{self.validation_mode}/{metric_name}",
+                f"{scene_name}/{metric_name}",
                 self.metrics[metric_name],
                 self.iterations
             )
-            reported_metrics_strings.append(f"{self.validation_mode}/{metric_name}: {self.metrics[metric_name]}")
+            reported_metrics_strings.append(f"{scene_name}/{metric_name}: {self.metrics[metric_name]}")
 
         reported_metrics = "\n".join(reported_metrics_strings)
         print(reported_metrics)
