@@ -11,10 +11,10 @@ from torch.utils.tensorboard import SummaryWriter
 import hydra
 from omegaconf import OmegaConf
 
-from datasets import QualcommDataset
+from dataset import QualcommDataset
 from evaluate import run
 from loss import CVVDPLoss, L1LossWithCVVDP
-from model import QualcommNetwork
+from models.qualcomm_network import QualcommNetwork
 from samplers import QualcommDatasetSampler
 from utils import checkpoint, gamma_to_linear
 

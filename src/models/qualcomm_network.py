@@ -197,8 +197,8 @@ class QualcommNetwork(nn.Module):
         input_tensor: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
-        input_tensor_B, input_tensor_C, input_tensor_H, input_tensor_W = input_tensor.shape
-        motion_vectors_B, motion_vectors_C, motion_vectors_H, motion_vectors_W = motion_vectors.shape
+        _, _, input_tensor_H, _ = input_tensor.shape
+        _, _, motion_vectors_H, _ = motion_vectors.shape
 
         if input_tensor_H != motion_vectors_H:
             # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
@@ -348,11 +348,3 @@ class QualcommNetwork(nn.Module):
         # prev_pred_features is only used by evaluation
         # out_blending_mask is only used during evaluation for inspection
         return torch.stack(outputs, dim=1), prev_pred_features, out_blending_mask.view(B, -1, H, W)
-
-
-class VRSpatialNetwork(nn.Module):
-    pass
-
-
-class VRSpatialTemporalNetwork(nn.Module):
-    pass
