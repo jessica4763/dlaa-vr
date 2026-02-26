@@ -320,6 +320,7 @@ class QualcommNetwork(nn.Module):
                 out_blending_mask = self.blending_mask_head(h)
 
             out_colour = self.colour_head_relu(out_colour)
+            # out_colour = torch.clamp(out_colour, min=0, max=1)
             out_blending_mask = self.blending_mask_sigmoid(out_blending_mask)
 
             # ------------------------------------------------------------

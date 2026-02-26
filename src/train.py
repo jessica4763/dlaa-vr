@@ -179,7 +179,7 @@ def train() -> None:
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
-        num_workers=8,
+        num_workers=15,
         pin_memory=True,
         persistent_workers=True
     )

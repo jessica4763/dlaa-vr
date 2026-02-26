@@ -326,6 +326,13 @@ class QualcommDataset(Dataset):
         if self.target_transform:
             curr_output_img = self.target_transform(curr_output_img)
 
+        # # Interpolate in linear space
+        # prev_output_img = F.interpolate(
+        #     prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
+        #     scale_factor=self.scale_factor, 
+        #     mode='nearest'
+        # ).squeeze(0)  # Remove the batch dimension
+
         # Interpolate in linear space
         prev_output_img = F.interpolate(
             prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
