@@ -28,9 +28,9 @@ class Scene:
     num_frames_per_instance: int = field(init=False)
     num_frames: int = field(init=False)
 
-    def __post_init__(self):
-        instances = os.listdir(self.scene_input_imgs_path / self.path_suffix)
-        frames = os.listdir(self.scene_input_imgs_path / self.path_suffix / instances[0])
+    def __post_init__(self, path_suffix):
+        instances = os.listdir(self.scene_input_imgs_path / path_suffix)
+        frames = os.listdir(self.scene_input_imgs_path / path_suffix / instances[0])
 
         self.num_instances = len(instances)
         self.num_frames_per_instance = len(frames)
