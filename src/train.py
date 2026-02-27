@@ -16,7 +16,7 @@ from evaluate import run
 from loss import CVVDPLoss, L1LossWithCVVDP
 from model import QualcommNetwork
 from samplers import QualcommDatasetSampler
-from utils import checkpoint, gamma_to_linear
+from utils import checkpoint, gamma_to_linear, linear_to_gamma
 
 
 def train_epoch(
@@ -61,13 +61,15 @@ def train_epoch(
         targets = targets.to(device, non_blocking=True)
 
         # Pass in motion vectors as well, for warping
-        pred_frame, _, _ = model(inputs, motion_vectors, curr_frame_num, jitter, "training")
-        pred_frame = pred_frame.view(-1, output_C, output_H, output_W)
+        pred_frames, _, _ = model(inputs, motion_vectors, curr_frame_num, jitter, "training")
+        pred_frames = pred_frames.view(-1, output_C, output_H, output_W)
 
         # Compute loss on only the centre of the patch
-        pred_frame = pred_frame[:, :, padding:output_H - padding, padding:output_W - padding]
+        pred_frames = pred_frames[:, :, padding:output_H - padding, padding:output_W - padding]
         targets = targets[:, :, padding:output_H - padding, padding:output_W - padding]
-        loss = loss_function(pred_frame, targets) / accumulation_steps
+        gamma_pred_frames = linear_to_gamma(pred_frames)
+        gamma_targets = linear_to_gamma(targets)
+        loss = loss_function(gamma_pred_frames, gamma_targets) / accumulation_steps
         loss.backward()
 
         # For reporting

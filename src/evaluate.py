@@ -61,19 +61,20 @@ def evaluate(
             output_N, output_C, output_H, output_W = target.shape
             pred_frame, features, _ = model(inputs, motion_vectors, curr_frame_num, jitter, "evaluation")
             pred_frame = pred_frame.view(-1, output_C, output_H, output_W)
-            loss = loss_function(pred_frame, target)
 
             prev_pred_frame = F.pixel_unshuffle(pred_frame, downscale_factor=scale_factor).unsqueeze(0)
             prev_features = features.unsqueeze(0)
 
+            gamma_pred_frame = linear_to_gamma(pred_frame)
+            gamma_target = linear_to_gamma(target)
+
+            loss = loss_function(gamma_pred_frame, gamma_target)
             loss, current_img = loss.item(), (batch + 1) * len(inputs)
             print(f"Loss: {loss:>7f}  [{current_img:>5d}/{len(evaluation_dataloader.dataset):>5d}]")
 
-            gamma_pred_frame = linear_to_gamma(pred_frame)
-            gamma_target_frame = linear_to_gamma(target)
-            metrics.record(gamma_pred_frame, gamma_target_frame)
+            metrics.record(gamma_pred_frame, gamma_target)
             write_frames(evaluation_output_path / "pred", gamma_pred_frame, batch)
-            write_frames(evaluation_output_path / "target", gamma_target_frame, batch)
+            write_frames(evaluation_output_path / "target", gamma_target, batch)
 
 
 def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
