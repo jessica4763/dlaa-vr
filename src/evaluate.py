@@ -9,8 +9,8 @@ from torch.utils.tensorboard import SummaryWriter
 import hydra
 from omegaconf import DictConfig
 
-from datasets import QualcommDataset
-from model import QualcommNetwork
+from dataset import QualcommDataset
+from models.qualcomm_network import QualcommNetwork
 from metrics import Metrics
 from utils import (
     checkpoint,
@@ -20,7 +20,7 @@ from utils import (
     write_video,
     VRConfig
 )
-from sanity_checks import print_parameters
+from utils import print_parameters
 
 
 def evaluate(

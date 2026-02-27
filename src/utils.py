@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 import imageio.v3
 import math
 from natsort import natsorted
@@ -10,22 +10,27 @@ from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 from torchvision.utils import save_image
+from typing import Any
 
-from sanity_checks import save_input
+
+# -------------------------------------------------------------------------
+# ------------------------------ Dataclasses ------------------------------
+# -------------------------------------------------------------------------
 
 
+@dataclass
 class Scene:
-    def __init__(
-        self,
-        scene_input_imgs_path: Path,
-        scene_output_imgs_path: Path,
-        colour_path_suffix: str,
-    ) -> None:
-        self.scene_input_imgs_path = scene_input_imgs_path
-        self.scene_output_imgs_path = scene_output_imgs_path
+    scene_input_imgs_path: Path
+    scene_output_imgs_path: Path
+    path_suffix: InitVar[str]
 
-        instances = os.listdir(scene_input_imgs_path / colour_path_suffix)
-        frames = os.listdir(scene_input_imgs_path / colour_path_suffix / instances[0])
+    num_instances: int = field(init=False)
+    num_frames_per_instance: int = field(init=False)
+    num_frames: int = field(init=False)
+
+    def __post_init__(self):
+        instances = os.listdir(self.scene_input_imgs_path / self.path_suffix)
+        frames = os.listdir(self.scene_input_imgs_path / self.path_suffix / instances[0])
 
         self.num_instances = len(instances)
         self.num_frames_per_instance = len(frames)
@@ -35,24 +40,263 @@ class Scene:
 @dataclass
 class VRConfig:
     camera_baseline: float = 0.065
-    diagonal_fov: float = 110.0
+    horizontal_fov: float = 100.0
+    vertical_fov: float = 104.0
     horizontal_resolution: int = 1440
     vertical_resolution: int = 1600
+
     focal_length: float = field(init=False)
+
+    def __post_init__(self):
+        # Whether we use horizontal or vertical does not matter
+        self.focal_length = VRConfig.get_focal_length(self.horizontal_fov, self.horizontal_resolution)
 
     @staticmethod
     def get_focal_length(
-        diagonal_fov: float, 
-        horizontal_resolution: int, 
-        vertical_resolution: int
+        fov: float, 
+        resolution: int, 
     ) -> float:
-        diagonal_fov_rad = math.radians(diagonal_fov)
-        diagonal = math.sqrt(horizontal_resolution ** 2 + vertical_resolution ** 2)
-        focal_length = diagonal / (2 * math.tan(diagonal_fov_rad / 2))
+        fov_rad = math.radians(fov)
+        focal_length = resolution / (2 * math.tan(fov_rad / 2))
         return focal_length
 
-    def __post_init__(self):
-        self.focal_length = VRConfig.get_focal_length(self.diagonal_fov, self.horizontal_resolution, self.vertical_resolution)
+    @staticmethod
+    def left_to_right_warp(
+        left_frame: torch.Tensor,
+        left_depth: torch.Tensor,
+        camera_baseline: float,
+        focal_length: float
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        left_frame = torch.permute(left_frame, dims=(2, 0, 1))
+        H, W, _ = left_frame.shape
+
+        ys, xs = torch.meshgrid(
+            torch.arange(H),
+            torch.arange(W),
+            indexing='ij'
+        )
+        base_grid = torch.stack((xs, ys), dim=-1)
+
+        # Disparity represents how much we need to shift the pixel in the 
+        # left frame to obtain the corresponding pixel in the right frame.
+        # In the case of occlusions, two pixels in the left frame map to a 
+        # single corresponding pixel in the right frame. 
+        # focal_length here is measured in pixels, and therefore disparity 
+        # is measured in pixels. 
+        disparity = (camera_baseline * focal_length) / left_depth
+
+        # warped_grid contains the new x coordinate to which each pixel is shifted.
+        # There may be duplicates in warped_grid, when two pixels in the left frame
+        # map to a single corresponding pixel in the right frame.
+        left_to_right_warped_grid = torch.round(xs - disparity)
+
+        # We need to deal with the duplicates in warped_grid and also compute a 
+        # grid that can be used in F.grid_sample. 
+        # right_to_left_warped_grid contains the locations of the pixels in the 
+        # left frame from which a pixel the right frame should be obtained, and 
+        # the pixel in the left frame needs to be the one at the lower depth. 
+        # This is necessarily the right-most pixel in the left frame.
+        closest = torch.zeros_like(xs)
+        flattened_closest = closest.view(-1)
+
+        flattened_xs = xs.view(-1)
+        flattened_ys = ys.view(-1)
+        flattened_indices = flattened_ys * W + flattened_xs
+
+        flattened_closest.scatter_reduce_(
+            dim=0,
+            index=left_to_right_warped_grid,
+            src=flattened_indices,
+            reduce="amax",
+            include_self=True
+        )
+        closest = flattened_closest.view(H, W)
+        closest = torch.stack((closest, ys), dim=-1)
+
+        valid_mask = torch.zeros_like(base_grid)
+        xs = closest[..., 0]
+        ys = closest[..., 1]
+        valid_mask[ys, xs] = 1
+
+        right_to_left_warped_grid = torch.copy(base_grid)
+        right_to_left_warped_grid[closest] = base_grid
+
+        # Warping the left frame on to the right frame
+        warped_left_frame = F.grid_sample(
+            left_frame, 
+            right_to_left_warped_grid, 
+            mode='bilinear',
+            padding_mode='zeros',
+            align_corners=False
+        )
+
+        return warped_left_frame, valid_mask
+
+
+# -------------------------------------------------------------------------
+# ---------------------------- Helper functions ---------------------------
+# -------------------------------------------------------------------------
+
+
+def cumsum(xs):
+    cumsum_xs = [0]
+    for x in xs:
+        cumsum_xs.append(cumsum_xs[-1] + x)
+
+    return cumsum_xs
+
+
+# -------------------------------------------------------------------------
+# ---------------------------- Image transforms ---------------------------
+# -------------------------------------------------------------------------
+
+def gamma_to_linear(image: torch.Tensor) -> torch.Tensor:
+    image = image.to(torch.float32) / 255.0
+    return torch.where(
+        image <= 0.04045,
+        image / 12.92,
+        ((image + 0.055) / 1.055) ** 2.4
+    )
+
+
+def linear_to_gamma(image: torch.Tensor) -> torch.Tensor:
+    image = torch.clamp(image, 0.0, 1.0)
+
+    # Adding this doesn't change the result of the computation at all, 
+    # but sidesteps the fact that PyTorch computes the gradients of 
+    # both branches of torch.where, which could result in NaN 
+    # if the gradient of one of the branches is NaN even if that 
+    # branch wasn't going to be taken anyway
+    max_image = torch.maximum(image, torch.tensor(0.0031308, device=image.device))
+
+    return torch.where(
+        image <= 0.0031308,
+        12.92 * image,
+        1.055 * (max_image ** (1.0 / 2.4)) - 0.055
+    )
+
+
+def rgb_to_y(frame: torch.Tensor) -> torch.Tensor:
+        r, g, b = frame[:, 0:1, ...], frame[:, 1:2, ...], frame[:, 2:3, ...]
+        y = 16.0 / 255.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0
+        return y.repeat(1, 3, 1, 1)
+
+
+# -------------------------------------------------------------------------
+# --------------------------------- Output --------------------------------
+# -------------------------------------------------------------------------
+
+
+def write_frames(
+    evaluation_output_path: Path,
+    frames: torch.Tensor,
+    batch: int
+) -> None:
+    for idx, frame in enumerate(frames):
+        save_image(frame, evaluation_output_path / f"{batch + idx}.png")
+
+
+def write_video(
+    imgs_path: Path,
+    filename: str,
+    fps: int = 24
+) -> None:
+    writer = imageio.get_writer(
+        imgs_path / filename,
+        fps=fps,
+        codec="libx264",
+        quality=10,
+        pixelformat='yuv420p',
+        macro_block_size=8
+    )
+
+    imgs_path = imgs_path / "pred"
+    for img_name in natsorted(os.listdir(imgs_path)):
+        img_path = imgs_path / img_name
+        img = imageio.v3.imread(img_path)
+        writer.append_data(img)
+
+    writer.close()
+
+
+# -------------------------------------------------------------------------
+# ----------------------------- Sanity checks -----------------------------
+# -------------------------------------------------------------------------
+
+
+def vr_checkpoint(
+    vr_checkpoints_path: Path,
+    vr_sanity_checks_output_path: Path,
+    device: str,
+    model: nn.Module,
+    data: Dataset,
+    iterations: int,
+    input_frame_height: int,
+    input_frame_width: int,
+    scale_factor: int,
+    use_jitter: bool,
+    mode: str = "training"
+):
+    pass
+
+
+def save_input(
+    sanity_checks_output_path: Path,
+    model: nn.Module,
+    inputs: torch.Tensor,
+    motion_vectors: torch.Tensor,
+    scale_factor: int
+) -> None:
+    from utils import linear_to_gamma
+    
+    c0 = 0
+    c1 = c0 + model.num_curr_colour
+    curr_colour = inputs[c0:c1]
+    save_image(linear_to_gamma(curr_colour), sanity_checks_output_path / "curr_colour.png")
+
+    c0 = c1
+    c1 = c0 + model.num_curr_depth
+    curr_depth = inputs[c0:c1]
+    save_image(linear_to_gamma(curr_depth), sanity_checks_output_path / "curr_depth.png")
+
+    if model.num_curr_jitter != 0:
+        c0 = c1
+        c1 = c0 + model.num_curr_jitter
+        curr_jitter = inputs[c0:c1]
+        zeros = torch.zeros(
+            1,
+            curr_jitter.shape[1],
+            curr_jitter.shape[2],
+            device=curr_jitter.device,
+            dtype=curr_jitter.dtype
+        )
+        curr_jitter = torch.cat([curr_jitter, zeros], dim=0)
+        save_image(curr_jitter, sanity_checks_output_path / "curr_jitter.png")
+
+    c0 = c1
+    c1 = c0 + model.num_prev_colour
+    prev_colour = inputs[c0:c1]
+    save_image(linear_to_gamma(F.pixel_shuffle(prev_colour, upscale_factor=scale_factor)), sanity_checks_output_path / "prev_colour.png")
+
+    c0 = c1
+    c1 = c0 + model.num_prev_feature
+    prev_feature = inputs[c0:c1]
+    save_image(F.pixel_shuffle(prev_feature, upscale_factor=scale_factor), sanity_checks_output_path / "prev_feature.png")
+    
+    motion_vectors = motion_vectors.squeeze(0)
+    motion_vectors = torch.concat([
+        torch.zeros((1, motion_vectors.shape[1], motion_vectors.shape[2])),
+        motion_vectors
+    ])
+    save_image(linear_to_gamma(motion_vectors), sanity_checks_output_path / "motion_vectors.png")
+
+
+def print_parameters(evaluation_output_path: Path, parameters: dict[str, Any]) -> None:
+    with open(evaluation_output_path / "model_parameters.txt", "a") as a_writer:
+        for layer in parameters:
+            a_writer.write(f"\n----------------------{layer}----------------------\n")
+            a_writer.write(str(parameters[layer]))
+            a_writer.write("\n")
 
 
 def checkpoint(
@@ -66,7 +310,7 @@ def checkpoint(
     input_frame_width: int,
     scale_factor: int,
     use_jitter: bool,
-    mode: str = "training",
+    mode: str = "training"
 ) -> None:
     model.eval()
     with torch.no_grad():
@@ -74,14 +318,13 @@ def checkpoint(
         # n = random.choice(frames)
         # print(f"{n=}")
 
-        n = 0
-
+        index = 0
         if mode == "training":
-            inputs, motion_vectors, jitter, output, curr_frame_num = data[(n, 0, 0, input_frame_width, input_frame_height)]
-            inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[(n + 1, 0, 0, input_frame_width, input_frame_height)]
+            (inputs, motion_vectors, jitter, output, curr_frame_num) = data[(index, 0, 0, input_frame_width, input_frame_height)]
+            inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[(index + 1, 0, 0, input_frame_width, input_frame_height)]
         else:
-            inputs, motion_vectors, jitter, output, curr_frame_num = data[n]
-            inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[n + 1]
+            inputs, motion_vectors, jitter, output, curr_frame_num = data[index]
+            inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[index + 1]
 
         # Verify input to the network
         save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
@@ -136,75 +379,3 @@ def checkpoint(
         # Blending mask when history is valid
         out_blending_mask = F.pixel_shuffle(out_blending_mask.squeeze(0), upscale_factor=scale_factor)
         save_image(out_blending_mask, checkpoints_path / f"blending_mask_valid_{iterations}.png")
-
-
-def gamma_to_linear(image: torch.Tensor) -> torch.Tensor:
-    image = image.to(torch.float32) / 255.0
-    return torch.where(
-        image <= 0.04045,
-        image / 12.92,
-        ((image + 0.055) / 1.055) ** 2.4
-    )
-
-
-def linear_to_gamma(image: torch.Tensor) -> torch.Tensor:
-    image = torch.clamp(image, 0.0, 1.0)
-
-    # Adding this doesn't change the result of the computation at all, 
-    # but sidesteps the fact that PyTorch computes the gradients of 
-    # both branches of torch.where, which could result in NaN 
-    # if the gradient of one of the branches is NaN even if that 
-    # branch wasn't going to be taken anyway
-    max_image = torch.maximum(image, torch.tensor(0.0031308, device=image.device))
-
-    return torch.where(
-        image <= 0.0031308,
-        12.92 * image,
-        1.055 * (max_image ** (1.0 / 2.4)) - 0.055
-    )
-
-
-def rgb_to_y(frame: torch.Tensor) -> torch.Tensor:
-        r, g, b = frame[:, 0:1, ...], frame[:, 1:2, ...], frame[:, 2:3, ...]
-        y = 16.0 / 255.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0
-        return y.repeat(1, 3, 1, 1)
-
-
-def cumsum(xs):
-    cumsum_xs = [0]
-    for x in xs:
-        cumsum_xs.append(cumsum_xs[-1] + x)
-
-    return cumsum_xs
-
-
-def write_frames(
-    evaluation_output_path: Path,
-    frames: torch.Tensor,
-    batch: int
-) -> None:
-    for idx, frame in enumerate(frames):
-        save_image(frame, evaluation_output_path / f"{batch + idx}.png")
-
-
-def write_video(
-    imgs_path: Path,
-    filename: str,
-    fps: int = 24
-) -> None:
-    writer = imageio.get_writer(
-        imgs_path / filename,
-        fps=fps,
-        codec="libx264",
-        quality=10,
-        pixelformat='yuv420p',
-        macro_block_size=8
-    )
-
-    imgs_path = imgs_path / "pred"
-    for img_name in natsorted(os.listdir(imgs_path)):
-        img_path = imgs_path / img_name
-        img = imageio.v3.imread(img_path)
-        writer.append_data(img)
-
-    writer.close()

@@ -7,6 +7,7 @@ from skimage.metrics import (
     structural_similarity,
 )
 import torch
+import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from utils import VRConfig, rgb_to_y
@@ -86,43 +87,6 @@ class Metrics:
     def record_pixel_wise_std(self, pred: np.ndarray) -> None:
         self.pixel_sum += pred
         self.pixel_squared_sum += np.square(pred)
-
-    def left_to_right_warp(
-        left_frame: np.ndarray,
-        left_depth: np.ndarray,
-        camera_baseline: float,
-        focal_length: float
-    ) -> tuple[np.ndarray, np.ndarray]:
-        left_frame = torch.permute(left_frame, dims=(2, 0, 1))
-        H, W, C = left_frame.shape
-
-        warped_frame = np.zeros((H, W, C), dtype=left_frame.dtype)
-        z_buffer = np.full((H, W), np.inf, dtype=np.float32)
-        valid_mask = np.zeros((H, W), dtype=bool)
-
-        _, x_L = np.meshgrid(np.arange(H), np.arange(W), indexing="ij")
-        disparity = (camera_baseline * focal_length) / left_depth
-        x_R = np.round(x_L - disparity).astype(np.int32)
-
-        for yl in range(H):
-            for xl in range(W):
-                xr = x_R[yl, xl]
-
-                # The corresponding pixel is out-of-frame
-                if xr < 0 or xr >= W:
-                    continue
-                
-                # If two pixels in the left frame warp to the same pixel in the
-                # right frame, indicating an occlusion, mark the pixel at the 
-                # greater depth invalid
-                z = left_depth[yl, xl]
-
-                if z < z_buffer[yl, xr]:
-                    z_buffer[yl, xr] = z
-                    valid_mask[yl, xr] = True
-                    warped_frame[yl, xr, :] = left_frame[yl, xl, :]
-
-        return warped_frame, valid_mask
     
     def record_photometric_residual(self, left_pred: np.ndarray, left_depth: np.ndarray, right_pred: np.ndarray) -> float:
         warped_frame, valid_mask = self.left_to_right_warp(
