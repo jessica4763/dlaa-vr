@@ -4,27 +4,10 @@ import numpy as np
 from pathlib import Path
 import skimage.io as io
 import torch
+import torch.nn.functional as F
 from torchvision.io import decode_image
 
 from metrics import Metrics
-
-
-def gamma_to_linear(image: np.ndarray) -> np.ndarray:
-    image = image.astype(np.float32) / 255.0
-    return np.where(
-        image <= 0.04045,
-        image / 12.92,
-        ((image + 0.055) / 1.055) ** 2.4
-    )
-
-
-def linear_to_gamma(image: np.ndarray) -> np.ndarray:
-    image = np.clip(image, 0.0, 1.0)
-    return np.where(
-        image <= 0.0031308,
-        12.92 * image,
-        1.055 * (image ** (1.0 / 2.4)) - 0.055
-    )
 
 
 def downsample(
@@ -32,6 +15,23 @@ def downsample(
     output_path: Path,
     output_dimensions: tuple[int, int],
 ) -> None:
+    def gamma_to_linear(image: np.ndarray) -> np.ndarray:
+        image = image.astype(np.float32) / 255.0
+        return np.where(
+            image <= 0.04045,
+            image / 12.92,
+            ((image + 0.055) / 1.055) ** 2.4
+        )
+
+
+    def linear_to_gamma(image: np.ndarray) -> np.ndarray:
+        image = np.clip(image, 0.0, 1.0)
+        return np.where(
+            image <= 0.0031308,
+            12.92 * image,
+            1.055 * (image ** (1.0 / 2.4)) - 0.055
+        )
+
     for instance in os.listdir(input_path):
         input_frames_path = input_path / instance
         output_frames_path = output_path / instance
@@ -58,23 +58,45 @@ def downsample(
 
 
 def evaluate(pred_path: Path, target_path: Path) -> None:
-    pairs = list(zip(os.listdir(pred_path), os.listdir(target_path)))
+    def rgb_to_y(frame: torch.Tensor) -> torch.Tensor:
+        r, g, b = frame[:, 0:1, ...], frame[:, 1:2, ...], frame[:, 2:3, ...]
+        y = 16.0 / 255.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0
+        return y.repeat(1, 3, 1, 1)
+
+    pairs = list(zip(sorted(os.listdir(pred_path)), sorted(os.listdir(target_path))))
 
     metrics = Metrics(
-        len(pairs),  # The total number of frames in the dataset
+        dataset_size=len(pairs),
+        padding=0,
+        iterations=0,
         display_name="standard_fhd"
     )
 
     cuda0 = torch.device('cuda:0')
 
-    for pred_name, target_name in pairs:
+    for frame_num, (pred_name, target_name) in enumerate(pairs):
         pred = decode_image((pred_path / pred_name).resolve())[0:3, ...]
-        pred = pred.to(cuda0) / 255.0
-        target = decode_image((target_path / target_name).resolve())[0:3, ...]
-        target = target.to(cuda0) / 255.0
-        metrics.record(pred, target)
+        pred = pred.to(cuda0).to(torch.float32) / 255.0
+        pred = pred.unsqueeze(0)
+        pred = F.interpolate(
+            pred,
+            scale_factor=2, 
+            mode='bicubic',
+            align_corners=False
+        )
+        pred = torch.clamp(pred, 0.0, 1.0)
 
-    metrics.report()
+        target = decode_image((target_path / target_name).resolve())[0:3, ...]
+        target = target.to(cuda0).to(torch.float32) / 255.0
+        target = target.unsqueeze(0)
+
+        pred = rgb_to_y(pred)
+        target = rgb_to_y(target)
+
+        metrics.record(pred, target)
+        print(f"{frame_num=}")
+
+    metrics.report("SeaPort")
 
 
 def rename_files(folder_path, extension=".png"):
@@ -99,12 +121,12 @@ def rename_files(folder_path, extension=".png"):
 
 
 if __name__ == "__main__":
-    rename_files( "../data/test_data/QRISP/TestSet/AbandonedSchoolStationary/540p/MotionVectorsMipBiasMinus1Jittered/0000", extension=".exr")
+    # rename_files( "../data/test_data/QRISP/TestSet/AbandonedSchoolStationary/540p/MotionVectorsMipBiasMinus1Jittered/0000", extension=".exr")
 
-    # evaluate(
-    #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/MipBiasMinus1/0000"),
-    #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/Enhanced/0000")
-    # )
+    evaluate(
+        Path("../data/test_data/QRISP/TestSet/SeaPort/540p/MipBiasMinus1/0000"),
+        Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced/0000")
+    )
 
     # output_dimensions = (960, 540)
 

@@ -9,7 +9,7 @@ from skimage.metrics import (
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from utils import VRConfig
+from utils import VRConfig, rgb_to_y
 
 
 class Metrics:
@@ -73,8 +73,9 @@ class Metrics:
 
     def record_lpips(self, pred: torch.Tensor, target: torch.Tensor) -> None:
         # Display-encoded values in the range [-1, 1]
-        pred, target = (pred * 2.0 - 1.0).squeeze(0), (target * 2.0 - 1.0).squeeze(0)
-        self.lpips_sum += self.loss_function_alex.forward(pred, target)
+        pred = pred * 2.0 - 1.0
+        target = target * 2.0 - 1.0
+        self.lpips_sum += self.loss_function_alex(pred, target).item()
 
     def record_cvvdp_jod(self, pred: np.ndarray, target: np.ndarray) -> None:
         # sRGB frames and display-encoded values in the range [0, 1] 
@@ -134,28 +135,32 @@ class Metrics:
         return rmse
 
     def record(self, pred: torch.Tensor, target: torch.Tensor) -> None:
+        pred = torch.round(pred * 255.0) / 255.0
+        target = torch.round(target * 255.0) / 255.0
+
+        pred_y = np.squeeze(rgb_to_y(pred).cpu().numpy())
+        target_y = np.squeeze(rgb_to_y(target).cpu().numpy())
+
         pred_ndarray =  np.squeeze(pred.cpu().numpy())
         target_ndarray = np.squeeze(target.cpu().numpy())
 
-        # Quantise then unquantise to fairly calculate metrics
-        pred_ndarray = np.round(pred_ndarray * 255.0, decimals=0) / 255.0
-        target_ndarray = np.round(target_ndarray * 255.0, decimals=0) / 255.0
+        self.record_rmse(pred_y, target_y)
+        self.record_psnr(pred_y, target_y)
+        self.record_ssim(pred_y, target_y)
 
-        self.record_rmse(pred_ndarray, target_ndarray)
-        self.record_psnr(pred_ndarray, target_ndarray)
-        self.record_ssim(pred_ndarray, target_ndarray)
         self.record_lpips(pred, target)
+
         self.record_cvvdp_jod(pred_ndarray, target_ndarray)
 
         if self.is_stationary_segment:
             self.record_pixel_wise_std(pred_ndarray)
 
     def report(self, scene_name) -> None:
-        self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
+        # self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
         self.metrics["avg_psnr"] = self.psnr_sum.item() / self.dataset_size
-        self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size
-        self.metrics["avg_lpips"] = self.lpips_sum.item() / self.dataset_size
-        self.metrics["avg_cvvdp_jod"] = self.cvvdp_jod_sum / self.dataset_size
+        # self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size
+        self.metrics["avg_lpips"] = self.lpips_sum / self.dataset_size
+        # self.metrics["avg_cvvdp_jod"] = self.cvvdp_jod_sum / self.dataset_size
 
         if self.is_stationary_segment:
             pixel_mean = self.pixel_sum / self.dataset_size
@@ -164,12 +169,13 @@ class Metrics:
 
         reported_metrics_strings = []
         for metric_name in self.metrics:
-            self.writer.add_scalar(
-                f"{scene_name}/{metric_name}",
-                self.metrics[metric_name],
-                self.iterations
-            )
             reported_metrics_strings.append(f"{scene_name}/{metric_name}: {self.metrics[metric_name]}")
+            if self.writer is not None:
+                self.writer.add_scalar(
+                    f"{scene_name}/{metric_name}",
+                    self.metrics[metric_name],
+                    self.iterations
+                )
 
         reported_metrics = "\n".join(reported_metrics_strings)
         print(reported_metrics)

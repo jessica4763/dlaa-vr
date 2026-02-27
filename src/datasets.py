@@ -337,7 +337,9 @@ class QualcommDataset(Dataset):
         prev_output_img = F.interpolate(
             prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
             scale_factor=self.scale_factor, 
-            mode='bicubic'
+            mode='bicubic',
+            align_corners=False,
+            antialias=True
         ).squeeze(0)  # Remove the batch dimension
     
         # # Interpolate in linear space
@@ -345,7 +347,9 @@ class QualcommDataset(Dataset):
         #     prev_output_img = F.interpolate(
         #         prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
         #         scale_factor=self.scale_factor, 
-        #         mode='bicubic'
+        #         mode='bicubic',
+        #         align_corners=False,
+        #         antialias=True
         #     ).squeeze(0)  # Remove the batch dimension
 
         prev_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(prev_output_img)
