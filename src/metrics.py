@@ -156,11 +156,11 @@ class Metrics:
             self.record_pixel_wise_std(pred_ndarray)
 
     def report(self, scene_name) -> None:
-        # self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
+        self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
         self.metrics["avg_psnr"] = self.psnr_sum.item() / self.dataset_size
-        # self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size
+        self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size
         self.metrics["avg_lpips"] = self.lpips_sum / self.dataset_size
-        # self.metrics["avg_cvvdp_jod"] = self.cvvdp_jod_sum / self.dataset_size
+        self.metrics["avg_cvvdp_jod"] = self.cvvdp_jod_sum / self.dataset_size
 
         if self.is_stationary_segment:
             pixel_mean = self.pixel_sum / self.dataset_size
