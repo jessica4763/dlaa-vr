@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import math
+import random
 import sys
 import torch
 from torch import nn
@@ -115,6 +116,7 @@ def train() -> None:
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
     # -------------------------------------------------------------------------
+    random.seed(cfg["setup"]["seed"])
     torch.manual_seed(cfg["setup"]["seed"])
 
     # Deterministically selecting an algorithm reduces efficiency
