@@ -36,7 +36,7 @@ class Metrics:
 
         self.lpips_sum = 0
         cuda0 = torch.device('cuda:0')
-        self.loss_function_alex = lpips.LPIPS(net='alex').to(cuda0)
+        self.loss_function_lpips = lpips.LPIPS(net='vgg').to(cuda0)
 
         self.cvvdp = pycvvdp.cvvdp(display_name=display_name)
         self.cvvdp_jod_sum = 0
@@ -75,7 +75,7 @@ class Metrics:
         # Display-encoded values in the range [-1, 1]
         pred = pred * 2.0 - 1.0
         target = target * 2.0 - 1.0
-        self.lpips_sum += self.loss_function_alex(pred, target).item()
+        self.lpips_sum += self.loss_function_lpips(pred, target).item()
 
     def record_cvvdp_jod(self, pred: np.ndarray, target: np.ndarray) -> None:
         # sRGB frames and display-encoded values in the range [0, 1] 

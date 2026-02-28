@@ -60,7 +60,7 @@ def downsample(
 
 
 def evaluate(pred_path: Path, target_path: Path) -> None:
-    # Reproduces the bicubic baseline
+    # Reproduces the bicubic baseline to confirm metrics are calculated correctly
     pairs = list(zip(sorted(os.listdir(pred_path)), sorted(os.listdir(target_path))))
 
     metrics = Metrics(
@@ -87,9 +87,6 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
         target = decode_image((target_path / target_name).resolve())[0:3, ...]
         target = target.to(cuda0).to(torch.float32) / 255.0
         target = target.unsqueeze(0)
-
-        pred = rgb_to_y(pred)
-        target = rgb_to_y(target)
 
         metrics.record(pred, target)
         print(f"{frame_num=}")
