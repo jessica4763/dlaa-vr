@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 import hydra
 from omegaconf import DictConfig
 
-from dataset import QualcommDataset
+from datasets.qualcomm_dataset import QualcommDataset
 from models.qualcomm_network import QualcommNetwork
 from metrics import Metrics
 from utils import (

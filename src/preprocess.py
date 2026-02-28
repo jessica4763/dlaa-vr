@@ -6,8 +6,10 @@ import skimage.io as io
 import torch
 import torch.nn.functional as F
 from torchvision.io import decode_image
+from torchvision.utils import save_image
 
 from metrics import Metrics
+from utils import linear_to_gamma, rgb_to_y
 
 
 def downsample(
@@ -58,11 +60,7 @@ def downsample(
 
 
 def evaluate(pred_path: Path, target_path: Path) -> None:
-    def rgb_to_y(frame: torch.Tensor) -> torch.Tensor:
-        r, g, b = frame[:, 0:1, ...], frame[:, 1:2, ...], frame[:, 2:3, ...]
-        y = 16.0 / 255.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0
-        return y.repeat(1, 3, 1, 1)
-
+    # Reproduces the bicubic baseline
     pairs = list(zip(sorted(os.listdir(pred_path)), sorted(os.listdir(target_path))))
 
     metrics = Metrics(
@@ -99,7 +97,7 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
     metrics.report("SeaPort")
 
 
-def rename_files(folder_path, extension=".png"):
+def rename_files(folder_path: str, extension=".png"):
     files = os.listdir(folder_path)
     
     files.sort()
@@ -120,7 +118,24 @@ def rename_files(folder_path, extension=".png"):
     print("Renaming complete.")
 
 
+def display_depth(input_path: Path, output_path: Path) -> None:
+    depth = decode_image(input_path.resolve()).float()
+    depth = torch.unsqueeze((
+        depth[0] / 255 +
+        depth[1] / (255 ** 2) +
+        depth[2] / (255 ** 3) +
+        depth[3] / (255 ** 4)
+    ), 0)
+    save_image(linear_to_gamma(depth), output_path / "depth.png")
+    return depth
+
+
 if __name__ == "__main__":
+    # display_depth(
+    #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/DepthMipBiasMinus1Jittered/0000/0000.png"),
+    #     Path("checks")
+    # )
+
     # rename_files( "../data/test_data/QRISP/TestSet/AbandonedSchoolStationary/540p/MotionVectorsMipBiasMinus1Jittered/0000", extension=".exr")
 
     evaluate(

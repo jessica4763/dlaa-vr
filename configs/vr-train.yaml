@@ -1,18 +1,18 @@
 defaults:
-  - dataset: scale-train-upscale
+  - dataset: vr-train-upscale
   - optimiser: adamw
 
 setup:
   seed: 42
-  display-name: standard_fhd  # standard_fhd, standard_hmd
-  jitter: true
+  display-name: standard_hmd  # standard_fhd, standard_hmd
+  jitter: false
 
 paths:
-  checkpoints-path: run/checkpoints
-  sanity-checks-output-path: run/sanity_checks_output
+  checkpoints-path: run/vr_checkpoints
+  sanity-checks-output-path: run/vr_sanity_checks_output
   tensorboard-path: ../saved/logs/runs
-  saved-models-path: ../saved/models/scale_model.pt
-  training-checkpoint-path: ../saved/models/training_checkpoint.pt
+  saved-models-path: ../saved/models/vr_scale_model.pt
+  training-checkpoint-path: ../saved/models/vr_training_checkpoint.pt
 
 model:
   hidden-channels: 16  # 16, 32, 64

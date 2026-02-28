@@ -1,0 +1,25 @@
+defaults:
+  - dataset: vr-test-upscale
+
+setup:
+  seed: 42
+  display-name: standard_hmd  # standard_fhd, standard_hmd
+  jitter: false
+
+paths: 
+  checkpoints-path: run/vr_checkpoints
+  sanity-checks-output-path: run/vr_sanity_checks_output
+  evaluation-output-path: run/vr_evaluation_outputs
+  tensorboard-path: ../saved/logs/runs
+  saved-models-path: ../saved/models/vr_scale_model.pt
+
+model:
+  hidden-channels: 16
+  num-blocks: 1
+
+validation:
+  padding: 0
+
+hydra:
+  run:
+    dir: hydra_outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

@@ -7,7 +7,6 @@ from skimage.metrics import (
     structural_similarity,
 )
 import torch
-import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from utils import VRConfig, rgb_to_y
@@ -89,7 +88,7 @@ class Metrics:
         self.pixel_squared_sum += np.square(pred)
     
     def record_photometric_residual(self, left_pred: np.ndarray, left_depth: np.ndarray, right_pred: np.ndarray) -> float:
-        warped_frame, valid_mask = self.left_to_right_warp(
+        warped_frame, valid_mask = VRConfig.left_to_right_warp(
             left_pred,
             left_depth,
             self.vr_config.camera_baseline,
