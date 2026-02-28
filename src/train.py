@@ -21,6 +21,12 @@ from samplers import QualcommDatasetSampler
 from utils import checkpoint, gamma_to_linear, linear_to_gamma
 
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
 def train_epoch(
     device: str,
     model: nn.Module,
@@ -125,10 +131,13 @@ def train() -> None:
     torch.use_deterministic_algorithms(True)
 
     # Deterministically selecting an algorithm reduces efficiency
+    torch.use_deterministic_algorithms(True, warn_only=True)
     torch.backends.cudnn.benchmark = False
 
     # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = True
+
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
     # -------------------------------------------------------------------------
     # ------------------- Training + validation diagnostics -------------------
@@ -183,14 +192,8 @@ def train() -> None:
         scale_factor=scale_factor
     )
 
-    def seed_worker(worker_id):
-        worker_seed = torch.initial_seed() % (2 ** 32)
-        np.random.seed(worker_seed)
-        random.seed(worker_seed)
-
     g = torch.Generator()
     g.manual_seed(0)
-
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
