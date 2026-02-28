@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import math
+import numpy as np
 import random
 import sys
 import torch
@@ -116,16 +117,18 @@ def train() -> None:
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
     # -------------------------------------------------------------------------
-    random.seed(cfg["setup"]["seed"])
-    torch.manual_seed(cfg["setup"]["seed"])
+    seed = cfg["setup"]["seed"]
+    random.seed(seed)
+
+    # Seeds both the CPU and CUDA
+    torch.manual_seed(seed)
 
     # Deterministically selecting an algorithm reduces efficiency
-    torch.backends.cudnn.benchmark = True
-
-    torch.use_deterministic_algorithms(False)
+    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.benchmark = False
 
     # Does not use unitialised memory as an input to an operation
-    torch.utils.deterministic.fill_uninitialized_memory = False
+    torch.utils.deterministic.fill_uninitialized_memory = True
 
     # -------------------------------------------------------------------------
     # ------------------- Training + validation diagnostics -------------------
@@ -180,12 +183,22 @@ def train() -> None:
         scale_factor=scale_factor
     )
 
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
+    g = torch.Generator()
+    g.manual_seed(0)
+
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
         num_workers=15,
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=True,
+        worker_init_fn=seed_worker,
+        generator=g,
     )
 
     iterations_per_epoch = math.ceil(training_data.total_instances / cfg["optimiser"]["virtual-batch-size"])
