@@ -117,14 +117,14 @@ def train() -> None:
     # -------------------------------------------------------------------------
     # ---------------------------- Reproducibility ----------------------------
     # -------------------------------------------------------------------------
-    seed = cfg["setup"]["seed"]
-    random.seed(seed)
+    random.seed(cfg["setup"]["seed"])
 
     # Seeds both the CPU and CUDA
-    torch.manual_seed(seed)
+    torch.manual_seed(cfg["setup"]["seed"])
+
+    torch.use_deterministic_algorithms(True)
 
     # Deterministically selecting an algorithm reduces efficiency
-    torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.benchmark = False
 
     # Does not use unitialised memory as an input to an operation
@@ -184,7 +184,7 @@ def train() -> None:
     )
 
     def seed_worker(worker_id):
-        worker_seed = torch.initial_seed() % 2**32
+        worker_seed = torch.initial_seed() % (2 ** 32)
         np.random.seed(worker_seed)
         random.seed(worker_seed)
 
