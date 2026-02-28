@@ -124,6 +124,7 @@ def train() -> None:
     # ---------------------------- Reproducibility ----------------------------
     # -------------------------------------------------------------------------
     random.seed(cfg["setup"]["seed"])
+    np.random.seed(cfg["setup"]["seed"])
 
     # Seeds both the CPU and CUDA
     torch.manual_seed(cfg["setup"]["seed"])

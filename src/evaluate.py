@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import torch
 from torch import nn
@@ -98,17 +97,9 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     sanity_checks_output_path.mkdir(parents=True, exist_ok=True)
 
     # -------------------------------------------------------------------------
-    # ---------------------------- Reproducibility ----------------------------
+    # ------------------------------ Efficiency -------------------------------
     # -------------------------------------------------------------------------
-    torch.manual_seed(cfg["setup"]["seed"])
-
-    # Deterministically selecting an algorithm reduces efficiency
     torch.backends.cudnn.benchmark = True
-
-    torch.use_deterministic_algorithms(False)
-
-    # Does not use unitialised memory as an input to an operation
-    torch.utils.deterministic.fill_uninitialized_memory = False
 
     # -------------------------------------------------------------------------
     # ------------------------------- Constants -------------------------------
@@ -142,8 +133,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
 
     evaluation_dataloader = DataLoader(
         evaluation_data,
-        num_workers=os.cpu_count() // 2,
-        pin_memory=True,
+        num_workers=0,
         persistent_workers=True
     )
 

@@ -3,6 +3,7 @@ dlaa-vr-venv/
 learning/
 .vscode/
 saved/*
+src/run/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
