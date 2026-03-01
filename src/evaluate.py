@@ -131,11 +131,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
         mode="evaluation"
     )
 
-    evaluation_dataloader = DataLoader(
-        evaluation_data,
-        num_workers=0,
-        persistent_workers=True
-    )
+    evaluation_dataloader = DataLoader(evaluation_data)
 
     # -------------------------------------------------------------------------
     # --------------------------------- Model ---------------------------------
