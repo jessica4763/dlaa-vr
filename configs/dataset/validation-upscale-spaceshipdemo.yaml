@@ -1,5 +1,5 @@
 validation-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
-validation-output-img-path: ../data/test_data/QRISP/TestSet/*/1080p
+validation-output-img-path: ../data/test_data/QRISP/TestSet/*/1080p/Enhanced
 
 input-frame-height: 540
 input-frame-width: 960
@@ -14,7 +14,6 @@ is-vr: false
 is-stationary-segment: false
 
 camera-data-path-suffix: CameraData
-ground-truth-path-suffix: Enhanced
 
 colour-path-suffix: MipBiasMinus1
 depth-path-suffix: DepthMipBiasMinus1

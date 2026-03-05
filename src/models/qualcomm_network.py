@@ -246,24 +246,23 @@ class QualcommNetwork(nn.Module):
         B, clip_size, C, H, W = x.shape
 
         # To hold the recurrent colour frame and features
-        prev_pred_colour = prev_pred_features = None
+        prev_pred_frame = prev_features = None
 
         outputs = []
         for clip in range(clip_size):
             clip_frames = x[:, clip].clone()
             motion_vector_frames = motion_vectors[:, clip]
             if self.num_curr_jitter != 0:
-                assert jitter is not None
                 jitter_frames = jitter[:, clip]
 
             # Use recurrent colour frame
             c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter
             c1 = c0 + self.num_prev_colour
             if mode == "training":
-                if prev_pred_colour is not None:
+                if prev_pred_frame is not None:
                     # Warp recurrent colour frame
                     clip_frames[:, c0:c1] = self.warp(
-                        prev_pred_colour,
+                        prev_pred_frame,
                         motion_vector_frames
                     )
             else:
@@ -279,10 +278,10 @@ class QualcommNetwork(nn.Module):
             c0 = c1
             c1 = c0 + self.num_prev_feature
             if mode == "training":
-                if prev_pred_features is not None:
+                if prev_features is not None:
                     # Warp recurrent features
                     clip_frames[:, c0:c1] = self.warp(
-                        prev_pred_features,
+                        prev_features,
                         motion_vector_frames
                     )
             else:
@@ -321,6 +320,7 @@ class QualcommNetwork(nn.Module):
 
             out_colour = self.colour_head_relu(out_colour)
             # out_colour = torch.clamp(out_colour, min=0, max=1)
+
             out_blending_mask = self.blending_mask_sigmoid(out_blending_mask)
 
             # ------------------------------------------------------------
@@ -343,9 +343,9 @@ class QualcommNetwork(nn.Module):
             outputs.append(full_res_colour)
 
             # Save recurrent colour frame and features
-            prev_pred_colour = blended_colour
-            prev_pred_features = out_features
+            prev_pred_frame = blended_colour
+            prev_features = out_features
 
-        # prev_pred_features is only used by evaluation
+        # prev_features is only used by evaluation
         # out_blending_mask is only used during evaluation for inspection
-        return torch.stack(outputs, dim=1), prev_pred_features, out_blending_mask.view(B, -1, H, W)
+        return torch.stack(outputs, dim=1), prev_features, out_blending_mask.view(B, -1, H, W)

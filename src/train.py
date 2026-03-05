@@ -14,11 +14,13 @@ import hydra
 from omegaconf import OmegaConf
 
 from datasets.qualcomm_dataset import QualcommDataset
+from datasets.vr_dataset import VRDataset
 from evaluate import run
 from loss import CVVDPLoss, L1LossWithCVVDP
 from models.qualcomm_network import QualcommNetwork
-from samplers import QualcommDatasetSampler
-from utils import checkpoint, gamma_to_linear, linear_to_gamma
+from models.vr_spatial_temporal_network import VRSpatialTemporalNetwork
+from samplers.qualcomm_dataset_sampler import QualcommDatasetSampler
+from utils import checkpoint, checkpoint_vr, gamma_to_linear, linear_to_gamma
 
 
 def seed_worker(worker_id):
@@ -103,6 +105,126 @@ def train_epoch(
             total_loss = 0
 
 
+def train_epoch_vr(
+    device: str,
+    model: nn.Module,
+    training_dataloader: DataLoader,
+    actual_batch_size: int,
+    virtual_batch_size: int,
+    clip_size: int,
+    loss_function: nn.Module,
+    padding: int,
+    optimiser: MultiStepLR | CosineAnnealingLR,
+    scheduler: torch.optim.lr_scheduler.MultiStepLR,
+    writer: SummaryWriter,
+    iterations: int,
+    use_jitter: bool
+) -> None:
+    total_instances = training_dataloader.dataset.total_instances
+
+    total_loss = 0
+
+    accumulation_steps = virtual_batch_size // actual_batch_size
+
+    model.train()
+    for batch, data in enumerate(training_dataloader):
+        # -------------------------------------------------------------------------
+        # ----------------------------- Prepare inputs ----------------------------
+        # -------------------------------------------------------------------------
+        (
+            left_inputs,
+            right_inputs, 
+            left_motion_vectors, 
+            right_motion_vectors, 
+            left_jitter,
+            right_jitter, 
+            left_targets, 
+            right_targets, 
+            curr_frame_num
+        ) = data
+
+        # input_N = num_batches * clip_size
+        input_N, input_C, input_H, input_W = left_inputs.shape
+        left_inputs = left_inputs.to(device, non_blocking=True)  # non_blocking=True requires pin_memory=True
+        left_inputs = left_inputs.view(-1, clip_size, input_C, input_H, input_W)
+
+        input_N, input_C, input_H, input_W = right_inputs.shape
+        right_inputs = right_inputs.to(device, non_blocking=True)  # non_blocking=True requires pin_memory=True
+        right_inputs = right_inputs.view(-1, clip_size, input_C, input_H, input_W)
+
+        # output_N = num_batches * clip_size. output_H == input_H and output_W == input_W with no upscaling
+        output_N, output_C, output_H, output_W = left_targets.shape
+        left_motion_vectors = left_motion_vectors.to(device, non_blocking=True)
+        left_motion_vectors = left_motion_vectors.view(-1, clip_size, 2, output_H, output_W)
+
+        output_N, output_C, output_H, output_W = right_targets.shape
+        right_motion_vectors = right_motion_vectors.to(device, non_blocking=True)
+        right_motion_vectors = right_motion_vectors.view(-1, clip_size, 2, output_H, output_W)
+
+        if use_jitter: 
+            left_jitter = left_jitter.to(device, non_blocking=True)
+            left_jitter = left_jitter.view(-1, clip_size, 2)
+            right_jitter = right_jitter.to(device, non_blocking=True)
+            right_jitter = right_jitter.view(-1, clip_size, 2)
+        else:
+            left_jitter = right_jitter = None
+
+        left_targets = left_targets.to(device, non_blocking=True)
+        right_targets = right_targets.to(device, non_blocking=True)
+
+        # Pass in motion vectors as well, for warping
+        pred_left_frames, pred_right_frames, _, _, _, _ = model(
+            left_inputs,
+            right_inputs,
+            left_motion_vectors,
+            right_motion_vectors,
+            curr_frame_num,
+            left_jitter,
+            right_jitter,
+            "training"
+        )
+        pred_left_frames = pred_left_frames.view(-1, output_C, output_H, output_W)
+        pred_right_frames = pred_right_frames.view(-1, output_C, output_H, output_W)
+
+        # Compute loss on only the centre of the patch
+        pred_left_frames = pred_left_frames[:, :, padding:output_H - padding, padding:output_W - padding]
+        left_targets = left_targets[:, :, padding:output_H - padding, padding:output_W - padding]
+        pred_right_frames = pred_right_frames[:, :, padding:output_H - padding, padding:output_W - padding]
+        right_targets = right_targets[:, :, padding:output_H - padding, padding:output_W - padding]
+
+        gamma_pred_left_frames = linear_to_gamma(pred_left_frames)
+        gamma_left_targets = linear_to_gamma(left_targets)
+        gamma_pred_right_frames = linear_to_gamma(pred_right_frames)
+        gamma_right_targets = linear_to_gamma(right_targets)
+        
+        left_frame_loss = loss_function(gamma_pred_left_frames, gamma_left_targets) / accumulation_steps
+        right_frame_loss = loss_function(gamma_pred_right_frames, gamma_right_targets) / accumulation_steps
+        loss = left_frame_loss + right_frame_loss
+        loss.backward()
+
+        # For reporting
+        total_loss += loss.item()
+
+        if (batch + 1) % accumulation_steps == 0:
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float('inf'))
+            if grad_norm > 1.0:
+                print(f"{grad_norm=}")
+
+            optimiser.step()
+            optimiser.zero_grad()
+
+            scheduler.step()
+
+            writer.add_scalar(
+                "loss/train",
+                total_loss,
+                iterations + (batch + 1) // accumulation_steps
+            )
+            print(f"Loss: {total_loss:>7f} [{min((batch + 1) * actual_batch_size, total_instances):>5d} / {total_instances:>5d}]")
+
+            total_loss = 0
+
+
 def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
         cfg = hydra.compose(config_name="train")
@@ -156,27 +278,49 @@ def train() -> None:
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
-    training_data = QualcommDataset(
-        input_imgs_path=cfg["dataset"]["training-input-img-path"],
-        output_imgs_path=cfg["dataset"]["training-output-img-path"],
-        input_frame_height=cfg["dataset"]["input-frame-height"],
-        input_frame_width=cfg["dataset"]["input-frame-width"],
-        camera_data_path_suffix=cfg["dataset"]["camera-data-path-suffix"],
-        ground_truth_path_suffix=cfg["dataset"]["ground-truth-path-suffix"],
-        colour_path_suffix=cfg["dataset"]["colour-path-suffix"],
-        depth_path_suffix=cfg["dataset"]["depth-path-suffix"],
-        motion_vector_path_suffix=cfg["dataset"]["motion-vector-path-suffix"],
-        colour_jittered_path_suffix=cfg["dataset"]["colour-jittered-path-suffix"],
-        depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
-        motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
-        scene_names=cfg["dataset"]["scene-names"],
-        use_jitter=cfg["setup"]["jitter"],
-        scale_factor=scale_factor,
-        dilation_block_size=cfg["dataset"]["dilation-block-size"],
-        transform=gamma_to_linear,
-        target_transform=gamma_to_linear,
-        mode="training"
-    )
+    if cfg["dataset"]["is-vr"]:
+        training_data = VRDataset(
+            input_imgs_path=cfg["dataset"]["training-input-img-path"],
+            output_imgs_path=cfg["dataset"]["training-output-img-path"],
+            input_frame_height=cfg["dataset"]["input-frame-height"],
+            input_frame_width=cfg["dataset"]["input-frame-width"],
+            input_path_suffix=cfg["dataset"]["input-path-suffix"],
+            jittered_input_path_suffix=cfg["dataset"]["jittered-input-path-suffix"],
+            colour_path_suffix=cfg["dataset"]["colour-path-suffix"],
+            depth_path_suffix=cfg["dataset"]["depth-path-suffix"],
+            motion_vector_path_suffix=cfg["dataset"]["motion-vector-path-suffix"],
+            colour_jittered_path_suffix=cfg["dataset"]["colour-jittered-path-suffix"],
+            depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
+            motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
+            scene_names=cfg["dataset"]["scene-names"],
+            use_jitter=cfg["setup"]["jitter"],
+            scale_factor=scale_factor,
+            dilation_block_size=cfg["dataset"]["dilation-block-size"],
+            transform=gamma_to_linear,
+            target_transform=gamma_to_linear,
+            mode="training"
+        )
+    else:
+        training_data = QualcommDataset(
+            input_imgs_path=cfg["dataset"]["training-input-img-path"],
+            output_imgs_path=cfg["dataset"]["training-output-img-path"],
+            input_frame_height=cfg["dataset"]["input-frame-height"],
+            input_frame_width=cfg["dataset"]["input-frame-width"],
+            camera_data_path_suffix=cfg["dataset"]["camera-data-path-suffix"],
+            colour_path_suffix=cfg["dataset"]["colour-path-suffix"],
+            depth_path_suffix=cfg["dataset"]["depth-path-suffix"],
+            motion_vector_path_suffix=cfg["dataset"]["motion-vector-path-suffix"],
+            colour_jittered_path_suffix=cfg["dataset"]["colour-jittered-path-suffix"],
+            depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
+            motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
+            scene_names=cfg["dataset"]["scene-names"],
+            use_jitter=cfg["setup"]["jitter"],
+            scale_factor=scale_factor,
+            dilation_block_size=cfg["dataset"]["dilation-block-size"],
+            transform=gamma_to_linear,
+            target_transform=gamma_to_linear,
+            mode="training"
+        )
 
     training_sampler = QualcommDatasetSampler(
         scenes=training_data.scenes,
@@ -192,9 +336,11 @@ def train() -> None:
         padding=cfg["optimiser"]["padding"],
         scale_factor=scale_factor
     )
-
+    
+    # For reproducibility
     g = torch.Generator()
     g.manual_seed(0)
+
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
@@ -210,12 +356,20 @@ def train() -> None:
     # -------------------------------------------------------------------------
     # --------------------------------- Model ---------------------------------
     # -------------------------------------------------------------------------
-    model = QualcommNetwork(
-        hidden_channels=cfg["model"]["hidden-channels"],
-        num_blocks=cfg["model"]["num-blocks"],
-        scale_factor=scale_factor,
-        use_jitter=cfg["setup"]["jitter"]
-    ).to(device)
+    if cfg["dataset"]["is-vr"]:
+        model = VRSpatialTemporalNetwork(
+            hidden_channels=cfg["model"]["hidden-channels"],
+            num_blocks=cfg["model"]["num-blocks"],
+            scale_factor=scale_factor,
+            use_jitter=cfg["setup"]["jitter"]
+        ).to(device)
+    else:
+        model = QualcommNetwork(
+            hidden_channels=cfg["model"]["hidden-channels"],
+            num_blocks=cfg["model"]["num-blocks"],
+            scale_factor=scale_factor,
+            use_jitter=cfg["setup"]["jitter"]
+        ).to(device)
 
     # Initialise with parameters from a previously trained model if desired
     parameters_path = cfg["model"]["parameters"]
@@ -245,13 +399,7 @@ def train() -> None:
     else:
         sys.exit("Chosen loss function does not exist.")
 
-    if cfg["optimiser"]["name"] == "sgd":
-        optimiser = torch.optim.SGD(
-            model.parameters(),
-            lr=cfg["optimiser"]["learning-rate"],
-            weight_decay=cfg["optimiser"]["weight-decay"]
-        )
-    elif cfg["optimiser"]["name"] == "adamw":
+    if cfg["optimiser"]["name"] == "adamw":
         optimiser = torch.optim.AdamW(
             model.parameters(),
             lr=cfg["optimiser"]["learning-rate"],
@@ -274,12 +422,13 @@ def train() -> None:
             cfg["optimiser"]["iterations"],
             cfg["optimiser"]["learning-rate-eta-min"]
         )
+    else:
+        sys.exit("Chosen learning rate scheduler implementation does not exist.")
 
     # -------------------------------------------------------------------------
-    # ---------------------- Training + validation loop -----------------------
+    # -------------------- Load from a training checkpoint --------------------
     # -------------------------------------------------------------------------
-
-    # Load from a training checkpoint, if it exists 
+    # If the training checkpoint exists
     if os.path.exists(cfg["paths"]["training-checkpoint-path"]):
         training_checkpoint = torch.load(cfg["paths"]["training-checkpoint-path"], weights_only=False)
 
@@ -299,6 +448,9 @@ def train() -> None:
 
     # model = torch.compile(model)
 
+    # -------------------------------------------------------------------------
+    # ---------------------- Training + validation loop -----------------------
+    # -------------------------------------------------------------------------
     while iterations < cfg["optimiser"]["iterations"]:
         iterations = epoch * iterations_per_epoch + 1
 
@@ -307,35 +459,67 @@ def train() -> None:
         # -------------------------------------------------------------------------
         print(f"Epoch {epoch + 1} | Iteration {iterations} \n-------------------------------")
 
-        train_epoch(
-            device=device,
-            model=model,
-            training_dataloader=training_dataloader,
-            actual_batch_size=cfg["optimiser"]["actual-batch-size"],
-            virtual_batch_size=cfg["optimiser"]["virtual-batch-size"],
-            clip_size=cfg["optimiser"]["clip-size"],
-            loss_function=loss_function,
-            padding=cfg["optimiser"]["padding"],
-            optimiser=optimiser,
-            scheduler=scheduler,
-            writer=writer,
-            iterations=iterations,
-            use_jitter=cfg["setup"]["jitter"]
-        )
+        if cfg["dataset"]["is-vr"]:
+            train_epoch_vr(
+                device=device,
+                model=model,
+                training_dataloader=training_dataloader,
+                actual_batch_size=cfg["optimiser"]["actual-batch-size"],
+                virtual_batch_size=cfg["optimiser"]["virtual-batch-size"],
+                clip_size=cfg["optimiser"]["clip-size"],
+                loss_function=loss_function,
+                padding=cfg["optimiser"]["padding"],
+                optimiser=optimiser,
+                scheduler=scheduler,
+                writer=writer,
+                iterations=iterations,
+                use_jitter=cfg["setup"]["jitter"]
+            )
+        else:
+            train_epoch(
+                device=device,
+                model=model,
+                training_dataloader=training_dataloader,
+                actual_batch_size=cfg["optimiser"]["actual-batch-size"],
+                virtual_batch_size=cfg["optimiser"]["virtual-batch-size"],
+                clip_size=cfg["optimiser"]["clip-size"],
+                loss_function=loss_function,
+                padding=cfg["optimiser"]["padding"],
+                optimiser=optimiser,
+                scheduler=scheduler,
+                writer=writer,
+                iterations=iterations,
+                use_jitter=cfg["setup"]["jitter"]
+            )
 
-        checkpoint(
-            checkpoints_path=checkpoints_path,
-            sanity_checks_output_path=sanity_checks_output_path,
-            device=device,
-            model=model,
-            data=training_data,
-            iterations=iterations,
-            input_frame_height=cfg["dataset"]["input-frame-height"],
-            input_frame_width=cfg["dataset"]["input-frame-width"],
-            scale_factor=scale_factor,
-            use_jitter=cfg["setup"]["jitter"],
-            mode="training"
-        )
+        if cfg["dataset"]["is-vr"]:
+            checkpoint_vr(
+                checkpoints_path=checkpoints_path,
+                sanity_checks_output_path=sanity_checks_output_path,
+                device=device,
+                model=model,
+                data=training_data,
+                iterations=iterations,
+                input_frame_height=cfg["dataset"]["input-frame-height"],
+                input_frame_width=cfg["dataset"]["input-frame-width"],
+                scale_factor=scale_factor,
+                use_jitter=cfg["setup"]["jitter"],
+                mode="training"
+            )
+        else:
+            checkpoint(
+                checkpoints_path=checkpoints_path,
+                sanity_checks_output_path=sanity_checks_output_path,
+                device=device,
+                model=model,
+                data=training_data,
+                iterations=iterations,
+                input_frame_height=cfg["dataset"]["input-frame-height"],
+                input_frame_width=cfg["dataset"]["input-frame-width"],
+                scale_factor=scale_factor,
+                use_jitter=cfg["setup"]["jitter"],
+                mode="training"
+            )
 
         # -------------------------------------------------------------------------
         # ------------------------- Training checkpoint ---------------------------
@@ -357,24 +541,64 @@ def train() -> None:
         # -------------------------------------------------------------------------
 
         # Proxy validation happens every 1000 iterations, whereas primary validation happens every 100000 iterations
-        validate(
-            iterations=iterations + iterations_per_epoch,
-            iterations_per_epoch=iterations_per_epoch,
-            primary_validation_interval=cfg["validation"]["primary-validation-interval"],
-            proxy_validation_interval=cfg["validation"]["proxy-validation-interval"],
-            writer=writer,
-            saved_models_path=cfg["paths"]["saved-models-path"]
-        )
+        if cfg["dataset"]["is-vr"]:
+            validate_vr(
+                iterations=iterations + iterations_per_epoch,
+                iterations_per_epoch=iterations_per_epoch,
+                primary_validation_interval=cfg["validation"]["primary-validation-interval"],
+                proxy_validation_interval=cfg["validation"]["proxy-validation-interval"],
+                writer=writer,
+                saved_models_path=cfg["paths"]["saved-models-path"]
+            )
+        else:
+            validate(
+                iterations=iterations + iterations_per_epoch,
+                iterations_per_epoch=iterations_per_epoch,
+                primary_validation_interval=cfg["validation"]["primary-validation-interval"],
+                proxy_validation_interval=cfg["validation"]["proxy-validation-interval"],
+                writer=writer,
+                saved_models_path=cfg["paths"]["saved-models-path"]
+            )
 
         # -------------------------------------------------------------------------
         # ------------------------- Update training state -------------------------
         # -------------------------------------------------------------------------
         epoch += 1
 
+    # -------------------------------------------------------------------------
+    # -------------------------------- Cleanup --------------------------------
+    # ------------------------------------------------------------------------- 
     writer.flush()
     writer.close()
 
-    print("Done.")
+
+def validate_vr(
+    iterations: int,
+    iterations_per_epoch: int,
+    primary_validation_interval: int,
+    proxy_validation_interval: int,
+    writer: SummaryWriter,
+    saved_models_path: str
+) -> None:
+    with hydra.initialize(version_base=None, config_path="../configs"):
+        if iterations % primary_validation_interval < iterations_per_epoch:
+            validation_cfg = hydra.compose(
+                config_name="vr-validation", 
+                overrides=[
+                    "dataset=vr-validation-upscale-fantasticvillage",
+                    f"paths.saved-models-path={saved_models_path}"
+                ]
+            )
+            run(cfg=validation_cfg, writer=writer, iterations=iterations)
+        elif iterations % proxy_validation_interval < iterations_per_epoch:
+            validation_cfg = hydra.compose(
+                config_name="vr-validation", 
+                overrides=[
+                    "dataset=vr-validation-upscale-fantasticvillage",
+                    f"paths.saved-models-path={saved_models_path}"
+                ]
+            )
+            run(cfg=validation_cfg, writer=writer, iterations=iterations)
 
 
 def validate(
