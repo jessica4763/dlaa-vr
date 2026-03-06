@@ -109,8 +109,9 @@ def evaluate_vr(
                 right_inputs, 
                 left_motion_vectors, 
                 right_motion_vectors, 
-                left_jitter,
-                right_jitter, 
+                prev_left_depth,
+                prev_right_depth,
+                jitter,
                 left_target, 
                 right_target, 
                 curr_frame_num
@@ -126,12 +127,10 @@ def evaluate_vr(
             right_motion_vectors = right_motion_vectors.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
             if use_jitter:
-                left_jitter = left_jitter.to(device, non_blocking=True)
-                left_jitter = left_jitter.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
-                right_jitter = right_jitter.to(device, non_blocking=True)
-                right_jitter = right_jitter.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
+                jitter = jitter.to(device, non_blocking=True)
+                jitter = jitter.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
             else:
-                left_jitter = right_jitter = None
+                jitter = None
 
             left_target = left_target.to(device, non_blocking=True)
             right_target = right_target.to(device, non_blocking=True)
@@ -156,8 +155,7 @@ def evaluate_vr(
                 left_motion_vectors, 
                 right_motion_vectors,
                 curr_frame_num, 
-                left_jitter, 
-                right_jitter,
+                jitter,
                 "evaluation"
             )
             pred_left_frame = pred_left_frame.view(-1, output_C, output_H, output_W)
@@ -271,20 +269,30 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     # --------------------------------- Model ---------------------------------
     # -------------------------------------------------------------------------
     if cfg["dataset"]["is-vr"]:
+        vr_config = VRConfig(
+            cfg["dataset"]["camera-baseline"], 
+            cfg["dataset"]["vertical-fov"],
+            cfg["dataset"]["horizontal-fov"],
+            cfg["dataset"]["output-frame-width"],
+            cfg["dataset"]["output-frame-height"]
+        )
+
         model = VRSpatialTemporalNetwork(
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
+            vr_config=vr_config,
             scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"]
         ).to(device)
     else:
+        vr_config = None
+        
         model = QualcommNetwork(
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
             scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"]
         ).to(device)
-        
 
     model.load_state_dict(
         torch.load(
@@ -303,17 +311,6 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     # -------------------------------- Metrics --------------------------------
     # -------------------------------------------------------------------------    
     loss_function = nn.L1Loss()
-
-    if cfg["dataset"]["is-vr"]:
-        vr_config = VRConfig(
-            cfg["dataset"]["camera-baseline"], 
-            cfg["dataset"]["vertical-fov"],
-            cfg["dataset"]["horizontal-fov"],
-            cfg["dataset"]["output-frame-width"],
-            cfg["dataset"]["output-frame-height"]
-        )
-    else:
-        vr_config = None
 
     metrics = Metrics(
         dataset_size=len(evaluation_dataloader.dataset),  # The total number of frames in the dataset

@@ -246,7 +246,7 @@ class QualcommNetwork(nn.Module):
         B, clip_size, C, H, W = x.shape
 
         # To hold the recurrent colour frame and features
-        prev_pred_frame = prev_features = None
+        prev_pred_frame = prev_pred_features = None
 
         outputs = []
         for clip in range(clip_size):
@@ -278,10 +278,10 @@ class QualcommNetwork(nn.Module):
             c0 = c1
             c1 = c0 + self.num_prev_feature
             if mode == "training":
-                if prev_features is not None:
+                if prev_pred_features is not None:
                     # Warp recurrent features
                     clip_frames[:, c0:c1] = self.warp(
-                        prev_features,
+                        prev_pred_features,
                         motion_vector_frames
                     )
             else:
@@ -326,10 +326,11 @@ class QualcommNetwork(nn.Module):
             # ------------------------------------------------------------
             # -------------------------- Blend ---------------------------
             # ------------------------------------------------------------
-            # (B, 12, H, W)
+            # (B, 12, H, W) --> (B, 3, 4, H, W)
             out_colour = out_colour.view(B, 3, -1, H, W)
             prev_colour = prev_colour.view(B, 3, -1, H, W)
 
+            # (B, 4, H, W) --> (B, 1, 4, H, W)
             out_blending_mask = out_blending_mask.view(B, 1, -1, H, W)
 
             blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
@@ -344,8 +345,8 @@ class QualcommNetwork(nn.Module):
 
             # Save recurrent colour frame and features
             prev_pred_frame = blended_colour
-            prev_features = out_features
+            prev_pred_features = out_features
 
-        # prev_features is only used by evaluation
+        # prev_pred_features is only used by evaluation
         # out_blending_mask is only used during evaluation for inspection
-        return torch.stack(outputs, dim=1), prev_features, out_blending_mask.view(B, -1, H, W)
+        return torch.stack(outputs, dim=1), prev_pred_features, out_blending_mask.view(B, -1, H, W)

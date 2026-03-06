@@ -285,6 +285,20 @@ class VRDataset(QualcommDataset):
             patch_end_y
         )
 
+        prev_left_depth = self.get_depth(
+            scene,
+            instance,
+            prev_frame_num,
+            "Left"
+        )
+        prev_left_depth = self.get_patch(
+            prev_left_depth,
+            patch_start_x,
+            patch_start_y,
+            patch_end_x,
+            patch_end_y
+        )
+
         # --------------------------- Right frame ---------------------------
         curr_right_depth = self.get_depth(
             scene,
@@ -294,6 +308,20 @@ class VRDataset(QualcommDataset):
         )
         curr_right_depth = self.get_patch(
             curr_right_depth,
+            patch_start_x,
+            patch_start_y,
+            patch_end_x,
+            patch_end_y
+        )
+
+        prev_right_depth = self.get_depth(
+            scene,
+            instance,
+            prev_frame_num,
+            "Right"
+        )
+        prev_right_depth = self.get_patch(
+            prev_right_depth,
             patch_start_x,
             patch_start_y,
             patch_end_x,
@@ -331,7 +359,7 @@ class VRDataset(QualcommDataset):
         )
         
         # Jitter is the same for both eyes, but we create jitter tensors for each eye
-        curr_left_jitter = torch.tensor((0, 0))
+        jitter = torch.tensor((0, 0))
         if self.use_jitter:
             curr_jitter_offset_x, curr_jitter_offset_y = self.get_jitter_offsets(
                 scene, 
@@ -411,11 +439,7 @@ class VRDataset(QualcommDataset):
                 self.input_frame_width
             )
 
-            # ---------------------------- Left frame ---------------------------
-            curr_left_jitter = torch.tensor((curr_jitter_offset_x, curr_jitter_offset_y))
-
-            # --------------------------- Right frame ---------------------------
-            curr_right_jitter = torch.tensor((curr_jitter_offset_x, curr_jitter_offset_y))
+            jitter = torch.tensor((curr_jitter_offset_x, curr_jitter_offset_y))
 
 
         # ---------------------------- Left frame ---------------------------
@@ -495,8 +519,9 @@ class VRDataset(QualcommDataset):
             right_input_imgs, 
             curr_left_motion_vectors,
             curr_right_motion_vectors,
-            curr_left_jitter, 
-            curr_right_jitter, 
+            prev_left_depth,
+            prev_right_depth,
+            jitter, 
             curr_left_output_img, 
             curr_right_output_img, 
             curr_frame_num

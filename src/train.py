@@ -20,7 +20,7 @@ from loss import CVVDPLoss, L1LossWithCVVDP
 from models.qualcomm_network import QualcommNetwork
 from models.vr_spatial_temporal_network import VRSpatialTemporalNetwork
 from samplers.qualcomm_dataset_sampler import QualcommDatasetSampler
-from utils import checkpoint, checkpoint_vr, gamma_to_linear, linear_to_gamma
+from utils import VRConfig, checkpoint, checkpoint_vr, gamma_to_linear, linear_to_gamma
 
 
 def seed_worker(worker_id):
@@ -136,8 +136,9 @@ def train_epoch_vr(
             right_inputs, 
             left_motion_vectors, 
             right_motion_vectors, 
-            left_jitter,
-            right_jitter, 
+            prev_left_depth,
+            prev_right_depth,
+            jitter, 
             left_targets, 
             right_targets, 
             curr_frame_num
@@ -162,12 +163,10 @@ def train_epoch_vr(
         right_motion_vectors = right_motion_vectors.view(-1, clip_size, 2, output_H, output_W)
 
         if use_jitter: 
-            left_jitter = left_jitter.to(device, non_blocking=True)
-            left_jitter = left_jitter.view(-1, clip_size, 2)
-            right_jitter = right_jitter.to(device, non_blocking=True)
-            right_jitter = right_jitter.view(-1, clip_size, 2)
+            jitter = jitter.to(device, non_blocking=True)
+            jitter = jitter.view(-1, clip_size, 2)
         else:
-            left_jitter = right_jitter = None
+            jitter = None
 
         left_targets = left_targets.to(device, non_blocking=True)
         right_targets = right_targets.to(device, non_blocking=True)
@@ -179,8 +178,7 @@ def train_epoch_vr(
             left_motion_vectors,
             right_motion_vectors,
             curr_frame_num,
-            left_jitter,
-            right_jitter,
+            jitter,
             "training"
         )
         pred_left_frames = pred_left_frames.view(-1, output_C, output_H, output_W)
@@ -357,13 +355,24 @@ def train() -> None:
     # --------------------------------- Model ---------------------------------
     # -------------------------------------------------------------------------
     if cfg["dataset"]["is-vr"]:
+        vr_config = VRConfig(
+            cfg["dataset"]["camera-baseline"], 
+            cfg["dataset"]["vertical-fov"],
+            cfg["dataset"]["horizontal-fov"],
+            cfg["dataset"]["output-frame-width"],
+            cfg["dataset"]["output-frame-height"]
+        )
+
         model = VRSpatialTemporalNetwork(
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
+            vr_config=vr_config,
             scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"]
         ).to(device)
     else:
+        vr_config = None
+
         model = QualcommNetwork(
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],

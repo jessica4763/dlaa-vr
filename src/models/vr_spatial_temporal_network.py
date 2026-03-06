@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from qualcomm_network import JitterConditionedConv, QualcommNetwork, kaiming_init_params
+from qualcomm_network import JitterConditionedConv, QualcommNetwork
 from utils import VRConfig
 
 
@@ -11,6 +11,7 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         self,
         hidden_channels: int,
         num_blocks: int,
+        vr_config: VRConfig,
         scale_factor: int = 1,
         use_jitter: bool = False
     ) -> None:
@@ -135,23 +136,204 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
 
         self.apply(self.kaiming_init_params)
 
+    def predict_clip_frames(
+        self,
+        curr_left_colour: torch.Tensor, 
+        curr_right_colour: torch.Tensor,
+        curr_depth: torch.Tensor,
+        curr_motion_vectors: torch.Tensor,
+        curr_jitter: torch.Tensor,
+        prev_left_colour: torch.Tensor,
+        prev_right_colour: torch.Tensor,
+        prev_left_feature: torch.Tensor,
+        prev_right_feature: torch.Tensor,
+        prev_depth: torch.Tensor,
+        jitter_frames: torch.Tensor,
+        eye: str
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:        
+        if eye == "left":
+            # Current right frame warped onto the current left frame
+            curr_warped_right_colour = VRConfig.right_to_left_warp(
+                curr_right_colour, 
+                curr_depth, 
+                self.vr_config.camera_baseline, 
+                self.vr_config.focal_length
+            )
+
+            # The previous left frame warped temporally onto the current left frame
+            prev_warped_left_colour = self.warp(
+                prev_left_colour,
+                curr_motion_vectors
+            )
+
+            # The previous left feature frame warped temporally onto the current left feature frame
+            prev_warped_left_feature = self.warp(
+                prev_left_feature,
+                curr_motion_vectors
+            )
+
+            # The previous right frame warped onto the previous left frame, and then warped temporally onto the current left frame
+            prev_warped_right_colour = self.warp(
+                VRConfig.right_to_left_warp(
+                    prev_right_colour, 
+                    prev_depth, 
+                    self.vr_config.camera_baseline, 
+                    self.vr_config.focal_length
+                ),
+                curr_motion_vectors
+            )
+
+            # The previous right feature frame warped onto the previous left feature frame, and then warped temporally onto the current left feature frame
+            prev_warped_right_feature = self.warp(
+                VRConfig.right_to_left_warp(
+                    prev_right_feature, 
+                    prev_depth, 
+                    self.vr_config.camera_baseline, 
+                    self.vr_config.focal_length
+                ),
+                curr_motion_vectors
+            )
+
+            # (B, C, H, W)
+            inputs = torch.stack([
+                curr_left_colour,          # C = 3
+                curr_warped_right_colour,  # C = 3
+                curr_depth,                # C = 1
+                curr_jitter,               # C = 2
+                prev_warped_left_colour,   # C = 12
+                prev_warped_right_colour,  # C = 12
+                prev_warped_left_feature,  # C = 12
+                prev_warped_right_feature  # C = 12
+            ], dim=1)
+
+        else:
+            # Current left frame warped onto the current right frame
+            curr_warped_left_colour = VRConfig.left_to_right_warp(
+                curr_left_colour,
+                curr_depth,
+                self.vr_config.camera_baseline, 
+                self.vr_config.focal_length
+            )
+
+            # The previous right frame warped temporally onto the current right frame
+            prev_warped_right_colour = self.warp(
+                prev_right_colour,
+                curr_motion_vectors
+            )
+
+            # The previous right feature frame warped temporally onto the current right feature frame
+            prev_warped_right_feature = self.warp(
+                prev_right_feature,
+                curr_motion_vectors
+            )
+
+            # The previous left frame warped onto the previous right frame, and then warped temporally onto the current right frame
+            prev_warped_left_colour = self.warp(
+                VRConfig.right_to_left_warp(
+                    prev_left_colour, 
+                    prev_depth, 
+                    self.vr_config.camera_baseline, 
+                    self.vr_config.focal_length
+                ),
+                curr_motion_vectors
+            )
+
+            # The previous left feature frame warped onto the previous right feature frame, and then warped temporally onto the current left right feature frame
+            prev_warped_left_feature = self.warp(
+                VRConfig.right_to_left_warp(
+                    prev_left_feature, 
+                    prev_depth, 
+                    self.vr_config.camera_baseline, 
+                    self.vr_config.focal_length
+                ),
+                curr_motion_vectors
+            )
+
+            # (B, C, H, W)
+            inputs = torch.stack([
+                curr_warped_left_colour,    # C = 3
+                curr_right_colour,          # C = 3
+                curr_depth,                 # C = 1
+                curr_jitter,                # C = 2
+                prev_warped_left_colour,    # C = 12
+                prev_warped_right_colour,   # C = 12
+                prev_warped_left_feature,   # C = 12
+                prev_warped_right_feature,  # C = 12
+            ], dim=1)
+
+        B, C, H, W = inputs.shape
+
+        # ------------------------------------------------------------
+        # ---------------- Input convolution and ReLU ----------------
+        # ------------------------------------------------------------
+        if self.num_curr_jitter != 0:
+            h = self.input_conv(inputs, jitter_frames)
+        else:
+            h = self.input_conv(inputs)
+
+        h = self.input_relu(h)
+
+        # ------------------------------------------------------------
+        # ---------------------- Main conv body ----------------------
+        # ------------------------------------------------------------
+        h = self.body(h)
+
+        # ------------------------------------------------------------
+        # -------- Feature, colour, and blending mask branches -------
+        # ------------------------------------------------------------
+        if self.num_curr_jitter != 0:
+            out_features = self.feature_head(h, jitter_frames)
+            out_colour = self.colour_head(h, jitter_frames)
+            out_blending_mask = self.blending_mask_head(h, jitter_frames)
+        else:
+            out_features = self.feature_head(h)
+            out_colour = self.colour_head(h)
+            out_blending_mask = self.blending_mask_head(h)
+
+        out_colour = self.colour_head_relu(out_colour)
+        # left_out_colour = torch.clamp(left_out_colour, min=0, max=1)
+
+        out_blending_mask = self.blending_mask_softmax(out_blending_mask)
+
+        # ------------------------------------------------------------
+        # -------------------------- Blend ---------------------------
+        # ------------------------------------------------------------
+        # (B, 12, H, W) --> (B, 3, 4, H, W)
+        out_colour = out_colour.view(B, 3, -1, H, W)
+        prev_warped_left_colour = prev_warped_left_colour.view(B, 3, -1, H, W)
+        prev_warped_right_colour = prev_warped_right_colour.view(B, 3, -1, H, W)
+
+        # (B, 12, H, W) --> (B, 3, 4, H, W)
+        out_blending_mask = out_blending_mask.view(B, 3, -1, H, W)
+        blended_colour = (
+            out_colour * out_blending_mask[:, 0:1, ...] +
+            prev_warped_left_colour * out_blending_mask[:, 1:2, ...] +
+            prev_warped_right_colour * out_blending_mask[:, 2:3, ...]
+        )
+        blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
+        blended_colour = blended_colour.view(B, -1, H, W)
+
+        return blended_colour, out_features, out_blending_mask
+
     def forward(
         self,
         left_inputs: torch.Tensor,
         right_inputs: torch.Tensor,
         left_motion_vectors: torch.Tensor,
         right_motion_vectors: torch.Tensor,
+        prev_left_depth: torch.Tensor,
+        prev_right_depth: torch.Tensor,
         curr_frame_num: int,
-        left_jitter: torch.Tensor = None,
-        right_jitter: torch.Tensor = None,
+        jitter: torch.Tensor = None,
         mode: str = "training"
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         B, clip_size, C, H, W = left_inputs.shape
 
         # To hold the recurrent colour frame and features
-        prev_pred_left_frame = prev_pred_right_frame, prev_left_features, prev_right_features = None
+        prev_pred_left_colour, prev_pred_right_colour, prev_pred_left_features, prev_pred_right_features = None
 
-        outputs = []
+        left_outputs = []
+        right_outputs = []
         for clip in range(clip_size):
             left_clip_frames = left_inputs[:, clip].clone()
             left_motion_vector_frames = left_motion_vectors[:, clip]
@@ -160,124 +342,91 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
             right_motion_vector_frames = right_motion_vectors[:, clip]
 
             if self.num_curr_jitter != 0:
-                left_jitter_frames = left_jitter[:, clip]
-                right_jitter_frames = right_jitter[:, clip]
+                jitter_frames = jitter[:, clip]
 
-            # Use recurrent colour frame
-            c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter
-            c1 = c0 + self.num_prev_colour
-            if mode == "training":
-                if prev_pred_left_frame is not None:
-                    # Warp recurrent colour frame
-                    left_clip_frames[:, c0:c1] = self.warp(
-                        prev_pred_left_frame,
-                        left_motion_vector_frames
-                    )
+            c0 = 0
+            c1 = c0 + self.num_curr_left_colour
+            curr_left_colour = left_clip_frames[:, c0:c1]
+            curr_right_colour = right_clip_frames[:, c0:c1]
 
-                    right_clip_frames[:, c0:c1] = self.warp(
-                        VRConfig.right_to_left_warp(prev_pred_right_frame),
-                        right_motion_vector_frames
-                    )
-            else:
-                if curr_frame_num > 0:
-                    left_clip_frames[:, c0:c1] = self.warp(
-                        left_clip_frames[:, c0:c1],
-                        left_motion_vector_frames
-                    )
-
-                    right_clip_frames[:, c0:c1] = self.warp(
-                        VRConfig.right_to_left_warp(right_clip_frames[:, c0:c1]),
-                        right_motion_vector_frames
-                    )
-
-            prev_left_frame = left_clip_frames[:, c0:c1]  # Save for the blend step
-            prev_right_frame = right_clip_frames[:, c0:c1]  # Save for the blend step
-
-            # Use recurrent features
             c0 = c1
-            c1 = c0 + self.num_prev_feature
-            if mode == "training":
-                if prev_left_features is not None:
-                    # Warp recurrent features
-                    left_clip_frames[:, c0:c1] = self.warp(
-                        prev_left_features,
-                        left_motion_vector_frames
-                    )
+            c1 = c0 + self.num_curr_depth
+            curr_left_depth = left_clip_frames[:, c0:c1]
+            curr_right_depth = right_clip_frames[:, c0:c1]
 
-                    right_clip_frames[:, c0:c1] = self.warp(
-                        VRConfig.right_to_left_warp(prev_right_features),
-                        right_motion_vector_frames
-                    )
-            else:
-                if curr_frame_num > 0:
-                    left_clip_frames[:, c0:c1] = self.warp(
-                        left_clip_frames[:, c0:c1],
-                        left_motion_vector_frames
-                    )
+            c0 = c1
+            c1 = c0 + self.num_curr_jitter
+            curr_jitter = left_clip_frames[:, c0:c1]
 
-                    right_clip_frames[:, c0:c1] = self.warp(
-                        VRConfig.right_to_left_warp(right_clip_frames[:, c0:c1]),
-                        right_motion_vector_frames
-                    )
+            c0 = c1
+            c1 = c0 + self.num_prev_left_colour
+            prev_left_colour = prev_pred_left_colour if prev_pred_left_colour is not None else left_clip_frames[:, c0:c1] 
+            prev_right_colour = prev_pred_right_colour if prev_pred_right_colour is not None else right_clip_frames[:, c0:c1]
+            
+            c0 = c1
+            c1 = c0 + self.num_prev_left_colour
+            prev_left_feature = prev_pred_left_features if prev_pred_left_features is not None else left_clip_frames[:, c0:c1]
+            prev_right_feature = prev_pred_right_features if prev_pred_right_features is not None else right_clip_frames[:, c0:c1]
+            
+            # ------------------------------------------------------------
+            # ------------------------- Left eye -------------------------
+            # ------------------------------------------------------------
+            left_blended_colour, left_out_features, left_out_blending_mask = self.predict_clip_frames(
+                curr_left_colour=curr_left_colour,
+                curr_right_colour=curr_right_colour,
+                curr_depth=curr_left_depth,
+                curr_motion_vectors=left_motion_vector_frames,
+                curr_jitter=curr_jitter,
+                prev_left_colour=prev_left_colour,
+                prev_right_colour=prev_right_colour,
+                prev_left_feature=prev_left_feature,
+                prev_right_feature=prev_right_feature,
+                prev_depth=prev_left_depth,
+                jitter_frames=jitter_frames,
+                eye="left"
+            )
 
             # ------------------------------------------------------------
-            # ---------------- Input convolution and ReLU ----------------
+            # ------------------------- Right eye ------------------------
             # ------------------------------------------------------------
-            if self.num_curr_jitter != 0:
-                left = self.input_conv(left_clip_frames, left_jitter_frames)
-            else:
-                left = self.input_conv(left_clip_frames)
-
-            left = self.input_relu(left)
-
-            # ------------------------------------------------------------
-            # ---------------------- Main conv body ----------------------
-            # ------------------------------------------------------------
-            left = self.body(left)
-
-            # ------------------------------------------------------------
-            # -------- Feature, colour, and blending mask branches -------
-            # ------------------------------------------------------------
-            if self.num_curr_jitter != 0:
-                left_out_features = self.feature_head(left, left_jitter_frames)
-                left_out_colour = self.colour_head(left, left_jitter_frames)
-                left_out_blending_mask = self.blending_mask_head(left, left_jitter_frames)
-            else:
-                left_out_features = self.feature_head(left)
-                left_out_colour = self.colour_head(left)
-                left_out_blending_mask = self.blending_mask_head(left)
-
-            left_out_colour = self.colour_head_relu(left_out_colour)
-            # left_out_colour = torch.clamp(left_out_colour, min=0, max=1)
-
-            left_out_blending_mask = self.blending_mask_softmax(left_out_blending_mask)
-
-            # ------------------------------------------------------------
-            # -------------------------- Blend ---------------------------
-            # ------------------------------------------------------------
-            # (B, 12, H, W)
-            left_out_colour = left_out_colour.view(B, 3, -1, H, W)
-            prev_left_frame = prev_left_frame.view(B, 3, -1, H, W)
-
-            left_out_blending_mask = left_out_blending_mask.view(B, 1, -1, H, W)
-
-            left_blended_colour = left_out_blending_mask * left_out_colour + (1.0 - left_out_blending_mask) * prev_left_frame
-            left_blended_colour = torch.clamp(left_blended_colour, min=0.0, max=1.0)
-            left_blended_colour = left_blended_colour.view(B, -1, H, W)
+            right_blended_colour, right_out_features, right_out_blending_mask = self.predict_clip_frames(
+                curr_left_colour=curr_left_colour,
+                curr_right_colour=curr_right_colour,
+                curr_depth=curr_right_depth,
+                curr_motion_vectors=right_motion_vector_frames,
+                curr_jitter=curr_jitter,
+                prev_left_colour=prev_left_colour,
+                prev_right_colour=prev_right_colour,
+                prev_left_feature=prev_left_feature,
+                prev_right_feature=prev_right_feature,
+                prev_depth=prev_right_depth,
+                jitter_frames=jitter_frames,
+                eye="right"
+            )
 
             # ------------------------------------------------------------
             # ---------------------- Depth to space ----------------------
             # ------------------------------------------------------------
-            full_res_colour = self.depth_to_space(blended_colour)  # (B, 3, H, W)
-            outputs.append(full_res_colour)
+            left_full_res_colour = self.depth_to_space(left_blended_colour)  # (B, 3, H, W)
+            left_outputs.append(left_full_res_colour)
+
+            right_full_res_colour = self.depth_to_space(right_blended_colour)  # (B, 3, H, W)
+            right_outputs.append(right_full_res_colour)
 
             # Save recurrent colour frame and features
-            prev_pred_colour = blended_colour
-            prev_pred_features = out_features
+            prev_pred_left_colour = left_blended_colour
+            prev_pred_left_features = left_out_features
+
+            prev_pred_right_colour = right_blended_colour
+            prev_right_feature = right_out_features
 
         # prev_pred_features is only used by evaluation
         # out_blending_mask is only used during evaluation for inspection
-        return torch.stack(outputs, dim=1), prev_pred_features, out_blending_mask.view(B, -1, H, W)
-
-    
-
+        return (
+            torch.stack(left_outputs, dim=1), 
+            torch.stack(right_outputs, dim=1), 
+            prev_pred_left_features, 
+            prev_pred_right_features,
+            left_out_blending_mask.view(B, -1, H, W),
+            right_out_blending_mask.view(B, -1, H, W),
+        )

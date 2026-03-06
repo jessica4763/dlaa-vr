@@ -188,6 +188,7 @@ def linear_to_gamma(image: torch.Tensor) -> torch.Tensor:
 
 
 def rgb_to_y(frame: torch.Tensor) -> torch.Tensor:
+    # Computes luma, Y', from R', G', B'
     r, g, b = frame[:, 0:1, ...], frame[:, 1:2, ...], frame[:, 2:3, ...]
     y = 16.0 / 255.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0
     return y.repeat(1, 3, 1, 1)
