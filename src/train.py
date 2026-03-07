@@ -350,7 +350,14 @@ def train() -> None:
             "rng_state": torch.get_rng_state(),
             "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None
         }
-        torch.save(training_checkpoint, cfg["paths"]["training-checkpoint-path"])
+        
+        temp_file = cfg["paths"]["training-checkpoint-path"] + ".tmp"
+        torch.save(training_checkpoint, temp_file)
+
+        with open(temp_file, 'ab') as f:
+            os.fsync(f.fileno())
+
+        os.replace(temp_file, cfg["paths"]["training-checkpoint-path"])
 
         # -------------------------------------------------------------------------
         # ------------------------------ Validation -------------------------------
