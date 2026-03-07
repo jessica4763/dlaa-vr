@@ -22,6 +22,7 @@ from typing import Any
 class Scene:
     scene_input_imgs_path: Path
     scene_output_imgs_path: Path
+
     path_suffix: InitVar[str]
 
     num_instances: int = field(init=False)
@@ -39,11 +40,11 @@ class Scene:
 
 @dataclass
 class VRConfig:
-    camera_baseline: float = 0.065
-    horizontal_fov: float = 100.0
-    vertical_fov: float = 104.0
-    horizontal_resolution: int = 1440
-    vertical_resolution: int = 1600
+    camera_baseline: float
+    horizontal_fov: float
+    vertical_fov: float
+    horizontal_resolution: int 
+    vertical_resolution: int
 
     focal_length: float = field(init=False)
 
@@ -59,6 +60,15 @@ class VRConfig:
         fov_rad = math.radians(fov)
         focal_length = resolution / (2 * math.tan(fov_rad / 2))
         return focal_length
+    
+    @staticmethod
+    def right_to_left_warp(
+        right_frame: torch.Tensor,
+        right_depth: torch.Tensor,
+        camera_baseline: float,
+        focal_length: float
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        pass
 
     @staticmethod
     def left_to_right_warp(
@@ -178,6 +188,7 @@ def linear_to_gamma(image: torch.Tensor) -> torch.Tensor:
 
 
 def rgb_to_y(frame: torch.Tensor) -> torch.Tensor:
+    # Computes luma, Y', from R', G', B'
     r, g, b = frame[:, 0:1, ...], frame[:, 1:2, ...], frame[:, 2:3, ...]
     y = 16.0 / 255.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0
     return y.repeat(1, 3, 1, 1)
@@ -203,7 +214,7 @@ def write_video(
     fps: int = 24
 ) -> None:
     writer = imageio.get_writer(
-        imgs_path / filename,
+        imgs_path.parent / filename,
         fps=fps,
         codec="libx264",
         quality=10,
@@ -211,7 +222,6 @@ def write_video(
         macro_block_size=8
     )
 
-    imgs_path = imgs_path / "pred"
     for img_name in natsorted(os.listdir(imgs_path)):
         img_path = imgs_path / img_name
         img = imageio.v3.imread(img_path)
@@ -225,9 +235,9 @@ def write_video(
 # -------------------------------------------------------------------------
 
 
-def vr_checkpoint(
-    vr_checkpoints_path: Path,
-    vr_sanity_checks_output_path: Path,
+def checkpoint_vr(
+    checkpoints_path: Path,
+    sanity_checks_output_path: Path,
     device: str,
     model: nn.Module,
     data: Dataset,
@@ -238,7 +248,184 @@ def vr_checkpoint(
     use_jitter: bool,
     mode: str = "training"
 ):
-    pass
+    model.eval()
+    with torch.no_grad():
+        # frames = [n for n in range(0, 7258) if (n + 1) % 30 != 0]
+        # n = random.choice(frames)
+        # print(f"{n=}")
+
+        index = 0
+        if mode == "training":
+            (
+                left_inputs,
+                right_inputs, 
+                left_motion_vectors, 
+                right_motion_vectors, 
+                left_jitter,
+                right_jitter, 
+                left_output, 
+                right_output, 
+                curr_frame_num
+            ) = data[(index, 0, 0, input_frame_width, input_frame_height)]
+
+            (
+                left_inputs_next,
+                right_inputs_next, 
+                left_motion_vectors_next, 
+                right_motion_vectors_next, 
+                left_jitter_next,
+                right_jitter_next, 
+                left_output_next, 
+                right_output_next, 
+                curr_frame_num_next
+            ) = data[(index + 1, 0, 0, input_frame_width, input_frame_height)]
+        else:
+            (
+                left_inputs,
+                right_inputs, 
+                left_motion_vectors, 
+                right_motion_vectors, 
+                left_jitter,
+                right_jitter, 
+                left_output, 
+                right_output, 
+                curr_frame_num
+            ) = data[index]
+
+            (
+                left_inputs_next,
+                right_inputs_next, 
+                left_motion_vectors_next, 
+                right_motion_vectors_next, 
+                left_jitter_next,
+                right_jitter_next, 
+                left_output_next, 
+                right_output_next, 
+                curr_frame_num_next
+            ) = data[index + 1]
+
+        # Verify input to the network
+        save_input(sanity_checks_output_path / "left", model, left_inputs, left_motion_vectors, scale_factor)
+        save_input(sanity_checks_output_path / "right", model, right_inputs, right_motion_vectors, scale_factor)
+
+        # Verify warping 
+        left_warped_prev = model.warp(
+            left_output.unsqueeze(0),
+            left_motion_vectors_next.unsqueeze(0)
+        ).squeeze(0)
+        save_image(linear_to_gamma(left_warped_prev), sanity_checks_output_path / "left_warped_prev.png")
+
+        left_diff = torch.abs(left_output_next - left_warped_prev)
+        save_image(linear_to_gamma(left_diff), sanity_checks_output_path / "left_diff.png")
+
+        right_warped_prev = model.warp(
+            right_output.unsqueeze(0),
+            right_motion_vectors_next.unsqueeze(0)
+        ).squeeze(0)
+        save_image(linear_to_gamma(right_warped_prev), sanity_checks_output_path / "right_warped_prev.png")
+
+        right_diff = torch.abs(right_output_next - right_warped_prev)
+        save_image(linear_to_gamma(right_diff), sanity_checks_output_path / "right_diff.png")
+
+        # Verify the goal of the network
+        save_image(linear_to_gamma(left_output), sanity_checks_output_path / "left_ground_truth.png")
+        save_image(linear_to_gamma(right_output), sanity_checks_output_path / "right_ground_truth.png")
+
+        # Strictly a training diagnostic, so it's OK if training data is used here
+
+        # Output of the network when history is invalid
+        left_inputs = left_inputs.to(device).unsqueeze(0).unsqueeze(0)
+        left_motion_vectors = left_motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
+        left_jitter = left_jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+
+        right_inputs = right_inputs.to(device).unsqueeze(0).unsqueeze(0)
+        right_motion_vectors = right_motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
+        right_jitter = right_jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+
+        (
+            pred_left_frame, 
+            pred_right_frame, 
+            left_features, 
+            right_features, 
+            left_out_blending_mask, 
+            right_out_blending_mask
+        ) = model(
+            left_inputs,
+            right_inputs,
+            left_motion_vectors, 
+            right_motion_vectors,
+            curr_frame_num, 
+            left_jitter, 
+            right_jitter,
+            "evaluation"
+        )
+
+        pred_left_frame = pred_left_frame.squeeze(0).squeeze(0)
+        pred_left_frame = linear_to_gamma(pred_left_frame)
+        save_image(pred_left_frame, checkpoints_path / f"left_colour_invalid_{iterations}.png")
+
+        pred_right_frame = pred_right_frame.squeeze(0).squeeze(0)
+        pred_right_frame = linear_to_gamma(pred_right_frame)
+        save_image(pred_right_frame, checkpoints_path / f"right_colour_invalid_{iterations}.png")
+        
+        # Blending mask when history is invalid
+        left_out_blending_mask = F.pixel_shuffle(left_out_blending_mask, upscale_factor=scale_factor)
+        save_image(left_out_blending_mask, checkpoints_path / f"left_blending_mask_invalid_{iterations}.png")
+
+        right_out_blending_mask = F.pixel_shuffle(right_out_blending_mask, upscale_factor=scale_factor)
+        save_image(right_out_blending_mask, checkpoints_path / f"right_blending_mask_invalid_{iterations}.png")
+
+        # Output of the network when history is valid
+        left_inputs_next = left_inputs_next.to(device).unsqueeze(0).unsqueeze(0)
+        left_motion_vectors_next = left_motion_vectors_next.to(device).unsqueeze(0).unsqueeze(0)
+        left_jitter_next = left_jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+
+        right_inputs_next = right_inputs_next.to(device).unsqueeze(0).unsqueeze(0)
+        right_motion_vectors_next = right_motion_vectors_next.to(device).unsqueeze(0).unsqueeze(0)
+        right_jitter_next = right_jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+
+        c0 = model.num_curr_colour + model.num_curr_depth + model.num_curr_jitter
+        c1 = c0 + model.num_prev_colour
+        left_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(left_output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
+        right_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(right_output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
+
+        c0 = c1
+        c1 = c0 + model.num_prev_feature
+        left_inputs_next[:, :, c0:c1] = left_features.squeeze(0)
+        right_inputs_next[:, :, c0:c1] = right_features.squeeze(0)
+
+        (
+            pred_left_frame, 
+            pred_right_frame, 
+            _, 
+            _, 
+            left_out_blending_mask, 
+            right_out_blending_mask
+        ) = model(
+            left_inputs_next, 
+            right_inputs_next,
+            left_motion_vectors_next, 
+            right_motion_vectors_next,
+            curr_frame_num_next, 
+            left_jitter_next,
+            right_jitter_next,
+            "evaluation"
+        )
+
+        pred_left_frame = pred_left_frame.squeeze(0).squeeze(0)
+        pred_left_frame = linear_to_gamma(pred_left_frame)
+        save_image(pred_left_frame, checkpoints_path / f"left_colour_valid_{iterations}.png")
+
+        pred_right_frame = pred_right_frame.squeeze(0).squeeze(0)
+        pred_right_frame = linear_to_gamma(pred_right_frame)
+        save_image(pred_right_frame, checkpoints_path / f"right_colour_valid_{iterations}.png")
+
+        # Blending mask when history is valid
+        left_out_blending_mask = F.pixel_shuffle(left_out_blending_mask.squeeze(0), upscale_factor=scale_factor)
+        save_image(left_out_blending_mask, checkpoints_path / f"left_blending_mask_valid_{iterations}.png")
+
+        right_out_blending_mask = F.pixel_shuffle(right_out_blending_mask.squeeze(0), upscale_factor=scale_factor)
+        save_image(right_out_blending_mask, checkpoints_path / f"right_blending_mask_valid_{iterations}.png")
 
 
 def save_input(

@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from torchvision.io import decode_image
 from torch.utils.data import Dataset
 
-
 from utils import Scene, cumsum
 
 
@@ -20,7 +19,6 @@ class QualcommDataset(Dataset):
         input_frame_height: int,
         input_frame_width: int,
         camera_data_path_suffix: str,
-        ground_truth_path_suffix: str,
         colour_path_suffix: str,
         depth_path_suffix: str,
         motion_vector_path_suffix: str,
@@ -39,8 +37,6 @@ class QualcommDataset(Dataset):
         self.output_imgs_path = output_imgs_path
         self.input_frame_height = input_frame_height
         self.input_frame_width = input_frame_width
-        self.camera_data_path_suffix = camera_data_path_suffix
-        self.ground_truth_path_suffix = ground_truth_path_suffix
 
         if use_jitter:
             self.colour_path_suffix = colour_jittered_path_suffix
@@ -50,6 +46,8 @@ class QualcommDataset(Dataset):
             self.colour_path_suffix = colour_path_suffix
             self.depth_path_suffix = depth_path_suffix
             self.motion_vector_path_suffix = motion_vector_path_suffix
+
+        self.camera_data_path_suffix = camera_data_path_suffix
 
         self.scenes = []
         for scene_name in scene_names:
@@ -137,7 +135,7 @@ class QualcommDataset(Dataset):
         instance: str,
         curr_frame_num: int
     ) -> torch.Tensor:
-        curr_frame = str(curr_frame_num).zfill(4) + '.exr'
+        curr_frame = str(curr_frame_num).zfill(4) + ".exr"
         motion_vectors_path = scene.scene_input_imgs_path / self.motion_vector_path_suffix / instance / curr_frame
         motion_vectors = iio.imread(motion_vectors_path.resolve())
 
@@ -265,7 +263,7 @@ class QualcommDataset(Dataset):
         curr_frame_num = idx % scene.num_frames_per_instance
         curr_frame = str(curr_frame_num).zfill(4) + ".png"
         curr_input_img_path = scene.scene_input_imgs_path / self.colour_path_suffix / instance / curr_frame
-        curr_output_img_path = scene.scene_output_imgs_path / self.ground_truth_path_suffix / instance / curr_frame
+        curr_output_img_path = scene.scene_output_imgs_path / instance / curr_frame
 
         curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, ...].float()
         curr_input_img = self.get_patch(
@@ -296,7 +294,7 @@ class QualcommDataset(Dataset):
         # # prev_output_img will be overwritten later, if there was a previous frame output from the model
         # if curr_frame_num == 0:
         #     prev_frame = str(prev_frame_num).zfill(4) + ".png"
-        #     prev_ground_truth_img_path = scene.scene_output_imgs_path / self.ground_truth_path_suffix / instance / prev_frame
+        #     prev_ground_truth_img_path = scene.scene_output_imgs_path / instance / prev_frame
         #     prev_output_img = decode_image(prev_ground_truth_img_path.resolve())[0:3, ...]
         #     prev_output_img = self.get_patch(
         #         prev_output_img,
@@ -319,8 +317,7 @@ class QualcommDataset(Dataset):
         if self.target_transform:
             curr_output_img = self.target_transform(curr_output_img)
 
-        # Interpolate in linear space
-        prev_output_img = F.interpolate(
+        prev_output_img = F.interpolate(  # Interpolate in linear space
             prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
             scale_factor=self.scale_factor, 
             mode='bicubic',
@@ -333,7 +330,6 @@ class QualcommDataset(Dataset):
         # -------------------------------------------------------------------
         # ----------------------------- Features ----------------------------
         # -------------------------------------------------------------------
-
         curr_depth = self.get_depth(
             scene,
             instance,

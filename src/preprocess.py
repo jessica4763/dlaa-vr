@@ -9,7 +9,7 @@ from torchvision.io import decode_image
 from torchvision.utils import save_image
 
 from metrics import Metrics
-from utils import linear_to_gamma, rgb_to_y
+from utils import linear_to_gamma
 
 
 def downsample(

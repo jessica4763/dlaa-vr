@@ -246,24 +246,23 @@ class QualcommNetwork(nn.Module):
         B, clip_size, C, H, W = x.shape
 
         # To hold the recurrent colour frame and features
-        prev_pred_colour = prev_pred_features = None
+        prev_pred_frame = prev_pred_features = None
 
         outputs = []
         for clip in range(clip_size):
             clip_frames = x[:, clip].clone()
             motion_vector_frames = motion_vectors[:, clip]
             if self.num_curr_jitter != 0:
-                assert jitter is not None
                 jitter_frames = jitter[:, clip]
 
             # Use recurrent colour frame
             c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter
             c1 = c0 + self.num_prev_colour
             if mode == "training":
-                if prev_pred_colour is not None:
+                if prev_pred_frame is not None:
                     # Warp recurrent colour frame
                     clip_frames[:, c0:c1] = self.warp(
-                        prev_pred_colour,
+                        prev_pred_frame,
                         motion_vector_frames
                     )
             else:
@@ -321,15 +320,17 @@ class QualcommNetwork(nn.Module):
 
             out_colour = self.colour_head_relu(out_colour)
             # out_colour = torch.clamp(out_colour, min=0, max=1)
+
             out_blending_mask = self.blending_mask_sigmoid(out_blending_mask)
 
             # ------------------------------------------------------------
             # -------------------------- Blend ---------------------------
             # ------------------------------------------------------------
-            # (B, 12, H, W)
+            # (B, 12, H, W) --> (B, 3, 4, H, W)
             out_colour = out_colour.view(B, 3, -1, H, W)
             prev_colour = prev_colour.view(B, 3, -1, H, W)
 
+            # (B, 4, H, W) --> (B, 1, 4, H, W)
             out_blending_mask = out_blending_mask.view(B, 1, -1, H, W)
 
             blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
@@ -343,7 +344,7 @@ class QualcommNetwork(nn.Module):
             outputs.append(full_res_colour)
 
             # Save recurrent colour frame and features
-            prev_pred_colour = blended_colour
+            prev_pred_frame = blended_colour
             prev_pred_features = out_features
 
         # prev_pred_features is only used by evaluation

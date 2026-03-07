@@ -1,5 +1,5 @@
-training-input-img-path: ../data/training_data/VR/*/720x800
-training-output-img-path: ../data/training_data/VR/*/1440x1600/Enhanced
+validation-input-img-path:  ../data/test_data/VR/*/720x800
+validation-output-img-path:  ../data/test_data/VR/*/1440x1600/Enhanced
 
 input-frame-height: 720
 input-frame-width: 800
@@ -11,6 +11,7 @@ dilation-block-size: 8
 
 scene-names: [FantasticVillage]
 is-vr: true
+is-stationary-segment: false
 
 camera-baseline: 0.064  # metres
 horizontal-fov: 100.0  # degrees
