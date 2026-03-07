@@ -342,7 +342,7 @@ def train() -> None:
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
-        num_workers=15,
+        num_workers=16,
         pin_memory=True,
         persistent_workers=True,
         worker_init_fn=seed_worker,
@@ -533,7 +533,11 @@ def train() -> None:
         # -------------------------------------------------------------------------
         # ------------------------- Training checkpoint ---------------------------
         # -------------------------------------------------------------------------
-        torch.save(model.state_dict(), cfg["paths"]["saved-models-path"])
+        model_temp_file = cfg["paths"]["saved-models-path"] + ".tmp"
+        torch.save(model.state_dict(), model_temp_file)
+        with open(model_temp_file, 'ab') as f:
+            os.fsync(f.fileno())
+        os.replace(model_temp_file, cfg["paths"]["saved-models-path"])
 
         training_checkpoint = {
             "epoch": epoch,
@@ -543,14 +547,25 @@ def train() -> None:
             "rng_state": torch.get_rng_state(),
             "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None
         }
-        
-        temp_file = cfg["paths"]["training-checkpoint-path"] + ".tmp"
-        torch.save(training_checkpoint, temp_file)
-
-        with open(temp_file, 'ab') as f:
+        training_checkpoint_temp_file = cfg["paths"]["training-checkpoint-path"] + ".tmp"
+        torch.save(training_checkpoint, training_checkpoint_temp_file)
+        with open(training_checkpoint_temp_file, 'ab') as f:
             os.fsync(f.fileno())
+        os.replace(training_checkpoint_temp_file, cfg["paths"]["training-checkpoint-path"])
 
-        os.replace(temp_file, cfg["paths"]["training-checkpoint-path"])
+        save_interval = 10000
+        if iterations % save_interval < iterations_per_epoch:
+            id = (iterations // save_interval) * save_interval
+
+            model_save_path = checkpoints_path / f"model_{id}.pt"
+            torch.save(model.state_dict(), model_save_path)
+            with open(model_save_path, 'ab') as f:
+                os.fsync(f.fileno())
+
+            training_checkpoint_save_path = checkpoints_path / f"training_checkpoint_{id}.pt"
+            torch.save(training_checkpoint, training_checkpoint_save_path)
+            with open(training_checkpoint_save_path, 'ab') as f:
+                os.fsync(f.fileno())
 
         # -------------------------------------------------------------------------
         # ------------------------------ Validation -------------------------------

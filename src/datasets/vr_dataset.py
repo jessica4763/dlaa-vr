@@ -7,7 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 from torchvision.io import decode_image
 
-from qualcomm_dataset import QualcommDataset
+from datasets.qualcomm_dataset import QualcommDataset
 from utils import Scene, cumsum
 
 

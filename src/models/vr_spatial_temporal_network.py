@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from qualcomm_network import JitterConditionedConv, QualcommNetwork
+from .qualcomm_network import JitterConditionedConv, QualcommNetwork
 from utils import VRConfig
 
 
