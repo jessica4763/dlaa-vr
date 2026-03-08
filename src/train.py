@@ -149,16 +149,22 @@ def train_epoch_vr(
         left_inputs = left_inputs.to(device, non_blocking=True)  # non_blocking=True requires pin_memory=True
         left_inputs = left_inputs.view(-1, clip_size, input_C, input_H, input_W)
 
-        input_N, input_C, input_H, input_W = right_inputs.shape
         right_inputs = right_inputs.to(device, non_blocking=True)  # non_blocking=True requires pin_memory=True
         right_inputs = right_inputs.view(-1, clip_size, input_C, input_H, input_W)
+
+        # input_N = num_batches * clip_size
+        input_N, input_C, input_H, input_W = prev_left_depth.shape
+        prev_left_depth = prev_left_depth.to(device, non_blocking=True)
+        prev_left_depth = prev_left_depth.view(-1, clip_size, 1, input_H, input_W)
+
+        prev_right_depth = prev_right_depth.to(device, non_blocking=True)
+        prev_right_depth = prev_right_depth.view(-1, clip_size, 1, input_H, input_W)
 
         # output_N = num_batches * clip_size. output_H == input_H and output_W == input_W with no upscaling
         output_N, output_C, output_H, output_W = left_targets.shape
         left_motion_vectors = left_motion_vectors.to(device, non_blocking=True)
         left_motion_vectors = left_motion_vectors.view(-1, clip_size, 2, output_H, output_W)
 
-        output_N, output_C, output_H, output_W = right_targets.shape
         right_motion_vectors = right_motion_vectors.to(device, non_blocking=True)
         right_motion_vectors = right_motion_vectors.view(-1, clip_size, 2, output_H, output_W)
 
@@ -177,6 +183,8 @@ def train_epoch_vr(
             right_inputs,
             left_motion_vectors,
             right_motion_vectors,
+            prev_left_depth,
+            prev_right_depth,
             curr_frame_num,
             jitter,
             "training"
@@ -225,7 +233,7 @@ def train_epoch_vr(
 
 def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="train")
+        cfg = hydra.compose(config_name="vr-train")
 
     device = (
         torch.accelerator.current_accelerator().type
@@ -282,14 +290,12 @@ def train() -> None:
             output_imgs_path=cfg["dataset"]["training-output-img-path"],
             input_frame_height=cfg["dataset"]["input-frame-height"],
             input_frame_width=cfg["dataset"]["input-frame-width"],
+            camera_data_path_suffix=cfg["dataset"]["camera-data-path-suffix"],
             input_path_suffix=cfg["dataset"]["input-path-suffix"],
             jittered_input_path_suffix=cfg["dataset"]["jittered-input-path-suffix"],
             colour_path_suffix=cfg["dataset"]["colour-path-suffix"],
             depth_path_suffix=cfg["dataset"]["depth-path-suffix"],
             motion_vector_path_suffix=cfg["dataset"]["motion-vector-path-suffix"],
-            colour_jittered_path_suffix=cfg["dataset"]["colour-jittered-path-suffix"],
-            depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
-            motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
             scene_names=cfg["dataset"]["scene-names"],
             use_jitter=cfg["setup"]["jitter"],
             scale_factor=scale_factor,
@@ -342,7 +348,7 @@ def train() -> None:
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
-        num_workers=16,
+        num_workers=os.cpu_count() - 4,
         pin_memory=True,
         persistent_workers=True,
         worker_init_fn=seed_worker,
@@ -364,9 +370,9 @@ def train() -> None:
         )
 
         model = VRSpatialTemporalNetwork(
+            vr_config=vr_config,
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
-            vr_config=vr_config,
             scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"]
         ).to(device)
@@ -448,7 +454,8 @@ def train() -> None:
         scheduler.load_state_dict(training_checkpoint["scheduler"])
 
         torch.set_rng_state(training_checkpoint["rng_state"])
-        torch.cuda.set_rng_state(training_checkpoint["cuda_rng_state"])
+        if torch.cuda.is_available():
+            torch.cuda.set_rng_state(training_checkpoint["cuda_rng_state"])
 
         print(f"Resuming from epoch {epoch} / iteration {iterations} at learning rate: {scheduler.get_last_lr()[0]}")
     else:
@@ -643,7 +650,7 @@ def validate(
     with hydra.initialize(version_base=None, config_path="../configs"):
         if iterations % primary_validation_interval < iterations_per_epoch:
             validation_cfg = hydra.compose(
-                config_name="validation", 
+                config_name="vr-validation", 
                 overrides=[
                     "dataset=validation-upscale-seaport",
                     f"paths.saved-models-path={saved_models_path}"
@@ -652,7 +659,7 @@ def validate(
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
 
             validation_cfg = hydra.compose(
-                config_name="validation", 
+                config_name="vr-validation", 
                 overrides=[
                     "dataset=validation-upscale-abandonedschool",
                     f"paths.saved-models-path={saved_models_path}"
@@ -661,7 +668,7 @@ def validate(
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
 
             validation_cfg = hydra.compose(
-                config_name="validation", 
+                config_name="vr-validation", 
                 overrides=[
                     "dataset=validation-upscale-spaceshipdemo",
                     f"paths.saved-models-path={saved_models_path}"
@@ -670,7 +677,7 @@ def validate(
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
 
             validation_cfg = hydra.compose(
-                config_name="validation", 
+                config_name="vr-validation", 
                 overrides=[
                     "dataset=validation-upscale-stationary-segment",
                     f"paths.saved-models-path={saved_models_path}"
@@ -679,7 +686,7 @@ def validate(
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
         elif iterations % proxy_validation_interval < iterations_per_epoch:
             validation_cfg = hydra.compose(
-                config_name="validation", 
+                config_name="vr-validation", 
                 overrides=[
                     "dataset=validation-upscale-seaport",
                     f"paths.saved-models-path={saved_models_path}"

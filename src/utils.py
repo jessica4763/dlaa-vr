@@ -62,83 +62,72 @@ class VRConfig:
         return focal_length
     
     @staticmethod
-    def right_to_left_warp(
+    def left_to_right_warp(
         right_frame: torch.Tensor,
         right_depth: torch.Tensor,
         camera_baseline: float,
         focal_length: float
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        pass
-
-    @staticmethod
-    def left_to_right_warp(
-        left_frame: torch.Tensor,
-        left_depth: torch.Tensor,
-        camera_baseline: float,
-        focal_length: float
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        left_frame = torch.permute(left_frame, dims=(2, 0, 1))
-        H, W, _ = left_frame.shape
+        B, _, H, W = right_frame.shape
 
         ys, xs = torch.meshgrid(
             torch.arange(H),
             torch.arange(W),
             indexing='ij'
         )
-        base_grid = torch.stack((xs, ys), dim=-1)
 
-        # Disparity represents how much we need to shift the pixel in the 
-        # left frame to obtain the corresponding pixel in the right frame.
-        # In the case of occlusions, two pixels in the left frame map to a 
-        # single corresponding pixel in the right frame. 
-        # focal_length here is measured in pixels, and therefore disparity 
-        # is measured in pixels. 
-        disparity = (camera_baseline * focal_length) / left_depth
-
-        # warped_grid contains the new x coordinate to which each pixel is shifted.
-        # There may be duplicates in warped_grid, when two pixels in the left frame
-        # map to a single corresponding pixel in the right frame.
-        left_to_right_warped_grid = torch.round(xs - disparity)
-
-        # We need to deal with the duplicates in warped_grid and also compute a 
-        # grid that can be used in F.grid_sample. 
-        # right_to_left_warped_grid contains the locations of the pixels in the 
-        # left frame from which a pixel the right frame should be obtained, and 
-        # the pixel in the left frame needs to be the one at the lower depth. 
-        # This is necessarily the right-most pixel in the left frame.
-        closest = torch.zeros_like(xs)
-        flattened_closest = closest.view(-1)
-
-        flattened_xs = xs.view(-1)
-        flattened_ys = ys.view(-1)
-        flattened_indices = flattened_ys * W + flattened_xs
-
-        flattened_closest.scatter_reduce_(
-            dim=0,
-            index=left_to_right_warped_grid,
-            src=flattened_indices,
-            reduce="amax",
-            include_self=True
-        )
-        closest = flattened_closest.view(H, W)
-        closest = torch.stack((closest, ys), dim=-1)
-
-        valid_mask = torch.zeros_like(base_grid)
-        xs = closest[..., 0]
-        ys = closest[..., 1]
-        valid_mask[ys, xs] = 1
-
-        right_to_left_warped_grid = torch.copy(base_grid)
-        right_to_left_warped_grid[closest] = base_grid
+        disparity = (camera_baseline * focal_length) / right_depth
+        warped_xs = xs + disparity  # Note xs is broadcast here
+        warped_xs = torch.permute(warped_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
+        ys = ys.unsqueeze(0).unsqueeze(0).expand(B, -1, -1, -1)
+        ys = torch.permute(ys, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
+        warped_grid = torch.cat((warped_xs, ys), dim=-1)
 
         # Warping the left frame on to the right frame
-        warped_left_frame = F.grid_sample(
-            left_frame, 
-            right_to_left_warped_grid, 
+        warped_right_frame = F.grid_sample(
+            right_frame, 
+            warped_grid, 
             mode='bilinear',
             padding_mode='zeros',
             align_corners=False
         )
+
+        valid_mask = None
+
+        return warped_right_frame, valid_mask
+
+    @staticmethod
+    def right_to_left_warp(
+        left_frame: torch.Tensor,
+        left_depth: torch.Tensor,
+        camera_baseline: float,
+        focal_length: float
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        B, _, H, W = left_frame.shape
+
+        ys, xs = torch.meshgrid(
+            torch.arange(H),
+            torch.arange(W),
+            indexing='ij'
+        )
+
+        disparity = (camera_baseline * focal_length) / left_depth
+        warped_xs = xs - disparity  # Note xs is broadcast here
+        warped_xs = torch.permute(warped_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
+        ys = ys.unsqueeze(0).unsqueeze(0).expand(B, -1, -1, -1)
+        ys = torch.permute(ys, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
+        warped_grid = torch.cat((warped_xs, ys), dim=-1)
+
+        # Warping the left frame on to the right frame
+        warped_left_frame = F.grid_sample(
+            left_frame, 
+            warped_grid, 
+            mode='bilinear',
+            padding_mode='zeros',
+            align_corners=False
+        )
+
+        valid_mask = None
 
         return warped_left_frame, valid_mask
 
@@ -233,6 +222,60 @@ def write_video(
 # -------------------------------------------------------------------------
 # ----------------------------- Sanity checks -----------------------------
 # -------------------------------------------------------------------------
+def save_input_vr(
+    sanity_checks_output_path: Path,
+    model: nn.Module,
+    inputs: torch.Tensor,
+    motion_vectors: torch.Tensor,
+    scale_factor: int,
+    eye: str
+) -> None:
+    from utils import linear_to_gamma
+
+    sanity_checks_output_path = sanity_checks_output_path / eye.capitalize()
+    sanity_checks_output_path.mkdir(parents=True, exist_ok=True)
+    
+    c0 = 0
+    c1 = c0 + model.num_curr_left_colour
+    curr_colour = inputs[c0:c1]
+    save_image(linear_to_gamma(curr_colour), sanity_checks_output_path / f"curr_{eye}_colour.png")
+
+    c0 = c1
+    c1 = c0 + model.num_curr_depth
+    curr_depth = inputs[c0:c1]
+    save_image(linear_to_gamma(curr_depth), sanity_checks_output_path / f"curr_{eye}_depth.png")
+
+    if model.num_curr_jitter != 0:
+        c0 = c1
+        c1 = c0 + model.num_curr_jitter
+        curr_jitter = inputs[c0:c1]
+        zeros = torch.zeros(
+            1,
+            curr_jitter.shape[1],
+            curr_jitter.shape[2],
+            device=curr_jitter.device,
+            dtype=curr_jitter.dtype
+        )
+        curr_jitter = torch.cat([curr_jitter, zeros], dim=0)
+        save_image(curr_jitter, sanity_checks_output_path / "curr_jitter.png")
+
+    c0 = c1
+    c1 = c0 + model.num_prev_left_colour
+    prev_colour = inputs[c0:c1]
+    save_image(linear_to_gamma(F.pixel_shuffle(prev_colour, upscale_factor=scale_factor)), sanity_checks_output_path / f"prev_{eye}_colour.png")
+
+    c0 = c1
+    c1 = c0 + model.num_prev_left_feature
+    prev_feature = inputs[c0:c1]
+    save_image(F.pixel_shuffle(prev_feature, upscale_factor=scale_factor), sanity_checks_output_path / f"prev_{eye}_feature.png")
+    
+    motion_vectors = motion_vectors.squeeze(0)
+    motion_vectors = torch.cat([
+        torch.zeros((1, motion_vectors.shape[1], motion_vectors.shape[2])),
+        motion_vectors
+    ])
+    print(f"{motion_vectors=}")
+    save_image(linear_to_gamma(motion_vectors), sanity_checks_output_path / f"{eye}_motion_vectors.png")
 
 
 def checkpoint_vr(
@@ -261,8 +304,9 @@ def checkpoint_vr(
                 right_inputs, 
                 left_motion_vectors, 
                 right_motion_vectors, 
-                left_jitter,
-                right_jitter, 
+                prev_left_depth,
+                prev_right_depth,
+                jitter, 
                 left_output, 
                 right_output, 
                 curr_frame_num
@@ -273,8 +317,9 @@ def checkpoint_vr(
                 right_inputs_next, 
                 left_motion_vectors_next, 
                 right_motion_vectors_next, 
-                left_jitter_next,
-                right_jitter_next, 
+                prev_left_depth_next,
+                prev_right_depth_next,
+                jitter_next, 
                 left_output_next, 
                 right_output_next, 
                 curr_frame_num_next
@@ -285,8 +330,9 @@ def checkpoint_vr(
                 right_inputs, 
                 left_motion_vectors, 
                 right_motion_vectors, 
-                left_jitter,
-                right_jitter, 
+                prev_left_depth,
+                prev_right_depth,
+                jitter, 
                 left_output, 
                 right_output, 
                 curr_frame_num
@@ -297,50 +343,53 @@ def checkpoint_vr(
                 right_inputs_next, 
                 left_motion_vectors_next, 
                 right_motion_vectors_next, 
-                left_jitter_next,
-                right_jitter_next, 
+                prev_left_depth_next,
+                prev_right_depth_next,
+                jitter_next, 
                 left_output_next, 
                 right_output_next, 
                 curr_frame_num_next
             ) = data[index + 1]
 
         # Verify input to the network
-        save_input(sanity_checks_output_path / "left", model, left_inputs, left_motion_vectors, scale_factor)
-        save_input(sanity_checks_output_path / "right", model, right_inputs, right_motion_vectors, scale_factor)
+        save_input_vr(sanity_checks_output_path, model, left_inputs, left_motion_vectors, scale_factor, eye="left")
+        save_input_vr(sanity_checks_output_path, model, right_inputs, right_motion_vectors, scale_factor, eye="right")
 
         # Verify warping 
         left_warped_prev = model.warp(
             left_output.unsqueeze(0),
             left_motion_vectors_next.unsqueeze(0)
         ).squeeze(0)
-        save_image(linear_to_gamma(left_warped_prev), sanity_checks_output_path / "left_warped_prev.png")
+        save_image(linear_to_gamma(left_warped_prev), sanity_checks_output_path / "Left" / "left_warped_prev.png")
 
         left_diff = torch.abs(left_output_next - left_warped_prev)
-        save_image(linear_to_gamma(left_diff), sanity_checks_output_path / "left_diff.png")
+        save_image(linear_to_gamma(left_diff), sanity_checks_output_path / "Left" / "left_diff.png")
 
         right_warped_prev = model.warp(
             right_output.unsqueeze(0),
             right_motion_vectors_next.unsqueeze(0)
         ).squeeze(0)
-        save_image(linear_to_gamma(right_warped_prev), sanity_checks_output_path / "right_warped_prev.png")
+        save_image(linear_to_gamma(right_warped_prev), sanity_checks_output_path / "Right" / "right_warped_prev.png")
 
         right_diff = torch.abs(right_output_next - right_warped_prev)
-        save_image(linear_to_gamma(right_diff), sanity_checks_output_path / "right_diff.png")
+        save_image(linear_to_gamma(right_diff), sanity_checks_output_path / "Right" / "right_diff.png")
 
         # Verify the goal of the network
-        save_image(linear_to_gamma(left_output), sanity_checks_output_path / "left_ground_truth.png")
-        save_image(linear_to_gamma(right_output), sanity_checks_output_path / "right_ground_truth.png")
+        save_image(linear_to_gamma(left_output), sanity_checks_output_path / "Left" / "left_ground_truth.png")
+        save_image(linear_to_gamma(right_output), sanity_checks_output_path / "Right" / "right_ground_truth.png")
 
         # Strictly a training diagnostic, so it's OK if training data is used here
 
         # Output of the network when history is invalid
         left_inputs = left_inputs.to(device).unsqueeze(0).unsqueeze(0)
         left_motion_vectors = left_motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
-        left_jitter = left_jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+        prev_left_depth = prev_left_depth.to(device).unsqueeze(0).unsqueeze(0)
 
         right_inputs = right_inputs.to(device).unsqueeze(0).unsqueeze(0)
         right_motion_vectors = right_motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
-        right_jitter = right_jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+        prev_right_depth = prev_right_depth.to(device).unsqueeze(0).unsqueeze(0)
+
+        jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
 
         (
             pred_left_frame, 
@@ -354,9 +403,10 @@ def checkpoint_vr(
             right_inputs,
             left_motion_vectors, 
             right_motion_vectors,
+            prev_left_depth,
+            prev_right_depth,
             curr_frame_num, 
-            left_jitter, 
-            right_jitter,
+            jitter, 
             "evaluation"
         )
 
@@ -378,19 +428,21 @@ def checkpoint_vr(
         # Output of the network when history is valid
         left_inputs_next = left_inputs_next.to(device).unsqueeze(0).unsqueeze(0)
         left_motion_vectors_next = left_motion_vectors_next.to(device).unsqueeze(0).unsqueeze(0)
-        left_jitter_next = left_jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+        prev_left_depth_next = prev_left_depth_next.to(device).unsqueeze(0).unsqueeze(0)
 
         right_inputs_next = right_inputs_next.to(device).unsqueeze(0).unsqueeze(0)
         right_motion_vectors_next = right_motion_vectors_next.to(device).unsqueeze(0).unsqueeze(0)
-        right_jitter_next = right_jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+        prev_right_depth_next = prev_right_depth_next.to(device).unsqueeze(0).unsqueeze(0)
 
-        c0 = model.num_curr_colour + model.num_curr_depth + model.num_curr_jitter
-        c1 = c0 + model.num_prev_colour
+        jitter_next = jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+
+        c0 = model.num_curr_left_colour + model.num_curr_depth + model.num_curr_jitter
+        c1 = c0 + model.num_prev_left_colour
         left_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(left_output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
         right_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(right_output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
 
         c0 = c1
-        c1 = c0 + model.num_prev_feature
+        c1 = c0 + model.num_prev_left_feature
         left_inputs_next[:, :, c0:c1] = left_features.squeeze(0)
         right_inputs_next[:, :, c0:c1] = right_features.squeeze(0)
 
@@ -406,9 +458,10 @@ def checkpoint_vr(
             right_inputs_next,
             left_motion_vectors_next, 
             right_motion_vectors_next,
+            prev_left_depth_next,
+            prev_right_depth_next,
             curr_frame_num_next, 
-            left_jitter_next,
-            right_jitter_next,
+            jitter,
             "evaluation"
         )
 

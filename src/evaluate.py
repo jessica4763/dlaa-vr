@@ -225,14 +225,12 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             output_imgs_path=cfg["dataset"]["validation-output-img-path"],
             input_frame_height=cfg["dataset"]["input-frame-height"],
             input_frame_width=cfg["dataset"]["input-frame-width"],
+            camera_data_path_suffix=cfg["dataset"]["camera-data-path-suffix"],
             input_path_suffix=cfg["dataset"]["input-path-suffix"],
             jittered_input_path_suffix=cfg["dataset"]["jittered-input-path-suffix"],
             colour_path_suffix=cfg["dataset"]["colour-path-suffix"],
             depth_path_suffix=cfg["dataset"]["depth-path-suffix"],
             motion_vector_path_suffix=cfg["dataset"]["motion-vector-path-suffix"],
-            colour_jittered_path_suffix=cfg["dataset"]["colour-jittered-path-suffix"],
-            depth_jittered_path_suffix=cfg["dataset"]["depth-jittered-path-suffix"],
-            motion_vector_jittered_path_suffix=cfg["dataset"]["motion-vector-jittered-path-suffix"],
             scene_names=cfg["dataset"]["scene-names"],
             use_jitter=cfg["setup"]["jitter"],
             scale_factor=scale_factor,
@@ -278,9 +276,9 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
         )
 
         model = VRSpatialTemporalNetwork(
+            vr_config=vr_config,
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
-            vr_config=vr_config,
             scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"]
         ).to(device)
@@ -405,13 +403,13 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
 
 def main() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="validation")
+        cfg = hydra.compose(config_name="vr-validation")
         writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
 
         run(cfg=cfg, writer=writer, iterations=0)
 
         print("\n --------------------- Stationary Segments Evaluation -------------------- \n")
-        stationary_segments_cfg = hydra.compose(config_name="validation", overrides=["dataset=validation-upscale-stationary-segment"])
+        stationary_segments_cfg = hydra.compose(config_name="vr-validation", overrides=["dataset=validation-upscale-stationary-segment"])
         run(cfg=stationary_segments_cfg, writer=writer, iterations=0)
 
 

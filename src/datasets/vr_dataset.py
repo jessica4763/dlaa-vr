@@ -18,14 +18,12 @@ class VRDataset(QualcommDataset):
         output_imgs_path: str,
         input_frame_height: int,
         input_frame_width: int,
+        camera_data_path_suffix: str,
         input_path_suffix: str,
         jittered_input_path_suffix: str,
         colour_path_suffix: str,
         depth_path_suffix: str,
         motion_vector_path_suffix: str,
-        colour_jittered_path_suffix: str,
-        depth_jittered_path_suffix: str,
-        motion_vector_jittered_path_suffix: str,
         scene_names: list[str],
         use_jitter: bool = False,
         scale_factor: int = 1,
@@ -38,17 +36,16 @@ class VRDataset(QualcommDataset):
         self.output_imgs_path = output_imgs_path      # ../data/test_data/VR/*/1440x1600
         self.input_frame_height = input_frame_height  
         self.input_frame_width = input_frame_width
+        self.camera_data_path_suffix = camera_data_path_suffix
 
         if use_jitter:
             self.input_imgs_path += f"/{jittered_input_path_suffix}"             # ../data/test_data/VR/*/720x800/MipBiasMinus1Jittered
-            self.colour_path_suffix = colour_jittered_path_suffix                # Colour
-            self.depth_path_suffix = depth_jittered_path_suffix                  # Depth
-            self.motion_vector_path_suffix = motion_vector_jittered_path_suffix  # MotionVector
         else:
             self.input_imgs_path += f"/{input_path_suffix}"             # ../data/test_data/VR/*/720x800/MipBiasMinus1
-            self.colour_path_suffix = colour_path_suffix                # Colour
-            self.depth_path_suffix = depth_path_suffix                  # Depth
-            self.motion_vector_path_suffix = motion_vector_path_suffix  # MotionVector
+
+        self.colour_path_suffix = colour_path_suffix                # Colour
+        self.depth_path_suffix = depth_path_suffix                  # Depth
+        self.motion_vector_path_suffix = motion_vector_path_suffix  # MotionVector
 
         self.scenes = []
         for scene_name in scene_names:
@@ -100,7 +97,7 @@ class VRDataset(QualcommDataset):
         curr_frame_num: int,
         eye: str
     ) -> torch.Tensor:
-        curr_frame = str(curr_frame_num).zfill(4) + ".png"
+        curr_frame = str(curr_frame_num).zfill(4) + ".exr"
         depth_path = scene.scene_input_imgs_path / eye / self.depth_path_suffix / instance / curr_frame
         depth = iio.imread(depth_path.resolve())
 
@@ -140,6 +137,20 @@ class VRDataset(QualcommDataset):
 
         return motion_vectors
     
+    def apply_jitter_compensation(
+        self,
+        motion_vectors: torch.Tensor,
+        prev_jitter_x: torch.Tensor,
+        prev_jitter_y: torch.Tensor,
+        curr_jitter_x: torch.Tensor,
+        curr_jitter_y: torch.Tensor,
+        height: int,
+        width: int
+    ) -> torch.Tensor:
+        motion_vectors[[0], ...] += (prev_jitter_x - curr_jitter_x) / width
+        motion_vectors[[1], ...] += (prev_jitter_y - curr_jitter_y) / height
+        return motion_vectors
+        
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.mode == "training":
             idx, patch_start_x, patch_start_y, patch_end_x, patch_end_y = item
@@ -169,7 +180,7 @@ class VRDataset(QualcommDataset):
 
         # ---------------------------- Left frame ---------------------------
         left_input_img_path = scene.scene_input_imgs_path / "Left" / self.colour_path_suffix / instance / curr_frame
-        left_output_img_path = scene.scene_output_imgs_path / "Left" / instance / curr_frame
+        left_output_img_path = scene.scene_output_imgs_path / "Left" / self.colour_path_suffix / instance / curr_frame
 
         curr_left_input_img = decode_image(left_input_img_path.resolve())[0:3, ...].float()
         curr_left_input_img = self.get_patch(
@@ -191,7 +202,7 @@ class VRDataset(QualcommDataset):
 
         # --------------------------- Right frame ---------------------------
         right_input_img_path = scene.scene_input_imgs_path / "Right" / self.colour_path_suffix / instance / curr_frame
-        right_output_img_path = scene.scene_output_imgs_path / "Right" / instance / curr_frame
+        right_output_img_path = scene.scene_output_imgs_path / "Right" / self.colour_path_suffix / instance / curr_frame
 
         curr_right_input_img = decode_image(right_input_img_path.resolve())[0:3, ...].float()
         curr_right_input_img = self.get_patch(
@@ -253,7 +264,7 @@ class VRDataset(QualcommDataset):
             antialias=True
         ).squeeze(0)  # Remove the batch dimension
 
-        prev_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(prev_left_output_img)
+        prev_left_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(prev_left_output_img)
 
         # --------------------------- Right frame ---------------------------
         prev_right_output_img = F.interpolate(  # Interpolate in linear space
@@ -264,7 +275,7 @@ class VRDataset(QualcommDataset):
             antialias=True
         ).squeeze(0)  # Remove the batch dimension
 
-        prev_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(prev_right_output_img)
+        prev_right_output_img = nn.PixelUnshuffle(downscale_factor=self.scale_factor)(prev_right_output_img)
 
         # -------------------------------------------------------------------
         # ----------------------------- Features ----------------------------

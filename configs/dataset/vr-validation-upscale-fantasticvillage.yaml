@@ -1,11 +1,11 @@
 validation-input-img-path:  ../data/test_data/VR/*/720x800
 validation-output-img-path:  ../data/test_data/VR/*/1440x1600/Enhanced
 
-input-frame-height: 720
-input-frame-width: 800
+input-frame-height: 800
+input-frame-width: 720
 
-output-frame-height: 1440
-output-frame-width: 1600
+output-frame-height: 1600
+output-frame-width: 1440
 
 dilation-block-size: 8
 
@@ -16,6 +16,8 @@ is-stationary-segment: false
 camera-baseline: 0.064  # metres
 horizontal-fov: 100.0  # degrees
 vertical-fov: 105.8809
+
+camera-data-path-suffix: CameraData
 
 input-path-suffix: MipBiasMinus1
 jittered-input-path-suffix: MipBiasMinus1Jittered

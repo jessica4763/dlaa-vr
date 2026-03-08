@@ -37,6 +37,7 @@ class QualcommDataset(Dataset):
         self.output_imgs_path = output_imgs_path
         self.input_frame_height = input_frame_height
         self.input_frame_width = input_frame_width
+        self.camera_data_path_suffix = camera_data_path_suffix
 
         if use_jitter:
             self.colour_path_suffix = colour_jittered_path_suffix
@@ -46,8 +47,6 @@ class QualcommDataset(Dataset):
             self.colour_path_suffix = colour_path_suffix
             self.depth_path_suffix = depth_path_suffix
             self.motion_vector_path_suffix = motion_vector_path_suffix
-
-        self.camera_data_path_suffix = camera_data_path_suffix
 
         self.scenes = []
         for scene_name in scene_names:

@@ -127,7 +127,24 @@ def display_depth(input_path: Path, output_path: Path) -> None:
     return depth
 
 
+def filter_exr(folder_path: Path) -> None:
+    for file in folder_path.rglob("*"):
+        if not file.is_file():
+            continue
+
+        parent_name = file.parent.name
+        suffix = file.suffix.lower()
+
+        if suffix == ".exr" and parent_name == "Colour":
+            file.unlink()
+
+        if suffix == ".png" and parent_name in {"Depth", "MotionVector"}:
+            file.unlink()
+
+
 if __name__ == "__main__":
+    filter_exr(Path("../data/training_data/VR"))
+
     # display_depth(
     #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/DepthMipBiasMinus1Jittered/0000/0000.png"),
     #     Path("checks")
@@ -135,10 +152,10 @@ if __name__ == "__main__":
 
     # rename_files( "../data/test_data/QRISP/TestSet/AbandonedSchoolStationary/540p/MotionVectorsMipBiasMinus1Jittered/0000", extension=".exr")
 
-    evaluate(
-        Path("../data/test_data/QRISP/TestSet/SeaPort/540p/MipBiasMinus1/0000"),
-        Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced/0000")
-    )
+    # evaluate(
+    #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/MipBiasMinus1/0000"),
+    #     Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced/0000")
+    # )
 
     # output_dimensions = (960, 540)
 

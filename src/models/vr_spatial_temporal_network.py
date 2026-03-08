@@ -9,13 +9,15 @@ from utils import VRConfig
 class VRSpatialTemporalNetwork(QualcommNetwork):
     def __init__(
         self,
+        vr_config: VRConfig,
         hidden_channels: int,
         num_blocks: int,
-        vr_config: VRConfig,
         scale_factor: int = 1,
         use_jitter: bool = False
     ) -> None:
         nn.Module.__init__(self)
+        
+        self.vr_config = vr_config
 
         self.num_curr_left_colour = self.num_curr_right_colour = 3
         self.num_curr_depth = 1
@@ -75,7 +77,7 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         # Feature head
         if use_jitter:
             self.feature_head = JitterConditionedConv(
-                self.num_prev_feature,
+                self.num_prev_left_feature,
                 hidden_channels,
                 3,
                 3,
@@ -85,7 +87,7 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         else:
             self.feature_head = nn.Conv2d(
                 hidden_channels,
-                self.num_prev_feature,
+                self.num_prev_left_feature,
                 kernel_size=3,
                 padding=1,
                 padding_mode="zeros"
@@ -94,7 +96,7 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         # Colour head
         if use_jitter:
             self.colour_head = JitterConditionedConv(
-                self.num_prev_colour,
+                self.num_prev_left_colour,
                 hidden_channels,
                 3,
                 3,
@@ -104,7 +106,7 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         else:
             self.colour_head = nn.Conv2d(
                 hidden_channels,
-                self.num_prev_colour,
+                self.num_prev_left_colour,
                 kernel_size=3,
                 padding=1,
                 padding_mode="zeros"
@@ -149,116 +151,129 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         prev_right_feature: torch.Tensor,
         prev_depth: torch.Tensor,
         jitter_frames: torch.Tensor,
+        temporal_warp: int,
         eye: str
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:        
         if eye == "left":
             # Current right frame warped onto the current left frame
-            curr_warped_right_colour = VRConfig.right_to_left_warp(
+            curr_warped_right_colour, valid_mask = VRConfig.right_to_left_warp(
                 curr_right_colour, 
-                curr_depth, 
+                curr_depth,  # left depth
                 self.vr_config.camera_baseline, 
                 self.vr_config.focal_length
             )
 
             # The previous left frame warped temporally onto the current left frame
-            prev_warped_left_colour = self.warp(
-                prev_left_colour,
-                curr_motion_vectors
-            )
+            if temporal_warp:
+                prev_left_colour = self.warp(
+                    prev_left_colour,
+                    curr_motion_vectors
+                )
 
             # The previous left feature frame warped temporally onto the current left feature frame
-            prev_warped_left_feature = self.warp(
-                prev_left_feature,
-                curr_motion_vectors
-            )
+            if temporal_warp:
+                prev_left_feature = self.warp(
+                    prev_left_feature,
+                    curr_motion_vectors
+                )
 
             # The previous right frame warped onto the previous left frame, and then warped temporally onto the current left frame
-            prev_warped_right_colour = self.warp(
-                VRConfig.right_to_left_warp(
-                    prev_right_colour, 
-                    prev_depth, 
-                    self.vr_config.camera_baseline, 
-                    self.vr_config.focal_length
-                ),
-                curr_motion_vectors
+            prev_right_colour, valid_mask = VRConfig.right_to_left_warp(
+                prev_right_colour, 
+                prev_depth,  # left depth
+                self.vr_config.camera_baseline, 
+                self.vr_config.focal_length
             )
+            if temporal_warp:
+                prev_right_colour = self.warp(
+                    prev_right_colour,
+                    curr_motion_vectors
+                )
 
             # The previous right feature frame warped onto the previous left feature frame, and then warped temporally onto the current left feature frame
-            prev_warped_right_feature = self.warp(
-                VRConfig.right_to_left_warp(
-                    prev_right_feature, 
-                    prev_depth, 
-                    self.vr_config.camera_baseline, 
-                    self.vr_config.focal_length
-                ),
-                curr_motion_vectors
+            prev_right_feature, valid_mask = VRConfig.right_to_left_warp(
+                prev_right_feature, 
+                prev_depth,  # left depth
+                self.vr_config.camera_baseline, 
+                self.vr_config.focal_length
             )
+            if temporal_warp:
+                prev_right_feature = self.warp(
+                    prev_right_feature,
+                    curr_motion_vectors
+                )
 
             # (B, C, H, W)
-            inputs = torch.stack([
+            inputs = torch.cat([
                 curr_left_colour,          # C = 3
                 curr_warped_right_colour,  # C = 3
                 curr_depth,                # C = 1
                 curr_jitter,               # C = 2
-                prev_warped_left_colour,   # C = 12
-                prev_warped_right_colour,  # C = 12
-                prev_warped_left_feature,  # C = 12
-                prev_warped_right_feature  # C = 12
+                prev_left_colour,          # C = 12
+                prev_right_colour,         # C = 12
+                prev_left_feature,         # C = 12
+                prev_right_feature         # C = 12
             ], dim=1)
 
         else:
             # Current left frame warped onto the current right frame
-            curr_warped_left_colour = VRConfig.left_to_right_warp(
+            curr_warped_left_colour, valid_mask = VRConfig.left_to_right_warp(
                 curr_left_colour,
-                curr_depth,
+                curr_depth,  # right depth
                 self.vr_config.camera_baseline, 
                 self.vr_config.focal_length
             )
 
             # The previous right frame warped temporally onto the current right frame
-            prev_warped_right_colour = self.warp(
-                prev_right_colour,
-                curr_motion_vectors
-            )
+            if temporal_warp:
+                prev_right_colour = self.warp(
+                    prev_right_colour,
+                    curr_motion_vectors
+                )
 
             # The previous right feature frame warped temporally onto the current right feature frame
-            prev_warped_right_feature = self.warp(
-                prev_right_feature,
-                curr_motion_vectors
-            )
+            if temporal_warp:
+                prev_right_feature = self.warp(
+                    prev_right_feature,
+                    curr_motion_vectors
+                )
 
             # The previous left frame warped onto the previous right frame, and then warped temporally onto the current right frame
-            prev_warped_left_colour = self.warp(
-                VRConfig.right_to_left_warp(
-                    prev_left_colour, 
-                    prev_depth, 
-                    self.vr_config.camera_baseline, 
-                    self.vr_config.focal_length
-                ),
-                curr_motion_vectors
+            prev_left_colour, valid_mask = VRConfig.right_to_left_warp(
+                prev_left_colour, 
+                prev_depth,  # right depth
+                self.vr_config.camera_baseline, 
+                self.vr_config.focal_length
             )
+            if temporal_warp:
+                prev_left_colour = self.warp(
+                    prev_left_colour,
+                    curr_motion_vectors
+                )
 
             # The previous left feature frame warped onto the previous right feature frame, and then warped temporally onto the current left right feature frame
-            prev_warped_left_feature = self.warp(
-                VRConfig.right_to_left_warp(
-                    prev_left_feature, 
-                    prev_depth, 
-                    self.vr_config.camera_baseline, 
-                    self.vr_config.focal_length
-                ),
-                curr_motion_vectors
+            prev_left_feature, valid_mask = VRConfig.right_to_left_warp(
+                prev_left_feature, 
+                prev_depth,  # right depth
+                self.vr_config.camera_baseline, 
+                self.vr_config.focal_length
             )
+            if temporal_warp:
+                prev_left_feature = self.warp(
+                    prev_left_feature,
+                    curr_motion_vectors
+                )
 
             # (B, C, H, W)
-            inputs = torch.stack([
-                curr_warped_left_colour,    # C = 3
-                curr_right_colour,          # C = 3
-                curr_depth,                 # C = 1
-                curr_jitter,                # C = 2
-                prev_warped_left_colour,    # C = 12
-                prev_warped_right_colour,   # C = 12
-                prev_warped_left_feature,   # C = 12
-                prev_warped_right_feature,  # C = 12
+            inputs = torch.cat([
+                curr_warped_left_colour,  # C = 3
+                curr_right_colour,        # C = 3
+                curr_depth,               # C = 1
+                curr_jitter,              # C = 2
+                prev_left_colour,         # C = 12
+                prev_right_colour,        # C = 12
+                prev_left_feature,        # C = 12
+                prev_right_feature,       # C = 12
             ], dim=1)
 
         B, C, H, W = inputs.shape
@@ -300,15 +315,15 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         # ------------------------------------------------------------
         # (B, 12, H, W) --> (B, 3, 4, H, W)
         out_colour = out_colour.view(B, 3, -1, H, W)
-        prev_warped_left_colour = prev_warped_left_colour.view(B, 3, -1, H, W)
-        prev_warped_right_colour = prev_warped_right_colour.view(B, 3, -1, H, W)
+        prev_left_colour = prev_left_colour.view(B, 3, -1, H, W)
+        prev_right_colour = prev_right_colour.view(B, 3, -1, H, W)
 
         # (B, 12, H, W) --> (B, 3, 4, H, W)
         out_blending_mask = out_blending_mask.view(B, 3, -1, H, W)
         blended_colour = (
             out_colour * out_blending_mask[:, 0:1, ...] +
-            prev_warped_left_colour * out_blending_mask[:, 1:2, ...] +
-            prev_warped_right_colour * out_blending_mask[:, 2:3, ...]
+            prev_left_colour * out_blending_mask[:, 1:2, ...] +
+            prev_right_colour * out_blending_mask[:, 2:3, ...]
         )
         blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
         blended_colour = blended_colour.view(B, -1, H, W)
@@ -330,16 +345,18 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         B, clip_size, C, H, W = left_inputs.shape
 
         # To hold the recurrent colour frame and features
-        prev_pred_left_colour, prev_pred_right_colour, prev_pred_left_features, prev_pred_right_features = None
+        prev_pred_left_colour = prev_pred_right_colour = prev_pred_left_features = prev_pred_right_features = None
 
         left_outputs = []
         right_outputs = []
         for clip in range(clip_size):
             left_clip_frames = left_inputs[:, clip].clone()
             left_motion_vector_frames = left_motion_vectors[:, clip]
+            prev_left_depth_frames = prev_left_depth[:, clip]
 
             right_clip_frames = right_inputs[:, clip].clone()
             right_motion_vector_frames = right_motion_vectors[:, clip]
+            prev_right_depth_frames = prev_right_depth[:, clip]
 
             if self.num_curr_jitter != 0:
                 jitter_frames = jitter[:, clip]
@@ -360,13 +377,26 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
 
             c0 = c1
             c1 = c0 + self.num_prev_left_colour
-            prev_left_colour = prev_pred_left_colour if prev_pred_left_colour is not None else left_clip_frames[:, c0:c1] 
-            prev_right_colour = prev_pred_right_colour if prev_pred_right_colour is not None else right_clip_frames[:, c0:c1]
+            if mode == "training":
+                prev_left_colour = prev_pred_left_colour if prev_pred_left_colour is not None else left_clip_frames[:, c0:c1] 
+                prev_right_colour = prev_pred_right_colour if prev_pred_right_colour is not None else right_clip_frames[:, c0:c1]
+            else:
+                prev_left_colour = left_clip_frames[:, c0:c1] 
+                prev_right_colour = right_clip_frames[:, c0:c1]
             
             c0 = c1
             c1 = c0 + self.num_prev_left_colour
-            prev_left_feature = prev_pred_left_features if prev_pred_left_features is not None else left_clip_frames[:, c0:c1]
-            prev_right_feature = prev_pred_right_features if prev_pred_right_features is not None else right_clip_frames[:, c0:c1]
+            if mode == "training":
+                prev_left_feature = prev_pred_left_features if prev_pred_left_features is not None else left_clip_frames[:, c0:c1] 
+                prev_right_feature = prev_pred_right_features if prev_pred_right_features is not None else right_clip_frames[:, c0:c1]
+            else:
+                prev_left_feature = left_clip_frames[:, c0:c1] 
+                prev_right_feature = right_clip_frames[:, c0:c1]
+
+            if (mode == "training" and None not in (prev_pred_left_colour, prev_pred_right_colour, prev_pred_left_features, prev_pred_right_features)) or (mode != "training" and curr_frame_num > 0):
+                temporal_warp = True
+            else:
+                temporal_warp = False
             
             # ------------------------------------------------------------
             # ------------------------- Left eye -------------------------
@@ -381,8 +411,9 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
                 prev_right_colour=prev_right_colour,
                 prev_left_feature=prev_left_feature,
                 prev_right_feature=prev_right_feature,
-                prev_depth=prev_left_depth,
+                prev_depth=prev_left_depth_frames,
                 jitter_frames=jitter_frames,
+                temporal_warp=temporal_warp,
                 eye="left"
             )
 
@@ -399,8 +430,9 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
                 prev_right_colour=prev_right_colour,
                 prev_left_feature=prev_left_feature,
                 prev_right_feature=prev_right_feature,
-                prev_depth=prev_right_depth,
+                prev_depth=prev_right_depth_frames,
                 jitter_frames=jitter_frames,
+                temporal_warp=temporal_warp,
                 eye="right"
             )
 
@@ -418,7 +450,7 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
             prev_pred_left_features = left_out_features
 
             prev_pred_right_colour = right_blended_colour
-            prev_right_feature = right_out_features
+            prev_pred_right_features = right_out_features
 
         # prev_pred_features is only used by evaluation
         # out_blending_mask is only used during evaluation for inspection
