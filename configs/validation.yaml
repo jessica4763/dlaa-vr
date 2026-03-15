@@ -6,7 +6,7 @@ setup:
   display-name: standard_fhd  # standard_fhd, standard_hmd
   jitter: true
 
-paths: 
+paths:
   checkpoints-path: run/checkpoints
   sanity-checks-output-path: run/sanity_checks_output
   evaluation-output-path: run/evaluation_outputs

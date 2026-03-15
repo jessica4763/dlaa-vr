@@ -409,10 +409,6 @@ def main() -> None:
 
         run(cfg=cfg, writer=writer, iterations=0)
 
-        print("\n --------------------- Stationary Segments Evaluation -------------------- \n")
-        stationary_segments_cfg = hydra.compose(config_name="vr-validation", overrides=["dataset=validation-upscale-stationary-segment"])
-        run(cfg=stationary_segments_cfg, writer=writer, iterations=0)
-
 
 if __name__ == "__main__":
     main()

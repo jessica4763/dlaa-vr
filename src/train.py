@@ -235,7 +235,7 @@ def train_epoch_vr(
 
 def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="vr-train")
+        cfg = hydra.compose(config_name="train")
 
     device = (
         torch.accelerator.current_accelerator().type
@@ -655,7 +655,7 @@ def validate(
     with hydra.initialize(version_base=None, config_path="../configs"):
         if iterations % primary_validation_interval < iterations_per_epoch:
             validation_cfg = hydra.compose(
-                config_name="vr-validation", 
+                config_name="validation", 
                 overrides=[
                     "dataset=validation-upscale-seaport",
                     f"paths.saved-models-path={saved_models_path}"
@@ -664,7 +664,7 @@ def validate(
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
 
             validation_cfg = hydra.compose(
-                config_name="vr-validation", 
+                config_name="validation", 
                 overrides=[
                     "dataset=validation-upscale-abandonedschool",
                     f"paths.saved-models-path={saved_models_path}"
@@ -673,7 +673,7 @@ def validate(
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
 
             validation_cfg = hydra.compose(
-                config_name="vr-validation", 
+                config_name="validation", 
                 overrides=[
                     "dataset=validation-upscale-spaceshipdemo",
                     f"paths.saved-models-path={saved_models_path}"
@@ -682,7 +682,7 @@ def validate(
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
 
             validation_cfg = hydra.compose(
-                config_name="vr-validation", 
+                config_name="validation", 
                 overrides=[
                     "dataset=validation-upscale-stationary-segment",
                     f"paths.saved-models-path={saved_models_path}"
@@ -691,7 +691,7 @@ def validate(
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
         elif iterations % proxy_validation_interval < iterations_per_epoch:
             validation_cfg = hydra.compose(
-                config_name="vr-validation", 
+                config_name="validation", 
                 overrides=[
                     "dataset=validation-upscale-seaport",
                     f"paths.saved-models-path={saved_models_path}"
