@@ -12,7 +12,7 @@ dilation-block-size: 8
 scene-names: [FantasticVillage]
 is-vr: true
 
-camera-baseline: 0.064  # metres
+camera-baseline: 6.4  # cm
 horizontal-fov: 100.0  # degrees
 vertical-fov: 105.8809
 

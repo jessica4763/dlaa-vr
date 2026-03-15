@@ -132,7 +132,7 @@ def filter_exr(folder_path: Path) -> None:
         if not file.is_file():
             continue
 
-        parent_name = file.parent.name
+        parent_name = file.parent.parent.name
         suffix = file.suffix.lower()
 
         if suffix == ".exr" and parent_name == "Colour":

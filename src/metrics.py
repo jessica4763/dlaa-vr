@@ -88,14 +88,7 @@ class Metrics:
         self.pixel_squared_sum += np.square(pred)
     
     def record_photometric_residual(self, left_pred: np.ndarray, left_depth: np.ndarray, right_pred: np.ndarray) -> float:
-        warped_frame, valid_mask = VRConfig.left_to_right_warp(
-            left_pred,
-            left_depth,
-            self.vr_config.camera_baseline,
-            self.vr_config.focal_length
-        )
-        rmse = np.sqrt(np.mean((warped_frame[valid_mask] - right_pred[valid_mask]) ** 2))
-        return rmse
+        pass
 
     def record(self, pred: torch.Tensor, target: torch.Tensor) -> None:
         pred = torch.round(pred * 255.0) / 255.0

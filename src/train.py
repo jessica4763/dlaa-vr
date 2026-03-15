@@ -155,18 +155,18 @@ def train_epoch_vr(
         # input_N = num_batches * clip_size
         input_N, input_C, input_H, input_W = prev_left_depth.shape
         prev_left_depth = prev_left_depth.to(device, non_blocking=True)
-        prev_left_depth = prev_left_depth.view(-1, clip_size, 1, input_H, input_W)
+        prev_left_depth = prev_left_depth.view(-1, clip_size, input_C, input_H, input_W)
 
         prev_right_depth = prev_right_depth.to(device, non_blocking=True)
-        prev_right_depth = prev_right_depth.view(-1, clip_size, 1, input_H, input_W)
+        prev_right_depth = prev_right_depth.view(-1, clip_size, input_C, input_H, input_W)
 
         # output_N = num_batches * clip_size. output_H == input_H and output_W == input_W with no upscaling
-        output_N, output_C, output_H, output_W = left_targets.shape
+        input_N, input_C, input_H, input_W = left_motion_vectors.shape
         left_motion_vectors = left_motion_vectors.to(device, non_blocking=True)
-        left_motion_vectors = left_motion_vectors.view(-1, clip_size, 2, output_H, output_W)
+        left_motion_vectors = left_motion_vectors.view(-1, clip_size, input_C, input_H, input_W)
 
         right_motion_vectors = right_motion_vectors.to(device, non_blocking=True)
-        right_motion_vectors = right_motion_vectors.view(-1, clip_size, 2, output_H, output_W)
+        right_motion_vectors = right_motion_vectors.view(-1, clip_size, input_C, input_H, input_W)
 
         if use_jitter: 
             jitter = jitter.to(device, non_blocking=True)
@@ -189,6 +189,8 @@ def train_epoch_vr(
             jitter,
             "training"
         )
+
+        output_N, output_C, output_H, output_W = left_targets.shape
         pred_left_frames = pred_left_frames.view(-1, output_C, output_H, output_W)
         pred_right_frames = pred_right_frames.view(-1, output_C, output_H, output_W)
 
@@ -205,14 +207,14 @@ def train_epoch_vr(
         
         left_frame_loss = loss_function(gamma_pred_left_frames, gamma_left_targets) / accumulation_steps
         right_frame_loss = loss_function(gamma_pred_right_frames, gamma_right_targets) / accumulation_steps
-        loss = left_frame_loss + right_frame_loss
+        loss = (left_frame_loss + right_frame_loss) / 2
         loss.backward()
 
         # For reporting
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float('inf'))
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
             if grad_norm > 1.0:
                 print(f"{grad_norm=}")
 
@@ -362,11 +364,11 @@ def train() -> None:
     # -------------------------------------------------------------------------
     if cfg["dataset"]["is-vr"]:
         vr_config = VRConfig(
-            cfg["dataset"]["camera-baseline"], 
-            cfg["dataset"]["vertical-fov"],
-            cfg["dataset"]["horizontal-fov"],
-            cfg["dataset"]["output-frame-width"],
-            cfg["dataset"]["output-frame-height"]
+            camera_baseline=cfg["dataset"]["camera-baseline"], 
+            horizontal_fov=cfg["dataset"]["horizontal-fov"],
+            vertical_fov=cfg["dataset"]["vertical-fov"],
+            horizontal_resolution=cfg["dataset"]["input-frame-width"],
+            vertical_resolution=cfg["dataset"]["input-frame-height"]
         )
 
         model = VRSpatialTemporalNetwork(
@@ -467,6 +469,8 @@ def train() -> None:
     # -------------------------------------------------------------------------
     # ---------------------- Training + validation loop -----------------------
     # -------------------------------------------------------------------------
+    torch.autograd.set_detect_anomaly(True)
+
     while iterations < cfg["optimiser"]["iterations"]:
         iterations = epoch * iterations_per_epoch + 1
 
@@ -515,6 +519,7 @@ def train() -> None:
                 device=device,
                 model=model,
                 data=training_data,
+                vr_config=vr_config,
                 iterations=iterations,
                 input_frame_height=cfg["dataset"]["input-frame-height"],
                 input_frame_width=cfg["dataset"]["input-frame-width"],

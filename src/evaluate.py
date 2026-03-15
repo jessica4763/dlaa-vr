@@ -268,11 +268,11 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     # -------------------------------------------------------------------------
     if cfg["dataset"]["is-vr"]:
         vr_config = VRConfig(
-            cfg["dataset"]["camera-baseline"], 
-            cfg["dataset"]["vertical-fov"],
-            cfg["dataset"]["horizontal-fov"],
-            cfg["dataset"]["output-frame-width"],
-            cfg["dataset"]["output-frame-height"]
+            camera_baseline=cfg["dataset"]["camera-baseline"], 
+            horizontal_fov=cfg["dataset"]["horizontal-fov"],
+            vertical_fov=cfg["dataset"]["vertical-fov"],
+            horizontal_resolution=cfg["dataset"]["input-frame-width"],
+            vertical_resolution=cfg["dataset"]["input-frame-height"]
         )
 
         model = VRSpatialTemporalNetwork(
@@ -378,6 +378,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             device=device,
             model=model,
             data=evaluation_data,
+            vr_config=vr_config,
             iterations=0,
             input_frame_height=cfg["dataset"]["input-frame-height"],
             input_frame_width=cfg["dataset"]["input-frame-width"],

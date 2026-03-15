@@ -84,10 +84,8 @@ class VRDataset(QualcommDataset):
         json_file_path = scene.scene_input_imgs_path / self.camera_data_path_suffix / instance / frame
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
             camera_data = json.load(json_file)
-            # Negate jitter_offset_y because Unity is Y-up
-            # Then, negate both jitter offsets again because it's the projection matrices that are jittered
-            jitter_offset_x = -1 * camera_data["jitter_offset"]["x"]
-            jitter_offset_y = -1 * -camera_data["jitter_offset"]["y"]
+            jitter_offset_x = -camera_data["jitter_offset"]["x"]
+            jitter_offset_y = -camera_data["jitter_offset"]["y"]
             return jitter_offset_x, jitter_offset_y
         
     def get_depth(
@@ -130,10 +128,6 @@ class VRDataset(QualcommDataset):
 
         # The horizontal velocity is stored in the first channel
         motion_vectors = motion_vectors[0:2, ...]
-
-        # Although Unreal Engine uses a Y-up coordinate system, this code
-        # assumes a Y-down coordinate system
-        motion_vectors[1, ...] *= -1
 
         return motion_vectors
     
@@ -309,6 +303,7 @@ class VRDataset(QualcommDataset):
             patch_end_x,
             patch_end_y
         )
+        prev_left_depth = self.upscale_buffer(prev_left_depth)
 
         # --------------------------- Right frame ---------------------------
         curr_right_depth = self.get_depth(
@@ -338,6 +333,7 @@ class VRDataset(QualcommDataset):
             patch_end_x,
             patch_end_y
         )
+        prev_right_depth = self.upscale_buffer(prev_right_depth)
         
         # ---------------------------- Left frame ---------------------------
         curr_left_motion_vectors = self.get_motion_vectors(
