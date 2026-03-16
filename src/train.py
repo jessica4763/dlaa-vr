@@ -469,7 +469,7 @@ def train() -> None:
     # -------------------------------------------------------------------------
     # ---------------------- Training + validation loop -----------------------
     # -------------------------------------------------------------------------
-    torch.autograd.set_detect_anomaly(True)
+    # torch.autograd.set_detect_anomaly(True)
 
     while iterations < cfg["optimiser"]["iterations"]:
         iterations = epoch * iterations_per_epoch + 1
@@ -521,6 +521,7 @@ def train() -> None:
                 data=training_data,
                 vr_config=vr_config,
                 iterations=iterations,
+                iterations_per_epoch=iterations_per_epoch,
                 input_frame_height=cfg["dataset"]["input-frame-height"],
                 input_frame_width=cfg["dataset"]["input-frame-width"],
                 scale_factor=scale_factor,
@@ -535,6 +536,7 @@ def train() -> None:
                 model=model,
                 data=training_data,
                 iterations=iterations,
+                iterations_per_epoch=iterations_per_epoch,
                 input_frame_height=cfg["dataset"]["input-frame-height"],
                 input_frame_width=cfg["dataset"]["input-frame-width"],
                 scale_factor=scale_factor,

@@ -371,36 +371,6 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             fps=24
         )
 
-    if cfg["dataset"]["is-vr"]:
-        checkpoint_vr(
-            checkpoints_path=checkpoints_path,
-            sanity_checks_output_path=sanity_checks_output_path,
-            device=device,
-            model=model,
-            data=evaluation_data,
-            vr_config=vr_config,
-            iterations=0,
-            input_frame_height=cfg["dataset"]["input-frame-height"],
-            input_frame_width=cfg["dataset"]["input-frame-width"],
-            scale_factor=scale_factor,
-            use_jitter=cfg["setup"]["jitter"],
-            mode="evaluation"
-        )
-    else:
-        checkpoint(
-            checkpoints_path=checkpoints_path,
-            sanity_checks_output_path=sanity_checks_output_path,
-            device=device,
-            model=model,
-            data=evaluation_data,
-            iterations=0,
-            input_frame_height=cfg["dataset"]["input-frame-height"],
-            input_frame_width=cfg["dataset"]["input-frame-width"],
-            scale_factor=scale_factor,
-            use_jitter=cfg["setup"]["jitter"],
-            mode="evaluation"
-        )
-
 
 def main() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
