@@ -158,39 +158,43 @@ def TAA_benchmarks(pred_path: Path, target_path: Path) -> None:
 
 
 def filter_exr_png(folder_path: Path) -> None:
-    for file in folder_path.rglob("*"):
-        if not file.is_file():
-            continue
+    for subdirectory in folder_path.iterdir():
+        for file in folder_path.rglob("*"):
+            if not file.is_file():
+                continue
 
-        parent_name = file.parent.parent.name
-        suffix = file.suffix.lower()
+            parent_name = file.parent.parent.name
+            suffix = file.suffix.lower()
 
-        if suffix == ".exr" and parent_name == "Colour":
-            file.unlink()
+            if suffix == ".exr" and parent_name == "Colour":
+                file.unlink()
 
-        if suffix == ".png" and parent_name in {"Depth", "MotionVector"}:
-            file.unlink()
+            if suffix == ".png" and parent_name in {"Depth", "MotionVector"}:
+                file.unlink()
 
 
 def subsample(folder_path: Path, take: int = 30, skip: int = 60) -> None:
-    for directory_name in ("Colour", "Depth", "MotionVector"):
-        file_path = folder_path / directory_name
-        files = sorted(file_path.glob("*.*"))
-        kept = [f for i, f in enumerate(files) if i % skip < take]
-        for file_index, file_start in enumerate(range(0, len(kept), take)):
-            dest = file_path / f"{file_index:04d}"
-            dest.mkdir()
-            for f in kept[file_start:file_start + take]:
-                f.rename(dest / f.name)
+    for subdirectory in folder_path.iterdir():
+        for directory_name in ("Colour", "Depth", "MotionVector", "CameraData"):
+            file_path = subdirectory / directory_name
+            if not file_path.is_dir():
+                continue
+            files = sorted(file_path.glob("*.*"))
+            kept = [f for i, f in enumerate(files) if i % skip < take]
+            for file_index, file_start in enumerate(range(0, len(kept), take)):
+                dest = file_path / f"{file_index:04d}"
+                dest.mkdir()
+                for f in kept[file_start:file_start + take]:
+                    f.rename(dest / f.name)
 
 
 def prepare(folder_path: Path) -> None:
     renames = {
         "BP_VRStereoRig(1)": "Left",
         "BP_VRStereoRig(2)": "Right",
-        "FinalImage": "Colcour",
+        "FinalImage": "Colour",
         "FinalImageDepth": "Depth",
-        "FinalImageMotionVector": "MotionVector",
+        "FinalImageMotionVectors": "MotionVector",
     }
 
     for directory_path, directory_names, _ in os.walk(folder_path, topdown=False):
