@@ -127,7 +127,37 @@ def display_depth(input_path: Path, output_path: Path) -> None:
     return depth
 
 
-def filter_exr(folder_path: Path) -> None:
+def TAA_benchmarks(pred_path: Path, target_path: Path) -> None:
+    # Reproduces the bicubic baseline to confirm metrics are calculated correctly
+    pairs = list(zip(sorted(os.listdir(pred_path)), sorted(os.listdir(target_path))))
+
+    metrics = Metrics(
+        dataset_size=len(pairs),
+        padding=0,
+        iterations=0,
+        display_name="standard_fhd"
+    )
+
+    cuda0 = torch.device('cuda:0')
+
+    for frame_num, (pred_name, target_name) in enumerate(pairs):
+        pred = decode_image((pred_path / pred_name).resolve())[0:3, ...]
+        pred = pred.to(cuda0).to(torch.float32) / 255.0
+        pred = torch.clamp(pred, 0.0, 1.0)
+        pred.unsqueeze(0)
+
+        target = decode_image((target_path / target_name).resolve())[0:3, ...]
+        target = target.to(cuda0).to(torch.float32) / 255.0
+        target = torch.clamp(target, 0.0, 1.0)
+        target.unsqueeze(0)
+
+        metrics.record(pred, target)
+        print(f"{frame_num=}")
+
+    metrics.report("FantasticVillage")
+
+
+def filter_exr_png(folder_path: Path) -> None:
     for file in folder_path.rglob("*"):
         if not file.is_file():
             continue
@@ -142,8 +172,39 @@ def filter_exr(folder_path: Path) -> None:
             file.unlink()
 
 
+def subsample(folder_path: Path, take: int = 30, skip: int = 60) -> None:
+    for directory_name in ("Colour", "Depth", "MotionVector"):
+        file_path = folder_path / directory_name
+        files = sorted(file_path.glob("*.*"))
+        kept = [f for i, f in enumerate(files) if i % skip < take]
+        for file_index, file_start in enumerate(range(0, len(kept), take)):
+            dest = file_path / f"{file_index:04d}"
+            dest.mkdir()
+            for f in kept[file_start:file_start + take]:
+                f.rename(dest / f.name)
+
+
+def prepare(folder_path: Path) -> None:
+    renames = {
+        "BP_VRStereoRig(1)": "Left",
+        "BP_VRStereoRig(2)": "Right",
+        "FinalImage": "Colcour",
+        "FinalImageDepth": "Depth",
+        "FinalImageMotionVector": "MotionVector",
+    }
+
+    for directory_path, directory_names, _ in os.walk(folder_path, topdown=False):
+        for name in directory_names:
+            if name in renames:
+                Path(directory_path, name).rename(Path(directory_path, renames[name]))
+
+    filter_exr_png(folder_path)
+    subsample(folder_path)
+    
+
 if __name__ == "__main__":
-    filter_exr(Path("../data/training_data/VR"))
+    # prepare(Path("../data/training_data/VR"))
+    prepare(Path("../data/test_data/VR"))
 
     # display_depth(
     #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/DepthMipBiasMinus1Jittered/0000/0000.png"),
