@@ -175,7 +175,7 @@ def filter_exr_png(folder_path: Path) -> None:
                     file.unlink()
 
 
-def subsample(folder_path: Path, take: int = 30, skip: int = 60) -> None:
+def subsample_data(folder_path: Path, take: int = 30, skip: int = 60) -> None:
     for subdirectory in folder_path.iterdir():
         for directory_name in ("Colour", "Depth", "MotionVector", "CameraData"):
             file_path = subdirectory / directory_name
@@ -197,7 +197,7 @@ def subsample(folder_path: Path, take: int = 30, skip: int = 60) -> None:
                     f.rename(dest / f.name)
 
 
-def prepare(folder_path: Path) -> None:
+def prepare_data(folder_path: Path) -> None:
     renames = {
         "BP_VRStereoRig(1)": "Left",
         "BP_VRStereoRig(2)": "Right",
@@ -212,12 +212,17 @@ def prepare(folder_path: Path) -> None:
                 Path(directory_path, name).rename(Path(directory_path, renames[name]))
 
     filter_exr_png(folder_path)
-    subsample(folder_path)
     
 
 if __name__ == "__main__":
-    # prepare(Path("../data/training_data/VR"))
-    prepare(Path("../data/test_data/VR"))
+    prepare_data(Path("../data/test_data/VR"))
+
+    # folder_path = Path("../data/training_data/VR")
+    # prepare_data(folder_path)
+    # subsample_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
+    # subsample_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
+    # subsample_data(folder_path / "1440x1600/Enhanced/Left")
+    # subsample_data(folder_path / "1440x1600/Enhanced/Right")
 
     # display_depth(
     #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/DepthMipBiasMinus1Jittered/0000/0000.png"),

@@ -12,8 +12,8 @@ lr-scheduler: multi-step  # multi-step, cosine-annealing
 
 # MultiStepLR
 # l1loss: 1e-4 for training, 2.5e-5 for fine-tuning | 5e-5 for training for VR, 1.25e-5 for fine-tuning for VR
-# cvvdploss: 5e-6 for training
-learning-rate: 5e-6
+# cvvdploss: 1e-5 for training
+learning-rate: 1e-5
 learning-rate-gamma: 0.5
 learning-rate-milestones: [200000, 400000]  # [200000, 400000] for training, [] for fine-tuning 
 
