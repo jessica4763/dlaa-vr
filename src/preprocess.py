@@ -159,10 +159,13 @@ def TAA_benchmarks(pred_path: Path, target_path: Path) -> None:
 
 def filter_exr_png(folder_path: Path) -> None:
     for subdirectory in folder_path.iterdir():
+        if not subdirectory.is_dir():
+            continue
+
         for directory_path, _, filenames in os.walk(subdirectory):
             for filename in filenames:
                 file = Path(directory_path) / filename
-                parent_name = file.parent.parent.name
+                parent_name = file.parent.name
                 suffix = file.suffix.lower()
 
                 if suffix == ".exr" and parent_name == "Colour":
@@ -178,8 +181,15 @@ def subsample(folder_path: Path, take: int = 30, skip: int = 60) -> None:
             file_path = subdirectory / directory_name
             if not file_path.is_dir():
                 continue
+
             files = sorted(file_path.glob("*.*"))
-            kept = [f for i, f in enumerate(files) if i % skip < take]
+            kept = []
+            for i, f in enumerate(files):
+                if i % skip < take:
+                    kept.append(f)
+                else:
+                    f.unlink()
+
             for file_index, file_start in enumerate(range(0, len(kept), take)):
                 dest = file_path / f"{file_index:04d}"
                 dest.mkdir()
