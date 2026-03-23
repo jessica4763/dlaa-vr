@@ -127,36 +127,6 @@ def display_depth(input_path: Path, output_path: Path) -> None:
     return depth
 
 
-def TAA_benchmarks(pred_path: Path, target_path: Path) -> None:
-    # Reproduces the bicubic baseline to confirm metrics are calculated correctly
-    pairs = list(zip(sorted(os.listdir(pred_path)), sorted(os.listdir(target_path))))
-
-    metrics = Metrics(
-        dataset_size=len(pairs),
-        padding=0,
-        iterations=0,
-        display_name="standard_fhd"
-    )
-
-    cuda0 = torch.device('cuda:0')
-
-    for frame_num, (pred_name, target_name) in enumerate(pairs):
-        pred = decode_image((pred_path / pred_name).resolve())[0:3, ...]
-        pred = pred.to(cuda0).to(torch.float32) / 255.0
-        pred = torch.clamp(pred, 0.0, 1.0)
-        pred.unsqueeze(0)
-
-        target = decode_image((target_path / target_name).resolve())[0:3, ...]
-        target = target.to(cuda0).to(torch.float32) / 255.0
-        target = torch.clamp(target, 0.0, 1.0)
-        target.unsqueeze(0)
-
-        metrics.record(pred, target)
-        print(f"{frame_num=}")
-
-    metrics.report("FantasticVillage")
-
-
 def filter_exr_png(folder_path: Path) -> None:
     for subdirectory in folder_path.iterdir():
         if not subdirectory.is_dir():
@@ -176,25 +146,23 @@ def filter_exr_png(folder_path: Path) -> None:
 
 
 def subsample_data(folder_path: Path, take: int = 30, skip: int = 60) -> None:
-    for subdirectory in folder_path.iterdir():
-        for directory_name in ("Colour", "Depth", "MotionVector", "CameraData"):
-            file_path = subdirectory / directory_name
-            if not file_path.is_dir():
-                continue
+    for file_path in folder_path.iterdir():
+        if not file_path.is_dir():
+            continue
 
-            files = sorted(file_path.glob("*.*"))
-            kept = []
-            for i, f in enumerate(files):
-                if i % skip < take:
-                    kept.append(f)
-                else:
-                    f.unlink()
+        files = sorted(f for f in file_path.glob("*.*") if f.is_file())
+        kept = []
+        for i, f in enumerate(files):
+            if i % skip < take:
+                kept.append(f)
+            else:
+                f.unlink()
 
-            for file_index, file_start in enumerate(range(0, len(kept), take)):
-                dest = file_path / f"{file_index:04d}"
-                dest.mkdir()
-                for f in kept[file_start:file_start + take]:
-                    f.rename(dest / f.name)
+        for file_index, file_start in enumerate(range(0, len(kept), take)):
+            destination_path = file_path / f"{file_index:04d}"
+            destination_path.mkdir()
+            for local_index, f in enumerate(kept[file_start:file_start + take]):
+                f.rename(destination_path / f"{local_index:04d}{f.suffix}")
 
 
 def prepare_data(folder_path: Path) -> None:
@@ -215,14 +183,17 @@ def prepare_data(folder_path: Path) -> None:
     
 
 if __name__ == "__main__":
-    prepare_data(Path("../data/test_data/VR"))
-
-    # folder_path = Path("../data/training_data/VR")
+    folder_path = Path("../data/training_data/VR/FantasticVillage")
     # prepare_data(folder_path)
     # subsample_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
     # subsample_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
     # subsample_data(folder_path / "1440x1600/Enhanced/Left")
     # subsample_data(folder_path / "1440x1600/Enhanced/Right")
+
+    subsample_data(folder_path / "720x800/MipBiasMinus1Jittered")
+
+
+    # prepare_data(Path("../data/test_data/VR/FantasticVillage"))
 
     # display_depth(
     #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/DepthMipBiasMinus1Jittered/0000/0000.png"),

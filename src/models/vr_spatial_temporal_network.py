@@ -159,8 +159,8 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
             torch.arange(W),
             indexing='ij'
         )
-        ys = ys + 0.5 
-        xs = xs + 0.5
+        ys = ys.to(right_depth.device) + 0.5 
+        xs = xs.to(right_depth.device) + 0.5
 
         disparity = (camera_baseline * focal_length) / ((right_depth * 99990.0) + 10.0)
         warped_xs = xs + disparity  # Note xs is broadcast here
@@ -209,8 +209,8 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
             torch.arange(W),
             indexing='ij'
         )
-        ys = ys + 0.5 
-        xs = xs + 0.5
+        ys = ys.to(left_depth.device) + 0.5 
+        xs = xs.to(left_depth.device) + 0.5
 
         disparity = (camera_baseline * focal_length) / ((left_depth * 99990.0) + 10.0) 
         warped_xs = xs - disparity  # Note xs is broadcast here
