@@ -172,7 +172,7 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         warped_grid = torch.cat((warped_xs, ys), dim=-1)
 
         # Warping the left frame on to the right frame
-        warped_right_frame = F.grid_sample(
+        warped_left_frame = F.grid_sample(
             left_frame,
             warped_grid,
             mode='bilinear',
@@ -182,11 +182,11 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
 
         if left_frame_H != right_depth_H:
             # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
-            warped_right_frame = self.space_to_depth(warped_right_frame)
+            warped_left_frame = self.space_to_depth(warped_left_frame)
 
         valid_mask = None
 
-        return warped_right_frame, valid_mask
+        return warped_left_frame, valid_mask
 
     def right_to_left_warp(
         self,
@@ -222,7 +222,7 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         warped_grid = torch.cat((warped_xs, ys), dim=-1)
 
         # Warping the right frame on to the left frame
-        warped_left_frame = F.grid_sample(
+        warped_right_frame = F.grid_sample(
             right_frame,
             warped_grid,
             mode='bilinear',
@@ -232,11 +232,11 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
 
         if right_frame_H != left_depth_H:
             # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
-            warped_left_frame = self.space_to_depth(warped_left_frame)
+            warped_right_frame = self.space_to_depth(warped_right_frame)
 
         valid_mask = None
 
-        return warped_left_frame, valid_mask
+        return warped_right_frame, valid_mask
 
     def predict_clip_frames(
         self,
