@@ -18,7 +18,7 @@ from datasets.vr_dataset import VRDataset
 from evaluate import run
 from loss import CVVDPLoss, L1LossWithCVVDP
 from models.qualcomm_network import QualcommNetwork
-from models.vr_spatial_temporal_network import VRSpatialTemporalNetwork
+from models.vr_network import VRNetwork
 from samplers.qualcomm_dataset_sampler import QualcommDatasetSampler
 from utils import VRConfig, checkpoint, checkpoint_vr, gamma_to_linear, linear_to_gamma
 
@@ -235,7 +235,7 @@ def train_epoch_vr(
 
 def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="train")
+        cfg = hydra.compose(config_name="vr-train")
 
     device = (
         torch.accelerator.current_accelerator().type
@@ -371,7 +371,7 @@ def train() -> None:
             vertical_resolution=cfg["dataset"]["input-frame-height"]
         )
 
-        model = VRSpatialTemporalNetwork(
+        model = VRNetwork(
             vr_config=vr_config,
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
@@ -567,7 +567,7 @@ def train() -> None:
             os.fsync(f.fileno())
         os.replace(training_checkpoint_temp_file, cfg["paths"]["training-checkpoint-path"])
 
-        save_interval = 10000
+        save_interval = cfg["model"]["save-interval"]
         if iterations % save_interval < iterations_per_epoch:
             id = (iterations // save_interval) * save_interval
 

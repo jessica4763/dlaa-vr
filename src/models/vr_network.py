@@ -6,7 +6,7 @@ from .qualcomm_network import JitterConditionedConv, QualcommNetwork
 from utils import VRConfig
 
 
-class VRSpatialTemporalNetwork(QualcommNetwork):
+class VRNetwork(QualcommNetwork):
     def __init__(
         self,
         vr_config: VRConfig,
@@ -24,6 +24,14 @@ class VRSpatialTemporalNetwork(QualcommNetwork):
         self.num_curr_jitter = 2 if use_jitter else 0  # 2 for displacement in both x and y
         self.num_prev_left_colour = self.num_prev_right_colour = 3 * (scale_factor ** 2)
         self.num_prev_left_feature = self.num_prev_right_feature = 1 * (scale_factor ** 2)
+
+        self.left_in_channels = (
+            self.num_curr_left_colour +
+            self.num_curr_depth +
+            self.num_curr_jitter +
+            self.num_prev_left_colour +
+            self.num_prev_left_feature
+        )
 
         self.in_channels = (
             self.num_curr_left_colour +

@@ -1,3 +1,4 @@
+from collections import defaultdict
 import lpips
 import pycvvdp
 import numpy as np
@@ -44,14 +45,7 @@ class Metrics:
         self.pixel_sum = 0
         self.pixel_squared_sum = 0
 
-        self.metrics = {
-            "avg_norm_rmse": 0,
-            "avg_psnr": 0,
-            "avg_ssim": 0,
-            "avg_lpips": 0,
-            "avg_cvvdp_jod": 0,
-            "avg_pixel_wise_std": 0
-        }
+        self.metrics = defaultdict(float)
 
     def record_rmse(self, pred: np.ndarray, target: np.ndarray) -> None:
         # Display-encoded values in the range [0, 1]
@@ -81,7 +75,7 @@ class Metrics:
         # sRGB frames and display-encoded values in the range [0, 1] 
         # are expected if the display model is standard_fhd
         Q_jod, _ = self.cvvdp.predict(pred, target, dim_order="CHW")
-        self.cvvdp_jod_sum += Q_jod
+        self.cvvdp_jod_sum += Q_jod.item()
 
     def record_pixel_wise_std(self, pred: np.ndarray) -> None:
         self.pixel_sum += pred

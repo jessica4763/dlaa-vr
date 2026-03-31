@@ -225,7 +225,7 @@ def checkpoint_vr(
     use_jitter: bool,
     mode: str = "training"
 ) -> None:
-    if iterations % 10000 < iterations_per_epoch:
+    if iterations % 2500 < iterations_per_epoch:
         model.eval()
         with torch.no_grad():
             index = 0
@@ -540,7 +540,7 @@ def checkpoint(
     use_jitter: bool,
     mode: str = "training"
 ) -> None:
-    if iterations % 10000 < iterations_per_epoch:
+    if iterations % 1000 < iterations_per_epoch:
         model.eval()
         with torch.no_grad():
             # frames = [n for n in range(0, 7258) if (n + 1) % 30 != 0]

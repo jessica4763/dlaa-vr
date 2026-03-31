@@ -11,11 +11,9 @@ from omegaconf import DictConfig
 from datasets.qualcomm_dataset import QualcommDataset
 from datasets.vr_dataset import VRDataset
 from models.qualcomm_network import QualcommNetwork
-from models.vr_spatial_temporal_network import VRSpatialTemporalNetwork
+from models.vr_network import VRNetwork
 from metrics import Metrics
 from utils import (
-    checkpoint,
-    checkpoint_vr,
     gamma_to_linear,
     linear_to_gamma,
     write_frames,
@@ -121,6 +119,11 @@ def evaluate_vr(
             right_inputs = right_inputs.to(device, non_blocking=True)
             right_inputs = right_inputs.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
+            prev_left_depth = prev_left_depth.to(device, non_blocking=True)
+            prev_left_depth = prev_left_depth.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
+            prev_right_depth = prev_right_depth.to(device, non_blocking=True)
+            prev_right_depth = prev_right_depth.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
+
             left_motion_vectors = left_motion_vectors.to(device, non_blocking=True)
             left_motion_vectors = left_motion_vectors.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
             right_motion_vectors = right_motion_vectors.to(device, non_blocking=True)
@@ -137,13 +140,13 @@ def evaluate_vr(
 
             # Use the previously predicted frame and features during evaluation
             if None not in (prev_pred_left_frame, prev_pred_right_frame, prev_left_features, prev_right_features) and curr_frame_num > 0:
-                c0 = model.in_channels - (model.num_prev_colour + model.num_prev_feature)
-                c1 = model.in_channels - model.num_prev_feature
+                c0 = model.left_in_channels - (model.num_prev_left_colour + model.num_prev_left_feature)
+                c1 = model.left_in_channels - model.num_prev_left_feature
 
                 left_inputs[:, :, c0:c1] = prev_pred_left_frame
-                left_inputs[:, :, c1:model.in_channels] = prev_left_features
+                left_inputs[:, :, c1:model.left_in_channels] = prev_left_features
                 right_inputs[:, :, c0:c1] = prev_pred_right_frame
-                right_inputs[:, :, c1:model.in_channels] = prev_right_features
+                right_inputs[:, :, c1:model.left_in_channels] = prev_right_features
 
             # -------------------------------------------------------------------------
             # -------------------------------- Predict --------------------------------
@@ -154,6 +157,8 @@ def evaluate_vr(
                 right_inputs,
                 left_motion_vectors, 
                 right_motion_vectors,
+                prev_left_depth,
+                prev_right_depth,
                 curr_frame_num, 
                 jitter,
                 "evaluation"
@@ -195,10 +200,12 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     print(f"Using {device} device")
 
     evaluation_output_path_pred = Path(cfg["paths"]["evaluation-output-path"]) / "pred"
-    evaluation_output_path_pred.mkdir(parents=True, exist_ok=True)
+    (evaluation_output_path_pred / "left").mkdir(parents=True, exist_ok=True)
+    (evaluation_output_path_pred / "right").mkdir(parents=True, exist_ok=True)
 
     evaluation_output_path_target = Path(cfg["paths"]["evaluation-output-path"]) / "target"
-    evaluation_output_path_target.mkdir(parents=True, exist_ok=True)
+    (evaluation_output_path_target / "left").mkdir(parents=True, exist_ok=True)
+    (evaluation_output_path_target / "right").mkdir(parents=True, exist_ok=True)
 
     checkpoints_path = Path(cfg["paths"]["checkpoints-path"])
     checkpoints_path.mkdir(parents=True, exist_ok=True)
@@ -275,7 +282,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             vertical_resolution=cfg["dataset"]["input-frame-height"]
         )
 
-        model = VRSpatialTemporalNetwork(
+        model = VRNetwork(
             vr_config=vr_config,
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
