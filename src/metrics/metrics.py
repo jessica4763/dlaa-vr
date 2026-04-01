@@ -81,9 +81,6 @@ class Metrics:
         self.pixel_sum += pred
         self.pixel_squared_sum += np.square(pred)
     
-    def record_photometric_residual(self, left_pred: np.ndarray, left_depth: np.ndarray, right_pred: np.ndarray) -> float:
-        pass
-
     def record(self, pred: torch.Tensor, target: torch.Tensor) -> None:
         pred = torch.round(pred * 255.0) / 255.0
         target = torch.round(target * 255.0) / 255.0

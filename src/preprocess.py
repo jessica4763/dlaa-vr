@@ -1,17 +1,22 @@
+import os
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+
+import zarr
 import cv2
 import imageio.v3 as iio
-import os
 import numpy as np
 from pathlib import Path
 import skimage.io as io
+import sys
 import torch
 import torch.nn.functional as F
 from torchvision.io import decode_image
 from torchvision.utils import save_image
+from tqdm import tqdm
 
-from metrics import Metrics
+from metrics.metrics import Metrics
 from utils import gamma_to_linear, linear_to_gamma
-from models.vr_spatial_temporal_network import VRConfig
+from models.vr_network import VRConfig
 
 
 def downsample(
@@ -247,12 +252,77 @@ def warp_frames(left_frame_path: Path, right_frame_path: Path, depth_path: Path)
     save_image(diff, "warped_left.png")
 
 
-if __name__ == "__main__":
-    warp_frames(
-        left_frame_path=Path("0000_stereoscopic_images_visualisation_left"),
-        right_frame_path=Path("0000_stereoscopic_images_visualisation_right"),
-        depth_path=Path("0000_stereoscopic_images_visualisation_left_depth"),
+def generate_zarr(input_folder_path: Path, zarr_output_path: Path, channels: int) -> None:
+    filenames = sorted([filename for filename in os.listdir(input_folder_path)])
+
+    representative_image = cv2.imread(input_folder_path / filenames[0], cv2.IMREAD_UNCHANGED)
+    H, W, _ = representative_image.shape
+
+    if H == 1600:
+        patch_size = 264
+    elif H == 800:
+        patch_size = 132
+    elif H == 400:
+        patch_size = 66
+
+    data = zarr.open(
+        zarr_output_path,
+        mode='w',
+        shape=(len(filenames), channels, H, W),
+        chunks=(1, channels, patch_size, patch_size),
+        dtype=representative_image.dtype
     )
+
+    for i, filename in enumerate(tqdm(filenames)):
+        image = cv2.imread(input_folder_path / filename, cv2.IMREAD_UNCHANGED)
+        image = np.transpose(image, (2, 0, 1))
+
+        print(f"{image.dtype=}")
+
+        if channels == 1:
+            # Arbitrarily extracting channel B from BGRA
+            image = image[[0]]
+        elif channels == 2:
+            # Extracting channels R, G from BGRA
+            image = image[[2, 1]]
+        else:  # channels == 3
+            # Extracting channels R, G, B from BGRA
+            image = image[[2, 1, 0]]
+
+        data[i] = image
+
+
+def generate_vr_data_zarr(input_root_path: Path, output_root_path: Path):
+    for directory_path, _, filenames in os.walk(input_root_path):
+        directory_path = Path(directory_path)
+        if any(filename.endswith(('.png', '.exr')) for filename in filenames):
+            relative_path = os.path.relpath(directory_path, input_root_path)
+
+            if "Depth" in relative_path:
+                channels = 1
+            elif "MotionVector" in relative_path:
+                channels = 2
+            elif "Colour" in relative_path:
+                channels = 3
+            else:
+                sys.exit("Unexpected directory path.")
+
+            output_path = output_root_path / f"{relative_path}.zarr"
+            generate_zarr(directory_path, output_path, channels)
+
+
+if __name__ == "__main__":
+    generate_vr_data_zarr(
+        input_root_path=Path("../data/training_data/VR"),
+        output_root_path=Path("../data/training_data/VR_zarr")
+    )
+
+    # warp_frames(
+    #     left_frame_path=Path("0000_stereoscopic_images_visualisation_left"),
+    #     right_frame_path=Path("0000_stereoscopic_images_visualisation_right"),
+    #     depth_path=Path("0000_stereoscopic_images_visualisation_left_depth"),
+    # )
+
     # folder_path = Path("../data/training_data/VR/FantasticVillage")
     # prepare_data(folder_path)
     # subsample_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
@@ -260,6 +330,8 @@ if __name__ == "__main__":
     # subsample_data(folder_path / "1440x1600/Enhanced/Left")
     # subsample_data(folder_path / "1440x1600/Enhanced/Right")
     # subsample_data(folder_path / "720x800/MipBiasMinus1Jittered")
+
+    # prepare_data(Path("../data/validation_data/VR/FantasticVillage"))
 
     # prepare_data(Path("../data/test_data/VR/FantasticVillage"))
 

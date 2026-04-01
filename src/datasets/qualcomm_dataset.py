@@ -35,8 +35,10 @@ class QualcommDataset(Dataset):
     ) -> None:
         self.input_imgs_path = input_imgs_path
         self.output_imgs_path = output_imgs_path
+
         self.input_frame_height = input_frame_height
         self.input_frame_width = input_frame_width
+
         self.camera_data_path_suffix = camera_data_path_suffix
 
         if use_jitter:
@@ -230,6 +232,8 @@ class QualcommDataset(Dataset):
     ) -> torch.Tensor:
         # (C, H, W) -> (C, patch_size, patch_size)
         patch = x[:, patch_start_y:patch_end_y, patch_start_x:patch_end_x]
+
+        # .clone() because slicing returns a view of the original frame, and therefore keeps the whole frame in memory
         return patch.clone()
 
     def __len__(self) -> int:
@@ -289,21 +293,6 @@ class QualcommDataset(Dataset):
 
         # prev_output_img will be overwritten later, if there was a previous frame output from the model
         prev_output_img = curr_input_img.clone().detach()
-
-        # # prev_output_img will be overwritten later, if there was a previous frame output from the model
-        # if curr_frame_num == 0:
-        #     prev_frame = str(prev_frame_num).zfill(4) + ".png"
-        #     prev_ground_truth_img_path = scene.scene_output_imgs_path / instance / prev_frame
-        #     prev_output_img = decode_image(prev_ground_truth_img_path.resolve())[0:3, ...]
-        #     prev_output_img = self.get_patch(
-        #         prev_output_img,
-        #         patch_start_x * self.scale_factor,
-        #         patch_start_y * self.scale_factor,
-        #         patch_end_x * self.scale_factor,
-        #         patch_end_y * self.scale_factor
-        #     )
-        # else:
-        #     prev_output_img = curr_input_img.clone().detach()
 
         # -------------------------------------------------------------------
         # ---------------------------- Transforms ---------------------------

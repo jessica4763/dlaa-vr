@@ -1,5 +1,5 @@
-validation-input-img-path:  ../data/validation_data/VR/*/720x800
-validation-output-img-path:  ../data/validation_data/VR/*/1440x1600/Enhanced
+validation-input-img-path:  ../data/test_data/VR/*/720x800
+validation-output-img-path:  ../data/test_data/VR/*/1440x1600/Enhanced
 
 input-frame-height: 800
 input-frame-width: 720

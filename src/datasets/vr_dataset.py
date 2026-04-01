@@ -1,11 +1,13 @@
 from bisect import bisect_right
 import imageio.v3 as iio
 import json
+import os
 from pathlib import Path
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torchvision.io import decode_image
+import zarr
 
 from datasets.qualcomm_dataset import QualcommDataset
 from utils import Scene, cumsum
@@ -14,6 +16,7 @@ from utils import Scene, cumsum
 class VRDataset(QualcommDataset):
     def __init__(
         self,
+        data_root: str,
         input_imgs_path: str,
         output_imgs_path: str,
         input_frame_height: int,
@@ -33,19 +36,26 @@ class VRDataset(QualcommDataset):
         mode: str = "training"
     ) -> None:
         self.input_imgs_path = input_imgs_path        # ../data/test_data/VR/*/720x800
-        self.output_imgs_path = output_imgs_path      # ../data/test_data/VR/*/1440x1600
+        self.output_imgs_path = output_imgs_path      # ../data/test_data/VR/*/1440x1600/Enhanced
+
         self.input_frame_height = input_frame_height  
         self.input_frame_width = input_frame_width
-        self.camera_data_path_suffix = camera_data_path_suffix
 
         if use_jitter:
             self.input_imgs_path += f"/{jittered_input_path_suffix}"             # ../data/test_data/VR/*/720x800/MipBiasMinus1Jittered
         else:
             self.input_imgs_path += f"/{input_path_suffix}"             # ../data/test_data/VR/*/720x800/MipBiasMinus1
 
+        self.camera_data_path_suffix = camera_data_path_suffix      # CameraData
         self.colour_path_suffix = colour_path_suffix                # Colour
         self.depth_path_suffix = depth_path_suffix                  # Depth
         self.motion_vector_path_suffix = motion_vector_path_suffix  # MotionVector
+
+        # Open zarr files
+        self.data = {}
+        for directory_path, _, _ in os.walk(data_root):
+            if directory_path.endswith(".zarr"):
+                self.data[directory_path.removesuffix(".zarr")] = zarr.open(directory_path, mode='r')
 
         self.scenes = []
         for scene_name in scene_names:
@@ -380,8 +390,7 @@ class VRDataset(QualcommDataset):
                 prev_frame_num
             )
 
-            # ---------------------------- Left frame ---------------------------
-            curr_left_jitter_x, curr_left_jitter_y = self.get_jitter_tensors(
+            curr_jitter_x, curr_jitter_y = self.get_jitter_tensors(
                 1,
                 patch_height,
                 patch_width,
@@ -389,48 +398,15 @@ class VRDataset(QualcommDataset):
                 curr_jitter_offset_y,
                 curr_left_input_img.device,
                 curr_left_input_img.dtype
-            )
-
-            # --------------------------- Right frame ---------------------------
-            curr_right_jitter_x, curr_right_jitter_y = self.get_jitter_tensors(
-                1,
-                patch_height,
-                patch_width,
-                curr_jitter_offset_x,
-                curr_jitter_offset_y,
-                curr_right_input_img.device,
-                curr_right_input_img.dtype
-            )
-
-            # ---------------------------- Left frame ---------------------------
-            prev_left_jitter_x, prev_left_jitter_y = self.get_jitter_tensors(
-                1,
-                patch_height,
-                patch_width,
-                prev_jitter_offset_x,
-                prev_jitter_offset_y,
-                curr_left_input_img.device,
-                curr_left_input_img.dtype
-            )
-
-            # --------------------------- Right frame ---------------------------
-            prev_right_jitter_x, prev_right_jitter_y = self.get_jitter_tensors(
-                1,
-                patch_height,
-                patch_width,
-                prev_jitter_offset_x,
-                prev_jitter_offset_y,
-                curr_right_input_img.device,
-                curr_right_input_img.dtype
             )
 
             # ---------------------------- Left frame ---------------------------
             curr_left_motion_vectors = self.apply_jitter_compensation(
                 curr_left_motion_vectors,
-                prev_left_jitter_x,
-                prev_left_jitter_y,
-                curr_left_jitter_x,
-                curr_left_jitter_y,
+                prev_jitter_offset_x,
+                prev_jitter_offset_y,
+                curr_jitter_offset_x,
+                curr_jitter_offset_y,
                 self.input_frame_height,  # Still need to scale relative to the dimensions of the frame, not the dimensions of the patch
                 self.input_frame_width
             )
@@ -438,10 +414,10 @@ class VRDataset(QualcommDataset):
             # --------------------------- Right frame ---------------------------
             curr_right_motion_vectors = self.apply_jitter_compensation(
                 curr_right_motion_vectors,
-                prev_right_jitter_x,
-                prev_right_jitter_y,
-                curr_right_jitter_x,
-                curr_right_jitter_y,
+                prev_jitter_offset_x,
+                prev_jitter_offset_y,
+                curr_jitter_offset_x,
+                curr_jitter_offset_y,
                 self.input_frame_height,  # Still need to scale relative to the dimensions of the frame, not the dimensions of the patch
                 self.input_frame_width
             )
@@ -481,8 +457,8 @@ class VRDataset(QualcommDataset):
                 [
                     curr_left_input_img,
                     curr_left_depth,
-                    curr_left_jitter_x,
-                    curr_left_jitter_y,
+                    curr_jitter_x,
+                    curr_jitter_y,
                     prev_left_output_img,
                     prev_left_features
                 ],
@@ -493,8 +469,8 @@ class VRDataset(QualcommDataset):
                 [
                     curr_right_input_img,
                     curr_right_depth,
-                    curr_right_jitter_x,
-                    curr_right_jitter_y,
+                    curr_jitter_x,
+                    curr_jitter_y,
                     prev_right_output_img,
                     prev_right_features
                 ],

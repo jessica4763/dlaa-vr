@@ -12,7 +12,7 @@ from datasets.qualcomm_dataset import QualcommDataset
 from datasets.vr_dataset import VRDataset
 from models.qualcomm_network import QualcommNetwork
 from models.vr_network import VRNetwork
-from metrics import Metrics
+from metrics.metrics import Metrics
 from utils import (
     gamma_to_linear,
     linear_to_gamma,
@@ -199,13 +199,20 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     )
     print(f"Using {device} device")
 
-    evaluation_output_path_pred = Path(cfg["paths"]["evaluation-output-path"]) / "pred"
-    (evaluation_output_path_pred / "left").mkdir(parents=True, exist_ok=True)
-    (evaluation_output_path_pred / "right").mkdir(parents=True, exist_ok=True)
+    if cfg["dataset"]["is-vr"]:
+        evaluation_output_path_pred = Path(cfg["paths"]["evaluation-output-path"]) / "pred"
+        (evaluation_output_path_pred / "left").mkdir(parents=True, exist_ok=True)
+        (evaluation_output_path_pred / "right").mkdir(parents=True, exist_ok=True)
 
-    evaluation_output_path_target = Path(cfg["paths"]["evaluation-output-path"]) / "target"
-    (evaluation_output_path_target / "left").mkdir(parents=True, exist_ok=True)
-    (evaluation_output_path_target / "right").mkdir(parents=True, exist_ok=True)
+        evaluation_output_path_target = Path(cfg["paths"]["evaluation-output-path"]) / "target"
+        (evaluation_output_path_target / "left").mkdir(parents=True, exist_ok=True)
+        (evaluation_output_path_target / "right").mkdir(parents=True, exist_ok=True)
+    else:
+        evaluation_output_path_pred = Path(cfg["paths"]["evaluation-output-path"]) / "pred"
+        (evaluation_output_path_pred).mkdir(parents=True, exist_ok=True)
+
+        evaluation_output_path_target = Path(cfg["paths"]["evaluation-output-path"]) / "target"
+        (evaluation_output_path_target).mkdir(parents=True, exist_ok=True)
 
     checkpoints_path = Path(cfg["paths"]["checkpoints-path"])
     checkpoints_path.mkdir(parents=True, exist_ok=True)
