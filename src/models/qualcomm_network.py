@@ -188,7 +188,7 @@ class QualcommNetwork(nn.Module):
 
     def kaiming_init_params(self, model):
         if isinstance(model, (nn.Linear, nn.Conv2d)):
-            nn.init.kaiming_normal_(model.weight, mode='fan_out', nonlinearity='relu')
+            nn.init.kaiming_normal_(model.weight, mode="fan_out", nonlinearity="relu")
             if model.bias is not None:
                 nn.init.constant_(model.bias, 0)
 
@@ -217,7 +217,7 @@ class QualcommNetwork(nn.Module):
         y, x = torch.meshgrid(
             torch.linspace(-1 + (1 / H), 1 - (1 / H), H),
             torch.linspace(-1 + (1 / W), 1 - (1 / W), W),
-            indexing='ij'
+            indexing="ij"
         )
         base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
         warped_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
@@ -225,8 +225,8 @@ class QualcommNetwork(nn.Module):
         warped_input_tensor = F.grid_sample(
             input_tensor,
             warped_grid,
-            mode='bilinear',
-            padding_mode='zeros',
+            mode="bilinear",
+            padding_mode="zeros",
             align_corners=False
         )
 

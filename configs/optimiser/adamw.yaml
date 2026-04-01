@@ -1,6 +1,6 @@
 ---
 name: adamw
-loss: cvvdploss  # l1loss, mseloss, cvvdploss, l1loss_with_cvvdp
+loss: l1loss_with_cvvdp  # l1loss, cvvdploss, l1loss_with_cvvdp
 cvvdp-weight: 0.01
 actual-batch-size: 8
 virtual-batch-size: 8
@@ -13,7 +13,7 @@ lr-scheduler: multi-step  # multi-step, cosine-annealing
 # MultiStepLR
 # l1loss: 1e-4 for training, 2.5e-5 for fine-tuning | 5e-5 for training for VR, 1.25e-5 for fine-tuning for VR
 # cvvdploss: 1e-5 for training
-learning-rate: 1e-5
+learning-rate: 1e-4
 learning-rate-gamma: 0.5
 learning-rate-milestones: [200000, 400000]  # [200000, 400000] for training, [] for fine-tuning 
 

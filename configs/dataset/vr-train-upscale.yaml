@@ -1,5 +1,5 @@
-training-input-img-path: ../data/training_data/VR/*/720x800
-training-output-img-path: ../data/training_data/VR/*/1440x1600/Enhanced
+training-input-img-path: ../data/training_data/VR_zarr/*/720x800
+training-output-img-path: ../data/training_data/VR_zarr/*/1440x1600/Enhanced
 
 input-frame-height: 800
 input-frame-width: 720

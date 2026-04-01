@@ -25,14 +25,19 @@ class Scene:
     scene_output_imgs_path: Path
 
     path_suffix: InitVar[str]
+    mode: InitVar[str] = field(default="training")
 
     num_instances: int = field(init=False)
     num_frames_per_instance: int = field(init=False)
     num_frames: int = field(init=False)
 
-    def __post_init__(self, path_suffix):
+    def __post_init__(self, path_suffix, mode):
         instances = os.listdir(self.scene_input_imgs_path / path_suffix)
-        frames = os.listdir(self.scene_input_imgs_path / path_suffix / instances[0])
+
+        if mode == "training":
+            frames = os.listdir(self.scene_input_imgs_path / path_suffix / instances[0] / "c")  # "c" is a quirk of zarr
+        else:
+            frames = os.listdir(self.scene_input_imgs_path / path_suffix / instances[0])
 
         self.num_instances = len(instances)
         self.num_frames_per_instance = len(frames)
@@ -138,7 +143,7 @@ def write_video(
         fps=fps,
         codec="libx264",
         quality=10,
-        pixelformat='yuv420p',
+        pixelformat="yuv420p",
         macro_block_size=8
     )
 

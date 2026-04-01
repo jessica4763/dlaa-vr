@@ -13,6 +13,7 @@ paths:
   tensorboard-path: ../saved/logs/runs
   saved-models-path: ../saved/models/vr_scale_model.pt
   training-checkpoint-path: ../saved/models/vr_training_checkpoint.pt
+  data-root: ../data/training_data/VR_zarr
 
 model:
   hidden-channels: 16  # 16, 32, 64
@@ -21,7 +22,7 @@ model:
   save-interval: 2500
 
 validation:
-  proxy-validation-interval: 250
+  proxy-validation-interval: 20
   primary-validation-interval: 2500
 
 hydra:

@@ -54,7 +54,7 @@ class QualcommDataset(Dataset):
         for scene_name in scene_names:
             scene_input_imgs_path = Path(self.input_imgs_path.replace("*", scene_name))
             scene_output_imgs_path = Path(self.output_imgs_path.replace("*", scene_name))
-            self.scenes.append(Scene(scene_input_imgs_path, scene_output_imgs_path, self.colour_path_suffix))
+            self.scenes.append(Scene(scene_input_imgs_path, scene_output_imgs_path, self.colour_path_suffix, mode=mode))
 
         scene_num_instances = [scene.num_instances for scene in self.scenes]
         self.instance_boundaries = cumsum(scene_num_instances)
@@ -210,7 +210,7 @@ class QualcommDataset(Dataset):
         output_motion_vectors = F.interpolate(
             seleted_motion_vectors,
             scale_factor=self.dilation_block_size,
-            mode='nearest'
+            mode="nearest"
         )
 
         return output_motion_vectors.squeeze(0)
@@ -219,7 +219,7 @@ class QualcommDataset(Dataset):
         return F.interpolate(
             buffer.unsqueeze(0), 
             scale_factor=self.scale_factor, 
-            mode='nearest'
+            mode="nearest"
         ).squeeze(0)
     
     def get_patch(
@@ -287,20 +287,15 @@ class QualcommDataset(Dataset):
         )
         
         # -------------------------------------------------------------------
-        # -------------------------- Previous frame -------------------------
+        # ------------------- Transforms + previous frame -------------------
         # -------------------------------------------------------------------
         prev_frame_num = max(0, curr_frame_num - 1)
 
-        # prev_output_img will be overwritten later, if there was a previous frame output from the model
-        prev_output_img = curr_input_img.clone().detach()
-
-        # -------------------------------------------------------------------
-        # ---------------------------- Transforms ---------------------------
-        # -------------------------------------------------------------------
-
         if self.transform:
             curr_input_img = self.transform(curr_input_img)
-            prev_output_img = self.transform(prev_output_img)
+
+            # prev_output_img will be overwritten later, if there was a previous frame output from the model
+            prev_output_img = curr_input_img.clone().detach()
 
         if self.target_transform:
             curr_output_img = self.target_transform(curr_output_img)
@@ -308,7 +303,7 @@ class QualcommDataset(Dataset):
         prev_output_img = F.interpolate(  # Interpolate in linear space
             prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
             scale_factor=self.scale_factor, 
-            mode='bicubic',
+            mode="bicubic",
             align_corners=False,
             antialias=True
         ).squeeze(0)  # Remove the batch dimension

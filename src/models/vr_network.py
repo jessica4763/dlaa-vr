@@ -165,7 +165,7 @@ class VRNetwork(QualcommNetwork):
         ys, xs = torch.meshgrid(
             torch.arange(H),
             torch.arange(W),
-            indexing='ij'
+            indexing="ij"
         )
         ys = ys.to(right_depth.device) + 0.5 
         xs = xs.to(right_depth.device) + 0.5
@@ -183,8 +183,8 @@ class VRNetwork(QualcommNetwork):
         warped_left_frame = F.grid_sample(
             left_frame,
             warped_grid,
-            mode='bilinear',
-            padding_mode='zeros',
+            mode="bilinear",
+            padding_mode="zeros",
             align_corners=False
         )
 
@@ -215,7 +215,7 @@ class VRNetwork(QualcommNetwork):
         ys, xs = torch.meshgrid(
             torch.arange(H),
             torch.arange(W),
-            indexing='ij'
+            indexing="ij"
         )
         ys = ys.to(left_depth.device) + 0.5 
         xs = xs.to(left_depth.device) + 0.5
@@ -233,8 +233,8 @@ class VRNetwork(QualcommNetwork):
         warped_right_frame = F.grid_sample(
             right_frame,
             warped_grid,
-            mode='bilinear',
-            padding_mode='zeros',
+            mode="bilinear",
+            padding_mode="zeros",
             align_corners=False
         )
 

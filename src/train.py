@@ -86,7 +86,7 @@ def train_epoch(
         total_loss += loss.item()
 
         if (batch + 1) % accumulation_steps == 0:
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float('inf'))
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float("inf"))
             if grad_norm > 1.0:
                 print(f"{grad_norm=}")
 
@@ -267,7 +267,9 @@ def train() -> None:
 
     # Does not use unitialised memory as an input to an operation
     torch.utils.deterministic.fill_uninitialized_memory = True
-
+    
+    # Forces the cuBLAS library to use deterministic algorithms
+    # 4098 KB for 8 streams
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
     # -------------------------------------------------------------------------
@@ -288,6 +290,7 @@ def train() -> None:
     # -------------------------------------------------------------------------
     if cfg["dataset"]["is-vr"]:
         training_data = VRDataset(
+            data_root=cfg["paths"]["data-root"],
             input_imgs_path=cfg["dataset"]["training-input-img-path"],
             output_imgs_path=cfg["dataset"]["training-output-img-path"],
             input_frame_height=cfg["dataset"]["input-frame-height"],
@@ -333,7 +336,6 @@ def train() -> None:
         instance_boundaries=training_data.instance_boundaries,
         total_instances=training_data.total_instances,
         frame_boundaries=training_data.frame_boundaries,
-        total_frames=training_data.total_frames,
         batch_size=cfg["optimiser"]["actual-batch-size"],
         clip_size=cfg["optimiser"]["clip-size"],
         input_frame_height=cfg["dataset"]["input-frame-height"],
@@ -356,8 +358,6 @@ def train() -> None:
         worker_init_fn=seed_worker,
         generator=g,
     )
-
-    iterations_per_epoch = math.ceil(training_data.total_instances / cfg["optimiser"]["virtual-batch-size"])
 
     # -------------------------------------------------------------------------
     # --------------------------------- Model ---------------------------------
@@ -401,7 +401,7 @@ def train() -> None:
 
     # -------------------------------------------------------------------------
     # ----------------------------- Optimisation ------------------------------
-    # -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------    
     if cfg["optimiser"]["loss"] == "l1loss":
         loss_function = nn.L1Loss()
     elif cfg["optimiser"]["loss"] == "mseloss":
@@ -441,6 +441,8 @@ def train() -> None:
         )
     else:
         sys.exit("Chosen learning rate scheduler implementation does not exist.")
+
+    iterations_per_epoch = math.ceil(training_data.total_instances / cfg["optimiser"]["virtual-batch-size"])
 
     # -------------------------------------------------------------------------
     # -------------------- Load from a training checkpoint --------------------
@@ -549,7 +551,7 @@ def train() -> None:
         # -------------------------------------------------------------------------
         model_temp_file = cfg["paths"]["saved-models-path"] + ".tmp"
         torch.save(model.state_dict(), model_temp_file)
-        with open(model_temp_file, 'ab') as f:
+        with open(model_temp_file, "ab") as f:
             os.fsync(f.fileno())
         os.replace(model_temp_file, cfg["paths"]["saved-models-path"])
 
@@ -563,7 +565,7 @@ def train() -> None:
         }
         training_checkpoint_temp_file = cfg["paths"]["training-checkpoint-path"] + ".tmp"
         torch.save(training_checkpoint, training_checkpoint_temp_file)
-        with open(training_checkpoint_temp_file, 'ab') as f:
+        with open(training_checkpoint_temp_file, "ab") as f:
             os.fsync(f.fileno())
         os.replace(training_checkpoint_temp_file, cfg["paths"]["training-checkpoint-path"])
 
@@ -573,12 +575,12 @@ def train() -> None:
 
             model_save_path = checkpoints_path / f"model_{id}.pt"
             torch.save(model.state_dict(), model_save_path)
-            with open(model_save_path, 'ab') as f:
+            with open(model_save_path, "ab") as f:
                 os.fsync(f.fileno())
 
             training_checkpoint_save_path = checkpoints_path / f"training_checkpoint_{id}.pt"
             torch.save(training_checkpoint, training_checkpoint_save_path)
-            with open(training_checkpoint_save_path, 'ab') as f:
+            with open(training_checkpoint_save_path, "ab") as f:
                 os.fsync(f.fileno())
 
         # -------------------------------------------------------------------------

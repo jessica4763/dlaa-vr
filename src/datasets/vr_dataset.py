@@ -9,8 +9,10 @@ import torch.nn.functional as F
 from torchvision.io import decode_image
 import zarr
 
+from torchvision.utils import save_image
+
 from datasets.qualcomm_dataset import QualcommDataset
-from utils import Scene, cumsum
+from utils import Scene, cumsum, linear_to_gamma
 
 
 class VRDataset(QualcommDataset):
@@ -35,6 +37,16 @@ class VRDataset(QualcommDataset):
         target_transform=None,
         mode: str = "training"
     ) -> None:
+        if mode == "training":
+            # Open zarr files
+            self.data = {}
+            for directory_path, _, _ in os.walk(data_root):
+                directory_path = Path(directory_path)
+                if directory_path.suffix == ".zarr":
+                    key = Path(os.path.relpath(directory_path, Path.cwd()))
+                    key = key.with_suffix("").as_posix()
+                    self.data[key] = zarr.open(directory_path, mode="r")
+
         self.input_imgs_path = input_imgs_path        # ../data/test_data/VR/*/720x800
         self.output_imgs_path = output_imgs_path      # ../data/test_data/VR/*/1440x1600/Enhanced
 
@@ -51,12 +63,6 @@ class VRDataset(QualcommDataset):
         self.depth_path_suffix = depth_path_suffix                  # Depth
         self.motion_vector_path_suffix = motion_vector_path_suffix  # MotionVector
 
-        # Open zarr files
-        self.data = {}
-        for directory_path, _, _ in os.walk(data_root):
-            if directory_path.endswith(".zarr"):
-                self.data[directory_path.removesuffix(".zarr")] = zarr.open(directory_path, mode='r')
-
         self.scenes = []
         for scene_name in scene_names:
             scene_input_imgs_path = Path(self.input_imgs_path.replace("*", scene_name))
@@ -65,7 +71,8 @@ class VRDataset(QualcommDataset):
             scene = Scene(
                 scene_input_imgs_path=scene_input_imgs_path, 
                 scene_output_imgs_path=scene_output_imgs_path, 
-                path_suffix=path_suffix
+                path_suffix=path_suffix,
+                mode=mode
             )
             self.scenes.append(scene)
 
@@ -103,17 +110,35 @@ class VRDataset(QualcommDataset):
         scene: Scene,
         instance: str,
         curr_frame_num: int,
+        patch_start_x: int,
+        patch_start_y: int,
+        patch_end_x: int,
+        patch_end_y: int,
         eye: str
     ) -> torch.Tensor:
-        curr_frame = str(curr_frame_num).zfill(4) + ".exr"
-        depth_path = scene.scene_input_imgs_path / eye / self.depth_path_suffix / instance / curr_frame
-        depth = iio.imread(depth_path.resolve())
+        if self.mode == "training":
+            depth_path = scene.scene_input_imgs_path / eye / self.depth_path_suffix / instance
+            depth_path = depth_path.as_posix()
+            depth = self.data[depth_path][curr_frame_num, :, patch_start_y:patch_end_y, patch_start_x:patch_end_x]
+            depth = torch.from_numpy(depth)
+        else:
+            curr_frame = str(curr_frame_num).zfill(4) + ".exr"
+            depth_path = scene.scene_input_imgs_path / eye / self.depth_path_suffix / instance / curr_frame
+            depth = iio.imread(depth_path.resolve())
 
-        # (H, W, C) --> (C, H, W)
-        depth = torch.permute(torch.from_numpy(depth), (2, 0, 1))
+            # (H, W, C) --> (C, H, W)
+            depth = torch.permute(torch.from_numpy(depth), (2, 0, 1))
 
-        # (C, H, W) --> (1, H, W)
-        depth = depth[0:1]
+            # (C, H, W) --> (1, H, W)
+            depth = depth[0:1]
+
+            depth = self.get_patch(
+                depth,
+                patch_start_x,
+                patch_start_y,
+                patch_end_x,
+                patch_end_y
+            )
 
         return depth
     
@@ -122,14 +147,32 @@ class VRDataset(QualcommDataset):
         scene: Scene,
         instance: str,
         curr_frame_num: int,
+        patch_start_x: int,
+        patch_start_y: int,
+        patch_end_x: int,
+        patch_end_y: int,
         eye: str
     ) -> torch.Tensor:
-        curr_frame = str(curr_frame_num).zfill(4) + ".exr"
-        motion_vectors_path = scene.scene_input_imgs_path / eye / self.motion_vector_path_suffix / instance / curr_frame
-        motion_vectors = iio.imread(motion_vectors_path.resolve())
+        if self.mode == "training":
+            motion_vectors_path = scene.scene_input_imgs_path / eye / self.motion_vector_path_suffix / instance
+            motion_vectors_path = motion_vectors_path.as_posix()
+            motion_vectors = self.data[motion_vectors_path][curr_frame_num, :, patch_start_y:patch_end_y, patch_start_x:patch_end_x]
+            motion_vectors = torch.from_numpy(motion_vectors)
+        else:
+            curr_frame = str(curr_frame_num).zfill(4) + ".exr"
+            motion_vectors_path = scene.scene_input_imgs_path / eye / self.motion_vector_path_suffix / instance / curr_frame
+            motion_vectors = iio.imread(motion_vectors_path.resolve())
 
-        # (H, W, C) --> (C, H, W)
-        motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
+            # (H, W, C) --> (C, H, W)
+            motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
+
+            motion_vectors = self.get_patch(
+                motion_vectors,
+                patch_start_x,
+                patch_start_y,
+                patch_end_x,
+                patch_end_y
+            )
 
         # Unreal Engine motion vectors are normalised to the range [0, 1], 
         # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
@@ -137,7 +180,7 @@ class VRDataset(QualcommDataset):
         motion_vectors = (motion_vectors - 0.5) * 2.0
 
         # The horizontal velocity is stored in the first channel
-        motion_vectors = motion_vectors[0:2, ...]
+        motion_vectors = motion_vectors[0:2, ...]  
 
         return motion_vectors
     
@@ -183,74 +226,97 @@ class VRDataset(QualcommDataset):
         curr_frame = str(curr_frame_num).zfill(4) + ".png"
 
         # ---------------------------- Left frame ---------------------------
-        left_input_img_path = scene.scene_input_imgs_path / "Left" / self.colour_path_suffix / instance / curr_frame
-        left_output_img_path = scene.scene_output_imgs_path / "Left" / self.colour_path_suffix / instance / curr_frame
 
-        curr_left_input_img = decode_image(left_input_img_path.resolve())[0:3, ...].float()
-        curr_left_input_img = self.get_patch(
-            curr_left_input_img,
-            patch_start_x,
-            patch_start_y,
-            patch_end_x,
-            patch_end_y
-        )
+        if self.mode == "training":
+            left_input_img_path = scene.scene_input_imgs_path / "Left" / self.colour_path_suffix / instance
+            left_input_img_path = left_input_img_path.as_posix()
+            curr_left_input_img = self.data[left_input_img_path][curr_frame_num, :, patch_start_y:patch_end_y, patch_start_x:patch_end_x]
+            curr_left_input_img = torch.from_numpy(curr_left_input_img)
+            # print(f"{curr_left_input_img.shape=}")
+            # print(f"{curr_left_input_img.dtype=}")
+            # print(f"{curr_left_input_img=}")
+            # saved_image = torch.from_numpy(curr_left_input_img)
+            # saved_image = saved_image.float() / 255.0
+            # save_image(saved_image, "sample_output.png")
+        else:
+            left_input_img_path = scene.scene_input_imgs_path / "Left" / self.colour_path_suffix / instance / curr_frame
+            curr_left_input_img = decode_image(left_input_img_path.resolve())[0:3, ...].float()
+            curr_left_input_img = self.get_patch(
+                curr_left_input_img,
+                patch_start_x,
+                patch_start_y,
+                patch_end_x,
+                patch_end_y
+            )
 
-        curr_left_output_img = decode_image(left_output_img_path.resolve())[0:3, ...].float()
-        curr_left_output_img = self.get_patch(
-            curr_left_output_img,
-            patch_start_x * self.scale_factor,
-            patch_start_y * self.scale_factor,
-            patch_end_x * self.scale_factor,
-            patch_end_y * self.scale_factor
-        )
+        if self.mode == "training":
+            left_output_img_path = scene.scene_output_imgs_path / "Left" / self.colour_path_suffix / instance
+            left_output_img_path = left_output_img_path.as_posix()
+            curr_left_output_img = self.data[left_output_img_path][curr_frame_num, :, patch_start_y * self.scale_factor:patch_end_y * self.scale_factor, patch_start_x * self.scale_factor:patch_end_x * self.scale_factor]
+            curr_left_output_img = torch.from_numpy(curr_left_output_img)
+        else:
+            left_output_img_path = scene.scene_output_imgs_path / "Left" / self.colour_path_suffix / instance / curr_frame
+            curr_left_output_img = decode_image(left_output_img_path.resolve())[0:3, ...].float()
+            curr_left_output_img = self.get_patch(
+                curr_left_output_img,
+                patch_start_x * self.scale_factor,
+                patch_start_y * self.scale_factor,
+                patch_end_x * self.scale_factor,
+                patch_end_y * self.scale_factor
+            )
 
         # --------------------------- Right frame ---------------------------
-        right_input_img_path = scene.scene_input_imgs_path / "Right" / self.colour_path_suffix / instance / curr_frame
         right_output_img_path = scene.scene_output_imgs_path / "Right" / self.colour_path_suffix / instance / curr_frame
 
-        curr_right_input_img = decode_image(right_input_img_path.resolve())[0:3, ...].float()
-        curr_right_input_img = self.get_patch(
-            curr_right_input_img,
-            patch_start_x,
-            patch_start_y,
-            patch_end_x,
-            patch_end_y
-        )
+        if self.mode == "training":
+            right_input_img_path = scene.scene_input_imgs_path / "Right" / self.colour_path_suffix / instance
+            right_input_img_path = right_input_img_path.as_posix()
+            curr_right_input_img = self.data[right_input_img_path][curr_frame_num, :, patch_start_y:patch_end_y, patch_start_x:patch_end_x]
+            curr_right_input_img = torch.from_numpy(curr_right_input_img)
+        else:
+            right_input_img_path = scene.scene_input_imgs_path / "Right" / self.colour_path_suffix / instance / curr_frame
+            curr_right_input_img = decode_image(right_input_img_path.resolve())[0:3, ...].float()
+            curr_right_input_img = self.get_patch(
+                curr_right_input_img,
+                patch_start_x,
+                patch_start_y,
+                patch_end_x,
+                patch_end_y
+            )
 
-        curr_right_output_img = decode_image(right_output_img_path.resolve())[0:3, ...].float()
-        curr_right_output_img = self.get_patch(
-            curr_right_output_img,
-            patch_start_x * self.scale_factor,
-            patch_start_y * self.scale_factor,
-            patch_end_x * self.scale_factor,
-            patch_end_y * self.scale_factor
-        )
+        if self.mode == "training":
+            right_output_img_path = scene.scene_output_imgs_path / "Right" / self.colour_path_suffix / instance
+            right_output_img_path = right_output_img_path.as_posix()
+            curr_right_output_img = self.data[right_output_img_path][curr_frame_num, :, patch_start_y * self.scale_factor:patch_end_y * self.scale_factor, patch_start_x * self.scale_factor:patch_end_x * self.scale_factor]
+            curr_right_output_img = torch.from_numpy(curr_right_output_img)
+        else:
+            right_output_img_path = scene.scene_output_imgs_path / "Right" / self.colour_path_suffix / instance / curr_frame
+            curr_right_output_img = decode_image(right_output_img_path.resolve())[0:3, ...].float()
+            curr_right_output_img = self.get_patch(
+                curr_right_output_img,
+                patch_start_x * self.scale_factor,
+                patch_start_y * self.scale_factor,
+                patch_end_x * self.scale_factor,
+                patch_end_y * self.scale_factor
+            )
         
         # -------------------------------------------------------------------
-        # -------------------------- Previous frame -------------------------
+        # ------------------- Transforms + previous frame -------------------
         # -------------------------------------------------------------------
         prev_frame_num = max(0, curr_frame_num - 1)
-
-        # ---------------------------- Left frame ---------------------------
-        # prev_left_output_img will be overwritten later, if there was a previous frame output from the model
-        prev_left_output_img = curr_left_input_img.clone().detach()
-
-        # --------------------------- Right frame ---------------------------
-        # prev_right_output_img will be overwritten later, if there was a previous frame output from the model
-        prev_right_output_img = curr_right_input_img.clone().detach()
-
-        # -------------------------------------------------------------------
-        # ---------------------------- Transforms ---------------------------
-        # -------------------------------------------------------------------
 
         if self.transform:
             # ---------------------------- Left frame ---------------------------
             curr_left_input_img = self.transform(curr_left_input_img)
-            prev_left_output_img = self.transform(prev_left_output_img)
+
+            # prev_left_output_img will be overwritten later, if there was a previous frame output from the model
+            prev_left_output_img = curr_left_input_img.clone().detach()
 
             # --------------------------- Right frame ---------------------------
             curr_right_input_img = self.transform(curr_right_input_img)
-            prev_right_output_img = self.transform(prev_right_output_img)
+            
+            # prev_right_output_img will be overwritten later, if there was a previous frame output from the model
+            prev_right_output_img = curr_right_input_img.clone().detach()
 
         if self.target_transform:
             # ---------------------------- Left frame ---------------------------
@@ -263,7 +329,7 @@ class VRDataset(QualcommDataset):
         prev_left_output_img = F.interpolate(  # Interpolate in linear space
             prev_left_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
             scale_factor=self.scale_factor, 
-            mode='bicubic',
+            mode="bicubic",
             align_corners=False,
             antialias=True
         ).squeeze(0)  # Remove the batch dimension
@@ -274,7 +340,7 @@ class VRDataset(QualcommDataset):
         prev_right_output_img = F.interpolate(  # Interpolate in linear space
             prev_right_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension
             scale_factor=self.scale_factor, 
-            mode='bicubic',
+            mode="bicubic",
             align_corners=False,
             antialias=True
         ).squeeze(0)  # Remove the batch dimension
@@ -290,28 +356,22 @@ class VRDataset(QualcommDataset):
             scene,
             instance,
             curr_frame_num,
-            "Left"
-        )
-        curr_left_depth = self.get_patch(
-            curr_left_depth,
             patch_start_x,
             patch_start_y,
             patch_end_x,
-            patch_end_y
+            patch_end_y,
+            "Left"
         )
 
         prev_left_depth = self.get_depth(
             scene,
             instance,
             prev_frame_num,
-            "Left"
-        )
-        prev_left_depth = self.get_patch(
-            prev_left_depth,
             patch_start_x,
             patch_start_y,
             patch_end_x,
-            patch_end_y
+            patch_end_y,
+            "Left"
         )
         prev_left_depth = self.upscale_buffer(prev_left_depth)
 
@@ -320,28 +380,22 @@ class VRDataset(QualcommDataset):
             scene,
             instance,
             curr_frame_num,
-            "Right"
-        )
-        curr_right_depth = self.get_patch(
-            curr_right_depth,
             patch_start_x,
             patch_start_y,
             patch_end_x,
-            patch_end_y
+            patch_end_y,
+            "Right"
         )
 
         prev_right_depth = self.get_depth(
             scene,
             instance,
             prev_frame_num,
-            "Right"
-        )
-        prev_right_depth = self.get_patch(
-            prev_right_depth,
             patch_start_x,
             patch_start_y,
             patch_end_x,
-            patch_end_y
+            patch_end_y,
+            "Right"
         )
         prev_right_depth = self.upscale_buffer(prev_right_depth)
         
@@ -350,14 +404,11 @@ class VRDataset(QualcommDataset):
             scene,
             instance,
             curr_frame_num,
-            "Left"
-        )
-        curr_left_motion_vectors = self.get_patch(
-            curr_left_motion_vectors,
             patch_start_x,
             patch_start_y,
             patch_end_x,
-            patch_end_y
+            patch_end_y,
+            "Left"
         )
 
         # --------------------------- Right frame ---------------------------
@@ -365,14 +416,11 @@ class VRDataset(QualcommDataset):
             scene,
             instance,
             curr_frame_num,
-            "Right"
-        )
-        curr_right_motion_vectors = self.get_patch(
-            curr_right_motion_vectors,
             patch_start_x,
             patch_start_y,
             patch_end_x,
-            patch_end_y
+            patch_end_y,
+            "Right"
         )
         
         # Jitter is the same for both eyes, but we create jitter tensors for each eye

@@ -235,6 +235,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     # -------------------------------------------------------------------------
     if cfg["dataset"]["is-vr"]:
         evaluation_data = VRDataset(
+            data_root=cfg["paths"]["data-root"],
             input_imgs_path=cfg["dataset"]["validation-input-img-path"],
             output_imgs_path=cfg["dataset"]["validation-output-img-path"],
             input_frame_height=cfg["dataset"]["input-frame-height"],

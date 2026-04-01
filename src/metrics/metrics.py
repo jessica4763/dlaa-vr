@@ -36,8 +36,8 @@ class Metrics:
         self.ssim_sum = 0
 
         self.lpips_sum = 0
-        cuda0 = torch.device('cuda:0')
-        self.loss_function_lpips = lpips.LPIPS(net='vgg').to(cuda0)
+        cuda0 = torch.device("cuda:0")
+        self.loss_function_lpips = lpips.LPIPS(net="vgg").to(cuda0)
 
         self.cvvdp = pycvvdp.cvvdp(display_name=display_name)
         self.cvvdp_jod_sum = 0

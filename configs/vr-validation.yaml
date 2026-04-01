@@ -12,6 +12,7 @@ paths:
   evaluation-output-path: run/vr_evaluation_outputs
   tensorboard-path: ../saved/logs/runs
   saved-models-path: ../saved/models/vr_scale_model.pt
+  data-root: ../data/training_data/VR
 
 model:
   hidden-channels: 16

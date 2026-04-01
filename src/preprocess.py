@@ -77,7 +77,7 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
         display_name="standard_fhd"
     )
 
-    cuda0 = torch.device('cuda:0')
+    cuda0 = torch.device("cuda:0")
 
     for frame_num, (pred_name, target_name) in enumerate(pairs):
         pred = decode_image((pred_path / pred_name).resolve())[0:3, ...]
@@ -86,7 +86,7 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
         pred = F.interpolate(
             pred,
             scale_factor=2, 
-            mode='bicubic',
+            mode="bicubic",
             align_corners=False
         )
         pred = torch.clamp(pred, 0.0, 1.0)
@@ -201,7 +201,7 @@ def warp_frames(left_frame_path: Path, right_frame_path: Path, depth_path: Path)
         ys, xs = torch.meshgrid(
             torch.arange(H),
             torch.arange(W),
-            indexing='ij'
+            indexing="ij"
         )
         ys = ys + 0.5 
         xs = xs + 0.5
@@ -219,8 +219,8 @@ def warp_frames(left_frame_path: Path, right_frame_path: Path, depth_path: Path)
         warped_left_frame = F.grid_sample(
             right_frame,
             warped_grid,
-            mode='bilinear',
-            padding_mode='zeros',
+            mode="bilinear",
+            padding_mode="zeros",
             align_corners=False
         )
 
@@ -267,7 +267,7 @@ def generate_zarr(input_folder_path: Path, zarr_output_path: Path, channels: int
 
     data = zarr.open(
         zarr_output_path,
-        mode='w',
+        mode="w",
         shape=(len(filenames), channels, H, W),
         chunks=(1, channels, patch_size, patch_size),
         dtype=representative_image.dtype
@@ -295,7 +295,7 @@ def generate_zarr(input_folder_path: Path, zarr_output_path: Path, channels: int
 def generate_vr_data_zarr(input_root_path: Path, output_root_path: Path):
     for directory_path, _, filenames in os.walk(input_root_path):
         directory_path = Path(directory_path)
-        if any(filename.endswith(('.png', '.exr')) for filename in filenames):
+        if any(filename.endswith((".png", ".exr")) for filename in filenames):
             relative_path = os.path.relpath(directory_path, input_root_path)
 
             if "Depth" in relative_path:
