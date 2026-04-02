@@ -10,7 +10,7 @@ from skimage.metrics import (
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from utils import VRConfig, rgb_to_y
+from utils import rgb_to_y
 
 
 class Metrics:
@@ -20,7 +20,6 @@ class Metrics:
         padding: int,
         iterations: int,
         writer: SummaryWriter = None, 
-        vr_config: VRConfig = None,
         is_stationary_segment: bool = False,
         display_name: str = "standard_fhd"
     ) -> None:
@@ -28,7 +27,6 @@ class Metrics:
         self.padding = padding
         self.iterations = iterations
         self.writer = writer
-        self.vr_config = vr_config
         self.is_stationary_segment = is_stationary_segment
 
         self.norm_rmse_sum = 0

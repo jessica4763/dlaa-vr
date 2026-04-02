@@ -22,7 +22,7 @@ model:
   save-interval: 2500
 
 validation:
-  proxy-validation-interval: 20
+  proxy-validation-interval: 250
   primary-validation-interval: 2500
 
 hydra:

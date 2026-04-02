@@ -16,6 +16,7 @@ paths:
 model:
   hidden-channels: 16
   num-blocks: 1
+  is-vr: false
 
 validation:
   padding: 0

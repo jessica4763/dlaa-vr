@@ -286,6 +286,20 @@ def train() -> None:
     scale_factor = cfg["dataset"]["output-frame-height"] // cfg["dataset"]["input-frame-height"]
 
     # -------------------------------------------------------------------------
+    # -------------------------------- VRConfig -------------------------------
+    # -------------------------------------------------------------------------
+    if cfg["dataset"]["is-vr"]:
+        vr_config = VRConfig(
+            camera_baseline=cfg["dataset"]["camera-baseline"], 
+            horizontal_fov=cfg["dataset"]["horizontal-fov"],
+            vertical_fov=cfg["dataset"]["vertical-fov"],
+            horizontal_resolution=cfg["dataset"]["input-frame-width"],
+            vertical_resolution=cfg["dataset"]["input-frame-height"]
+        )
+    else:
+        vr_config = None
+
+    # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
     # -------------------------------------------------------------------------
     if cfg["dataset"]["is-vr"]:
@@ -363,14 +377,6 @@ def train() -> None:
     # --------------------------------- Model ---------------------------------
     # -------------------------------------------------------------------------
     if cfg["dataset"]["is-vr"]:
-        vr_config = VRConfig(
-            camera_baseline=cfg["dataset"]["camera-baseline"], 
-            horizontal_fov=cfg["dataset"]["horizontal-fov"],
-            vertical_fov=cfg["dataset"]["vertical-fov"],
-            horizontal_resolution=cfg["dataset"]["input-frame-width"],
-            vertical_resolution=cfg["dataset"]["input-frame-height"]
-        )
-
         model = VRNetwork(
             vr_config=vr_config,
             hidden_channels=cfg["model"]["hidden-channels"],
@@ -379,8 +385,6 @@ def train() -> None:
             use_jitter=cfg["setup"]["jitter"]
         ).to(device)
     else:
-        vr_config = None
-
         model = QualcommNetwork(
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],

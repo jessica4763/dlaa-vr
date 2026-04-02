@@ -19,29 +19,29 @@ class VRNetwork(QualcommNetwork):
         
         self.vr_config = vr_config
 
-        self.num_curr_left_colour = self.num_curr_right_colour = 3
+        self.num_curr_colour = 3
         self.num_curr_depth = 1
         self.num_curr_jitter = 2 if use_jitter else 0  # 2 for displacement in both x and y
-        self.num_prev_left_colour = self.num_prev_right_colour = 3 * (scale_factor ** 2)
-        self.num_prev_left_feature = self.num_prev_right_feature = 1 * (scale_factor ** 2)
+        self.num_prev_colour = 3 * (scale_factor ** 2)
+        self.num_prev_feature = 1 * (scale_factor ** 2)
 
-        self.left_in_channels = (
-            self.num_curr_left_colour +
+        self.input_channels = (
+            self.num_curr_colour +
             self.num_curr_depth +
             self.num_curr_jitter +
-            self.num_prev_left_colour +
-            self.num_prev_left_feature
+            self.num_prev_colour +
+            self.num_prev_feature
         )
 
-        self.in_channels = (
-            self.num_curr_left_colour +
-            self.num_curr_right_colour +
+        self.total_channels = (
+            self.num_curr_colour +
+            self.num_curr_colour +
             self.num_curr_depth +
             self.num_curr_jitter +
-            self.num_prev_left_colour +
-            self.num_prev_right_colour + 
-            self.num_prev_left_feature + 
-            self.num_prev_right_feature
+            self.num_prev_colour +
+            self.num_prev_colour + 
+            self.num_prev_feature + 
+            self.num_prev_feature
         )
 
         self.depth_to_space = nn.PixelShuffle(upscale_factor=scale_factor)
@@ -49,8 +49,8 @@ class VRNetwork(QualcommNetwork):
 
         if use_jitter:
             self.input_conv = JitterConditionedConv(
-                out_channels=hidden_channels,
-                in_channels=self.in_channels,
+                output_channels=hidden_channels,
+                input_channels=self.total_channels,
                 kernel_height=3,
                 kernel_width=3,
                 num_hidden_features=2048,
@@ -59,7 +59,7 @@ class VRNetwork(QualcommNetwork):
         else:
             # Initial 3 × 3 Conv + ReLU block
             self.input_conv = nn.Conv2d(
-                self.in_channels,
+                self.total_channels,
                 hidden_channels,
                 kernel_size=3,
                 padding=1,
@@ -85,7 +85,7 @@ class VRNetwork(QualcommNetwork):
         # Feature head
         if use_jitter:
             self.feature_head = JitterConditionedConv(
-                self.num_prev_left_feature,
+                self.num_prev_feature,
                 hidden_channels,
                 3,
                 3,
@@ -95,7 +95,7 @@ class VRNetwork(QualcommNetwork):
         else:
             self.feature_head = nn.Conv2d(
                 hidden_channels,
-                self.num_prev_left_feature,
+                self.num_prev_feature,
                 kernel_size=3,
                 padding=1,
                 padding_mode="zeros"
@@ -104,7 +104,7 @@ class VRNetwork(QualcommNetwork):
         # Colour head
         if use_jitter:
             self.colour_head = JitterConditionedConv(
-                self.num_prev_left_colour,
+                self.num_prev_colour,
                 hidden_channels,
                 3,
                 3,
@@ -114,7 +114,7 @@ class VRNetwork(QualcommNetwork):
         else:
             self.colour_head = nn.Conv2d(
                 hidden_channels,
-                self.num_prev_left_colour,
+                self.num_prev_colour,
                 kernel_size=3,
                 padding=1,
                 padding_mode="zeros"
@@ -469,7 +469,7 @@ class VRNetwork(QualcommNetwork):
                 jitter_frames = jitter[:, clip]
 
             c0 = 0
-            c1 = c0 + self.num_curr_left_colour
+            c1 = c0 + self.num_curr_colour
             curr_left_colour = left_clip_frames[:, c0:c1]
             curr_right_colour = right_clip_frames[:, c0:c1]
 
@@ -483,7 +483,7 @@ class VRNetwork(QualcommNetwork):
             curr_jitter = left_clip_frames[:, c0:c1]
 
             c0 = c1
-            c1 = c0 + self.num_prev_left_colour
+            c1 = c0 + self.num_prev_colour
             if mode == "training":
                 prev_left_colour = prev_pred_left_colour if prev_pred_left_colour is not None else left_clip_frames[:, c0:c1] 
                 prev_right_colour = prev_pred_right_colour if prev_pred_right_colour is not None else right_clip_frames[:, c0:c1]
@@ -492,7 +492,7 @@ class VRNetwork(QualcommNetwork):
                 prev_right_colour = right_clip_frames[:, c0:c1]
             
             c0 = c1
-            c1 = c0 + self.num_prev_left_colour
+            c1 = c0 + self.num_prev_colour
             if mode == "training":
                 prev_left_feature = prev_pred_left_features if prev_pred_left_features is not None else left_clip_frames[:, c0:c1] 
                 prev_right_feature = prev_pred_right_features if prev_pred_right_features is not None else right_clip_frames[:, c0:c1]

@@ -6,8 +6,8 @@ import torch.nn.functional as F
 class JitterConditionedConv(nn.Module):
     def __init__(
         self,
-        out_channels: int,
-        in_channels: int,
+        output_channels: int,
+        input_channels: int,
         kernel_height: int,
         kernel_width: int,
         num_hidden_features: int = 2048,
@@ -15,11 +15,11 @@ class JitterConditionedConv(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.out_channels = out_channels
-        self.in_channels = in_channels
+        self.output_channels = output_channels
+        self.input_channels = input_channels
         self.kernel_height = kernel_height
         self.kernel_width = kernel_width
-        num_outputs = out_channels * in_channels * kernel_height * kernel_width
+        num_outputs = output_channels * input_channels * kernel_height * kernel_width
 
         self.input_layer = nn.Sequential(
             nn.Linear(2, num_hidden_features),
@@ -38,7 +38,7 @@ class JitterConditionedConv(nn.Module):
             nn.Linear(num_hidden_features, num_outputs),
         )
 
-    def forward(self, x: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
+    def forward(self, inputs: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
         batch_size, _ = jitter.shape
 
         h = self.input_layer(jitter)
@@ -46,8 +46,8 @@ class JitterConditionedConv(nn.Module):
         kernel = self.output_layer(h)
         kernel = kernel.view(
             batch_size,
-            self.out_channels,
-            self.in_channels,
+            self.output_channels,
+            self.input_channels,
             self.kernel_height,
             self.kernel_width
         )
@@ -59,7 +59,7 @@ class JitterConditionedConv(nn.Module):
         #    Although for loops are generally slow, I use them here for readability. 
         outputs = []
         for batch in range(batch_size):
-            outputs.append(F.conv2d(x[batch:batch + 1], kernel[batch], padding=1))
+            outputs.append(F.conv2d(inputs[batch:batch + 1], kernel[batch], padding=1))
         return torch.cat(outputs, dim=0)
 
 
@@ -79,7 +79,7 @@ class QualcommNetwork(nn.Module):
         self.num_prev_colour = self.num_curr_colour * (scale_factor ** 2)
         self.num_prev_feature = 1 * (scale_factor ** 2)
 
-        self.in_channels = (
+        self.input_channels = (
             self.num_curr_colour +
             self.num_curr_depth +
             self.num_curr_jitter +
@@ -92,8 +92,8 @@ class QualcommNetwork(nn.Module):
 
         if use_jitter:
             self.input_conv = JitterConditionedConv(
-                out_channels=hidden_channels,
-                in_channels=self.in_channels,
+                output_channels=hidden_channels,
+                input_channels=self.input_channels,
                 kernel_height=3,
                 kernel_width=3,
                 num_hidden_features=2048,
@@ -102,7 +102,7 @@ class QualcommNetwork(nn.Module):
         else:
             # Initial 3 × 3 Conv + ReLU block
             self.input_conv = nn.Conv2d(
-                self.in_channels,
+                self.input_channels,
                 hidden_channels,
                 kernel_size=3,
                 padding=1,
@@ -237,20 +237,20 @@ class QualcommNetwork(nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
+        inputs: torch.Tensor,
         motion_vectors: torch.Tensor,
         curr_frame_num: int,
         jitter: torch.Tensor = None,
         mode: str = "training"
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        B, clip_size, C, H, W = x.shape
+        B, clip_size, C, H, W = inputs.shape
 
         # To hold the recurrent colour frame and features
         prev_pred_frame = prev_pred_features = None
 
         outputs = []
         for clip in range(clip_size):
-            clip_frames = x[:, clip].clone()
+            clip_frames = inputs[:, clip].clone()
             motion_vector_frames = motion_vectors[:, clip]
             if self.num_curr_jitter != 0:
                 jitter_frames = jitter[:, clip]

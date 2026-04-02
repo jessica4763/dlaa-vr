@@ -13,6 +13,7 @@ from datasets.vr_dataset import VRDataset
 from models.qualcomm_network import QualcommNetwork
 from models.vr_network import VRNetwork
 from metrics.metrics import Metrics
+from metrics.vr_metrics import VRMetrics
 from utils import (
     gamma_to_linear,
     linear_to_gamma,
@@ -57,10 +58,10 @@ def evaluate(
 
             # Use the previously predicted frame and features during evaluation
             if prev_pred_frame is not None and prev_features is not None and curr_frame_num > 0:
-                c0 = model.in_channels - (model.num_prev_colour + model.num_prev_feature)
-                c1 = model.in_channels - model.num_prev_feature
+                c0 = model.input_channels - (model.num_prev_colour + model.num_prev_feature)
+                c1 = model.input_channels - model.num_prev_feature
                 inputs[:, :, c0:c1] = prev_pred_frame
-                inputs[:, :, c1:model.in_channels] = prev_features
+                inputs[:, :, c1:model.input_channels] = prev_features
 
             # -------------------------------------------------------------------------
             # -------------------------------- Predict --------------------------------
@@ -89,11 +90,12 @@ def evaluate_vr(
     model: nn.Module,
     evaluation_dataloader: DataLoader,
     loss_function: nn.Module,
-    metrics: Metrics,
+    metrics: VRMetrics,
     evaluation_output_path_pred: Path,
     evaluation_output_path_target: Path,
     scale_factor: int = 1,
-    use_jitter: bool = False
+    use_jitter: bool = False,
+    model_is_vr: bool = True
 ) -> None:
     model.eval()
     with torch.no_grad():
@@ -114,6 +116,7 @@ def evaluate_vr(
                 right_target, 
                 curr_frame_num
             ) = data
+
             left_inputs = left_inputs.to(device, non_blocking=True)
             left_inputs = left_inputs.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
             right_inputs = right_inputs.to(device, non_blocking=True)
@@ -140,29 +143,47 @@ def evaluate_vr(
 
             # Use the previously predicted frame and features during evaluation
             if None not in (prev_pred_left_frame, prev_pred_right_frame, prev_left_features, prev_right_features) and curr_frame_num > 0:
-                c0 = model.left_in_channels - (model.num_prev_left_colour + model.num_prev_left_feature)
-                c1 = model.left_in_channels - model.num_prev_left_feature
+                c0 = model.input_channels - (model.num_prev_colour + model.num_prev_feature)
+                c1 = model.input_channels - model.num_prev_feature
 
                 left_inputs[:, :, c0:c1] = prev_pred_left_frame
-                left_inputs[:, :, c1:model.left_in_channels] = prev_left_features
+                left_inputs[:, :, c1:model.input_channels] = prev_left_features
                 right_inputs[:, :, c0:c1] = prev_pred_right_frame
-                right_inputs[:, :, c1:model.left_in_channels] = prev_right_features
+                right_inputs[:, :, c1:model.input_channels] = prev_right_features
 
             # -------------------------------------------------------------------------
             # -------------------------------- Predict --------------------------------
             # -------------------------------------------------------------------------
+            if model_is_vr:            
+                pred_left_frame, pred_right_frame, left_features, right_features, left_blending_mask, right_blending_mask = model(
+                    left_inputs,
+                    right_inputs,
+                    left_motion_vectors, 
+                    right_motion_vectors,
+                    prev_left_depth,
+                    prev_right_depth,
+                    curr_frame_num, 
+                    jitter,
+                    "evaluation"
+                )
+            else:
+                pred_left_frame, left_features, left_blending_mask = model(
+                    left_inputs,
+                    left_motion_vectors,
+                    curr_frame_num,
+                    jitter,
+                    "evaluation"
+                )
+
+                pred_right_frame, right_features, right_blending_mask = model(
+                    right_inputs,
+                    right_motion_vectors,
+                    curr_frame_num,
+                    jitter,
+                    "evaluation"
+                )
+
             output_N, output_C, output_H, output_W = left_target.shape
-            pred_left_frame, pred_right_frame, left_features, right_features, _, _ = model(
-                left_inputs,
-                right_inputs,
-                left_motion_vectors, 
-                right_motion_vectors,
-                prev_left_depth,
-                prev_right_depth,
-                curr_frame_num, 
-                jitter,
-                "evaluation"
-            )
             pred_left_frame = pred_left_frame.view(-1, output_C, output_H, output_W)
             pred_right_frame = pred_right_frame.view(-1, output_C, output_H, output_W)
 
@@ -183,8 +204,8 @@ def evaluate_vr(
             current_img = (batch + 1) * len(left_inputs)
             print(f"left_frame_loss: {left_frame_loss:>7f} | right_frame_loss: {right_frame_loss:>7f}  [{current_img:>5d}/{len(evaluation_dataloader.dataset):>5d}]")
 
-            metrics.record(gamma_pred_left_frame, gamma_left_target)
-            metrics.record(gamma_pred_right_frame, gamma_right_target)
+            metrics.record(gamma_pred_left_frame, gamma_left_target, "left")
+            metrics.record(gamma_pred_right_frame, gamma_right_target, "right")
             write_frames(evaluation_output_path_pred / "left", gamma_pred_left_frame, batch)
             write_frames(evaluation_output_path_target / "left", gamma_left_target, batch)
             write_frames(evaluation_output_path_pred / "right", gamma_pred_right_frame, batch)
@@ -229,6 +250,20 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     # ------------------------------- Constants -------------------------------
     # -------------------------------------------------------------------------
     scale_factor = cfg["dataset"]["output-frame-height"] // cfg["dataset"]["input-frame-height"]
+
+    # -------------------------------------------------------------------------
+    # -------------------------------- VRConfig -------------------------------
+    # -------------------------------------------------------------------------
+    if cfg["dataset"]["is-vr"]:
+        vr_config = VRConfig(
+            camera_baseline=cfg["dataset"]["camera-baseline"], 
+            horizontal_fov=cfg["dataset"]["horizontal-fov"],
+            vertical_fov=cfg["dataset"]["vertical-fov"],
+            horizontal_resolution=cfg["dataset"]["input-frame-width"],
+            vertical_resolution=cfg["dataset"]["input-frame-height"]
+        )
+    else:
+        vr_config = None
 
     # -------------------------------------------------------------------------
     # --------------------------------- Data ----------------------------------
@@ -281,15 +316,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     # -------------------------------------------------------------------------
     # --------------------------------- Model ---------------------------------
     # -------------------------------------------------------------------------
-    if cfg["dataset"]["is-vr"]:
-        vr_config = VRConfig(
-            camera_baseline=cfg["dataset"]["camera-baseline"], 
-            horizontal_fov=cfg["dataset"]["horizontal-fov"],
-            vertical_fov=cfg["dataset"]["vertical-fov"],
-            horizontal_resolution=cfg["dataset"]["input-frame-width"],
-            vertical_resolution=cfg["dataset"]["input-frame-height"]
-        )
-
+    if cfg["model"]["is-vr"]:
         model = VRNetwork(
             vr_config=vr_config,
             hidden_channels=cfg["model"]["hidden-channels"],
@@ -298,8 +325,6 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             use_jitter=cfg["setup"]["jitter"]
         ).to(device)
     else:
-        vr_config = None
-        
         model = QualcommNetwork(
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
@@ -315,25 +340,30 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
         )
     )
 
-    print_parameters(
-        evaluation_output_path=Path(cfg["paths"]["evaluation-output-path"]),
-        parameters=model.state_dict()
-    )
-
     # -------------------------------------------------------------------------
     # -------------------------------- Metrics --------------------------------
     # -------------------------------------------------------------------------    
     loss_function = nn.L1Loss()
 
-    metrics = Metrics(
-        dataset_size=len(evaluation_dataloader.dataset),  # The total number of frames in the dataset
-        padding=cfg["validation"]["padding"],
-        iterations=iterations,
-        writer=writer,
-        vr_config=vr_config,
-        is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
-        display_name=cfg["setup"]["display-name"],
-    )
+    if cfg["dataset"]["is-vr"]:
+        metrics = VRMetrics(
+            dataset_size=len(evaluation_dataloader.dataset),  # The total number of frames in the dataset
+            padding=cfg["validation"]["padding"],
+            iterations=iterations,
+            writer=writer,
+            vr_config=vr_config,
+            is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
+            display_name=cfg["setup"]["display-name"],
+        )
+    else:
+        metrics = Metrics(
+            dataset_size=len(evaluation_dataloader.dataset),  # The total number of frames in the dataset
+            padding=cfg["validation"]["padding"],
+            iterations=iterations,
+            writer=writer,
+            is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
+            display_name=cfg["setup"]["display-name"],
+        )
 
     # -------------------------------------------------------------------------
     # ------------------------------- Evaluation ------------------------------
@@ -348,7 +378,8 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             evaluation_output_path_pred=evaluation_output_path_pred,
             evaluation_output_path_target=evaluation_output_path_target,
             scale_factor=scale_factor,
-            use_jitter=cfg["setup"]["jitter"]
+            use_jitter=cfg["setup"]["jitter"],
+            model_is_vr=cfg["model"]["is-vr"]
         )
     else:
         evaluate(
@@ -365,7 +396,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
 
     # -------------------------------------------------------------------------
     # --------------------------------- Output --------------------------------
-    # ------------------------------------------------------------------------- 
+    # -------------------------------------------------------------------------
     metrics.report(scene_name=cfg["dataset"]["scene-names"][0])
 
     if cfg["dataset"]["is-vr"]:
@@ -385,6 +416,11 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             filename="evaluation_output.mp4",
             fps=24
         )
+
+    print_parameters(
+        evaluation_output_path=Path(cfg["paths"]["evaluation-output-path"]),
+        parameters=model.state_dict()
+    )
 
 
 def main() -> None:

@@ -9,10 +9,8 @@ import torch.nn.functional as F
 from torchvision.io import decode_image
 import zarr
 
-from torchvision.utils import save_image
-
 from datasets.qualcomm_dataset import QualcommDataset
-from utils import Scene, cumsum, linear_to_gamma
+from utils import Scene, cumsum
 
 
 class VRDataset(QualcommDataset):
@@ -72,7 +70,8 @@ class VRDataset(QualcommDataset):
                 scene_input_imgs_path=scene_input_imgs_path, 
                 scene_output_imgs_path=scene_output_imgs_path, 
                 path_suffix=path_suffix,
-                mode=mode
+                mode=mode,
+                is_vr=True
             )
             self.scenes.append(scene)
 
@@ -90,6 +89,9 @@ class VRDataset(QualcommDataset):
         self.transform = transform
         self.target_transform = target_transform
         self.mode = mode
+
+    def __len__(self) -> int:
+        return self.total_frames
 
     def get_jitter_offsets(
         self,

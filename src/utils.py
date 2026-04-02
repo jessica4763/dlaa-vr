@@ -26,15 +26,16 @@ class Scene:
 
     path_suffix: InitVar[str]
     mode: InitVar[str] = field(default="training")
+    is_vr: InitVar[bool] = field(default=False)
 
     num_instances: int = field(init=False)
     num_frames_per_instance: int = field(init=False)
     num_frames: int = field(init=False)
 
-    def __post_init__(self, path_suffix, mode):
+    def __post_init__(self, path_suffix, mode, is_vr):
         instances = os.listdir(self.scene_input_imgs_path / path_suffix)
 
-        if mode == "training":
+        if mode == "training" and is_vr:
             frames = os.listdir(self.scene_input_imgs_path / path_suffix / instances[0] / "c")  # "c" is a quirk of zarr
         else:
             frames = os.listdir(self.scene_input_imgs_path / path_suffix / instances[0])
@@ -172,7 +173,7 @@ def save_input_vr(
     sanity_checks_output_path.mkdir(parents=True, exist_ok=True)
     
     c0 = 0
-    c1 = c0 + model.num_curr_left_colour
+    c1 = c0 + model.num_curr_colour
     curr_colour = inputs[c0:c1]
     save_image(linear_to_gamma(curr_colour), sanity_checks_output_path / f"curr_{eye}_colour.png")
 
@@ -196,12 +197,12 @@ def save_input_vr(
         save_image(curr_jitter, sanity_checks_output_path / "curr_jitter.png")
 
     c0 = c1
-    c1 = c0 + model.num_prev_left_colour
+    c1 = c0 + model.num_prev_colour
     prev_colour = inputs[c0:c1]
     save_image(linear_to_gamma(F.pixel_shuffle(prev_colour, upscale_factor=scale_factor)), sanity_checks_output_path / f"prev_{eye}_colour.png")
 
     c0 = c1
-    c1 = c0 + model.num_prev_left_feature
+    c1 = c0 + model.num_prev_feature
     prev_feature = inputs[c0:c1]
     save_image(F.pixel_shuffle(prev_feature, upscale_factor=scale_factor), sanity_checks_output_path / f"prev_{eye}_feature.png")
     
@@ -426,12 +427,12 @@ def checkpoint_vr(
 
             jitter_next = jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
 
-            c0 = model.num_curr_left_colour + model.num_curr_depth + model.num_curr_jitter
-            c1 = c0 + model.num_prev_left_colour
+            c0 = model.num_curr_colour + model.num_curr_depth + model.num_curr_jitter
+            c1 = c0 + model.num_prev_colour
             left_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(left_output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
             right_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(right_output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
             c0 = c1
-            c1 = c0 + model.num_prev_left_feature
+            c1 = c0 + model.num_prev_feature
             left_inputs_next[:, :, c0:c1] = left_features.squeeze(0)
             right_inputs_next[:, :, c0:c1] = right_features.squeeze(0)
 

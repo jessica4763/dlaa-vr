@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from utils import VRConfig, rgb_to_y
 
 
-class Metrics:
+class VRMetrics:
     def __init__(
         self, 
         dataset_size: int,

@@ -54,7 +54,7 @@ class QualcommDataset(Dataset):
         for scene_name in scene_names:
             scene_input_imgs_path = Path(self.input_imgs_path.replace("*", scene_name))
             scene_output_imgs_path = Path(self.output_imgs_path.replace("*", scene_name))
-            self.scenes.append(Scene(scene_input_imgs_path, scene_output_imgs_path, self.colour_path_suffix, mode=mode))
+            self.scenes.append(Scene(scene_input_imgs_path, scene_output_imgs_path, self.colour_path_suffix, mode=mode, is_vr=False))
 
         scene_num_instances = [scene.num_instances for scene in self.scenes]
         self.instance_boundaries = cumsum(scene_num_instances)
