@@ -82,7 +82,7 @@ class QualcommDataset(Dataset):
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
             camera_data = json.load(json_file)
             # Negate jitter_offset_y because Unity is Y-up
-            # Then, negate both jitter offsets again because it's the projection matrices that are jittered
+            # Then, negate both jitter offsets again because the projection matrices are jittered
             jitter_offset_x = -1 * camera_data["jitter_offset"]["x"]
             jitter_offset_y = -1 * -camera_data["jitter_offset"]["y"]
             return jitter_offset_x, jitter_offset_y
@@ -129,6 +129,24 @@ class QualcommDataset(Dataset):
             depth[3] / (255 ** 4)
         ), 0)
         return depth
+    
+    # def get_depth(
+    #     self,
+    #     scene: Scene,
+    #     instance: str,
+    #     curr_frame_num: int
+    # ) -> torch.Tensor:
+    #     curr_frame = str(curr_frame_num).zfill(4) + ".exr"
+    #     depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
+    #     depth = iio.imread(depth_path.resolve())
+
+    #     # (H, W, C) --> (C, H, W)
+    #     depth = torch.permute(torch.from_numpy(depth), (2, 0, 1))
+
+    #     # (C, H, W) --> (1, H, W)
+    #     depth = depth[0:1]
+
+    #     return depth
 
     def get_motion_vectors(
         self,
@@ -153,6 +171,31 @@ class QualcommDataset(Dataset):
         motion_vectors[1, ...] *= -1
 
         return motion_vectors
+    
+    # def get_motion_vectors(
+    #     self,
+    #     scene: Scene,
+    #     instance: str,
+    #     curr_frame_num: int
+    # ) -> torch.Tensor:
+    #     curr_frame = str(curr_frame_num).zfill(4) + ".exr"
+    #     motion_vectors_path = scene.scene_input_imgs_path / self.motion_vector_path_suffix / instance / curr_frame
+    #     motion_vectors = iio.imread(motion_vectors_path.resolve())
+
+    #     # (H, W, C) --> (C, H, W)
+    #     motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
+
+    #     # Unreal Engine motion vectors are normalised to the range [0, 1], 
+    #     # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
+    #     # where (0, 0) represents no motion. 
+    #     motion_vectors = (motion_vectors - 0.5) * 2.0
+
+    #     # The horizontal velocity is stored in the first channel
+    #     motion_vectors = motion_vectors[0:2, ...]
+
+    #     motion_vectors[1, ...] *= -1
+
+    #     return motion_vectors
 
     def apply_jitter_compensation(
         self,
@@ -294,11 +337,11 @@ class QualcommDataset(Dataset):
         if self.transform:
             curr_input_img = self.transform(curr_input_img)
 
-            # prev_output_img will be overwritten later, if there was a previous frame output from the model
-            prev_output_img = curr_input_img.clone().detach()
-
         if self.target_transform:
             curr_output_img = self.target_transform(curr_output_img)
+
+        # prev_output_img will be overwritten later, if there was a previous frame output from the model
+        prev_output_img = curr_input_img.clone().detach()
 
         prev_output_img = F.interpolate(  # Interpolate in linear space
             prev_output_img.unsqueeze(0),  # F.interpolate expects a batch dimension

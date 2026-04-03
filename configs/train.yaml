@@ -1,5 +1,5 @@
 defaults:
-  - dataset: train-upscale
+  - dataset: train-upscale  # train-upscale, vr-left-train-upscale
   - optimiser: adamw
 
 setup:

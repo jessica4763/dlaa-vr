@@ -1,18 +1,17 @@
-validation-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
-validation-output-img-path: ../data/test_data/QRISP/TestSet/*/1080p/Enhanced
+training-input-img-path: ../data/training_data/VR_left/*/720x800
+training-output-img-path: ../data/training_data/VR_left/*/1440x1600/Enhanced
 
-input-frame-height: 540
-input-frame-width: 960
+input-frame-height: 800
+input-frame-width: 720
 
-output-frame-height: 1080
-output-frame-width: 1920
+output-frame-height: 1600
+output-frame-width: 1440
 
 dilation-block-size: 8
 
-scene-names: [SeaPortStationary]
+scene-names: [FantasticVillage]
 is-vr: false
-is-unreal-engine: false
-is-stationary-segment: true
+is-unreal-engine: true
 
 camera-data-path-suffix: CameraData
 

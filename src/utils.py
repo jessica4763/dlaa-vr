@@ -234,7 +234,8 @@ def checkpoint_vr(
     if iterations % 2500 < iterations_per_epoch:
         model.eval()
         with torch.no_grad():
-            index = 0
+            index = 900
+            print(f"{index=}")
             if mode == "training":
                 (
                     left_inputs,
@@ -546,69 +547,70 @@ def checkpoint(
     use_jitter: bool,
     mode: str = "training"
 ) -> None:
-    if iterations % 1000 < iterations_per_epoch:
-        model.eval()
-        with torch.no_grad():
-            # frames = [n for n in range(0, 7258) if (n + 1) % 30 != 0]
-            # n = random.choice(frames)
-            # print(f"{n=}")
+    # if iterations % 1000 < iterations_per_epoch:
+    model.eval()
+    with torch.no_grad():
+        # frames = [n for n in range(0, 7258) if (n + 1) % 30 != 0]
+        # index = random.choice(frames)
+        # print(f"{index=}")
 
-            index = 0
-            if mode == "training":
-                (inputs, motion_vectors, jitter, output, curr_frame_num) = data[(index, 0, 0, input_frame_width, input_frame_height)]
-                inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[(index + 1, 0, 0, input_frame_width, input_frame_height)]
-            else:
-                inputs, motion_vectors, jitter, output, curr_frame_num = data[index]
-                inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[index + 1]
+        index = 0
+        print(f"{index=}")
+        if mode == "training":
+            (inputs, motion_vectors, jitter, output, curr_frame_num) = data[(index, 0, 0, input_frame_width, input_frame_height)]
+            inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[(index + 1, 0, 0, input_frame_width, input_frame_height)]
+        else:
+            inputs, motion_vectors, jitter, output, curr_frame_num = data[index]
+            inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[index + 1]
 
-            # Verify input to the network
-            save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
+        # Verify input to the network
+        save_input(sanity_checks_output_path, model, inputs, motion_vectors, scale_factor)
 
-            # Verify warping 
-            warped_prev = model.warp(
-                output.unsqueeze(0),
-                motion_vectors_next.unsqueeze(0)
-            ).squeeze(0)
-            save_image(linear_to_gamma(warped_prev), sanity_checks_output_path / "warped_prev.png")
+        # Verify warping 
+        warped_prev = model.warp(
+            output.unsqueeze(0),
+            motion_vectors_next.unsqueeze(0)
+        ).squeeze(0)
+        save_image(linear_to_gamma(warped_prev), sanity_checks_output_path / "warped_prev.png")
 
-            diff = torch.abs(output_next - warped_prev)
-            save_image(linear_to_gamma(diff), sanity_checks_output_path / "diff.png")
+        diff = torch.abs(output_next - warped_prev)
+        save_image(linear_to_gamma(diff), sanity_checks_output_path / "diff.png")
 
-            # Verify the goal of the network
-            save_image(linear_to_gamma(output), sanity_checks_output_path / "ground_truth.png")
+        # Verify the goal of the network
+        save_image(linear_to_gamma(output), sanity_checks_output_path / "ground_truth.png")
 
-            # Output of the network when history is invalid
-            inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
-            motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
-            jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
-            anti_aliased_img, prev_pred_features, out_blending_mask = model(inputs, motion_vectors, curr_frame_num, jitter, "evaluation")
-            anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
-            anti_aliased_img = linear_to_gamma(anti_aliased_img)
-            save_image(anti_aliased_img, checkpoints_path / f"colour_invalid_{iterations}.png")
-            
-            # Blending mask when history is invalid
-            out_blending_mask = F.pixel_shuffle(out_blending_mask, upscale_factor=scale_factor)
-            save_image(out_blending_mask, checkpoints_path / f"blending_mask_invalid_{iterations}.png")
+        # Output of the network when history is invalid
+        inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
+        motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
+        jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+        anti_aliased_img, prev_pred_features, out_blending_mask = model(inputs, motion_vectors, curr_frame_num, jitter, "evaluation")
+        anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
+        anti_aliased_img = linear_to_gamma(anti_aliased_img)
+        save_image(anti_aliased_img, checkpoints_path / f"colour_invalid_{iterations}.png")
+        
+        # Blending mask when history is invalid
+        out_blending_mask = F.pixel_shuffle(out_blending_mask, upscale_factor=scale_factor)
+        save_image(out_blending_mask, checkpoints_path / f"blending_mask_invalid_{iterations}.png")
 
-            # Output of the network when history is valid
-            inputs_next = inputs_next.to(device).unsqueeze(0).unsqueeze(0)
-            motion_vectors_next = motion_vectors_next.to(device).unsqueeze(0).unsqueeze(0)
-            jitter_next = jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
+        # Output of the network when history is valid
+        inputs_next = inputs_next.to(device).unsqueeze(0).unsqueeze(0)
+        motion_vectors_next = motion_vectors_next.to(device).unsqueeze(0).unsqueeze(0)
+        jitter_next = jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
 
-            c0 = model.num_curr_colour + model.num_curr_depth + model.num_curr_jitter
-            c1 = c0 + model.num_prev_colour
-            inputs_next[:, :, c0:c1] = F.pixel_unshuffle(output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
+        c0 = model.num_curr_colour + model.num_curr_depth + model.num_curr_jitter
+        c1 = c0 + model.num_prev_colour
+        inputs_next[:, :, c0:c1] = F.pixel_unshuffle(output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
 
-            c0 = c1
-            c1 = c0 + model.num_prev_feature
-            inputs_next[:, :, c0:c1] = prev_pred_features.squeeze(0)
+        c0 = c1
+        c1 = c0 + model.num_prev_feature
+        inputs_next[:, :, c0:c1] = prev_pred_features.squeeze(0)
 
-            anti_aliased_img, _, out_blending_mask = model(inputs_next, motion_vectors_next, curr_frame_num_next, jitter_next, "evaluation")
+        anti_aliased_img, _, out_blending_mask = model(inputs_next, motion_vectors_next, curr_frame_num_next, jitter_next, "evaluation")
 
-            anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
-            anti_aliased_img = linear_to_gamma(anti_aliased_img)
-            save_image(anti_aliased_img, checkpoints_path / f"colour_valid_{iterations}.png")
+        anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
+        anti_aliased_img = linear_to_gamma(anti_aliased_img)
+        save_image(anti_aliased_img, checkpoints_path / f"colour_valid_{iterations}.png")
 
-            # Blending mask when history is valid
-            out_blending_mask = F.pixel_shuffle(out_blending_mask.squeeze(0), upscale_factor=scale_factor)
-            save_image(out_blending_mask, checkpoints_path / f"blending_mask_valid_{iterations}.png")
+        # Blending mask when history is valid
+        out_blending_mask = F.pixel_shuffle(out_blending_mask.squeeze(0), upscale_factor=scale_factor)
+        save_image(out_blending_mask, checkpoints_path / f"blending_mask_valid_{iterations}.png")

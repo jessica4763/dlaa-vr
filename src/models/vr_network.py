@@ -18,6 +18,7 @@ class VRNetwork(QualcommNetwork):
         nn.Module.__init__(self)
         
         self.vr_config = vr_config
+        self.scale_factor = scale_factor
 
         self.num_curr_colour = 3
         self.num_curr_depth = 1
@@ -146,6 +147,49 @@ class VRNetwork(QualcommNetwork):
 
         self.apply(self.kaiming_init_params)
 
+    def warp(
+        self,
+        input_tensor: torch.Tensor,
+        motion_vectors: torch.Tensor
+    ) -> torch.Tensor:
+        _, _, input_tensor_H, _ = input_tensor.shape
+        _, _, motion_vectors_H, _ = motion_vectors.shape
+
+        if input_tensor_H != motion_vectors_H:
+            # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
+            input_tensor = self.depth_to_space(input_tensor)
+
+        H = motion_vectors.shape[2]
+        W = motion_vectors.shape[3]
+
+        # (B, 2, H, W) --> (B, H, W, 2)
+        motion_vectors = torch.permute(motion_vectors, (0, 2, 3, 1))
+
+        # Once motion_vectors is added to base_grid, each location
+        # in the grid contains the absolute coordinates of the previous
+        # pixel/feature after motion compensation. There is no need to
+        # normalise the motion vectors because they are stored in the [-1, 1] range
+        y, x = torch.meshgrid(
+            torch.linspace(-1 + (1 / H), 1 - (1 / H), H),
+            torch.linspace(-1 + (1 / W), 1 - (1 / W), W),
+            indexing="ij"
+        )
+        base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
+        warped_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
+
+        warped_input_tensor = F.grid_sample(
+            input_tensor,
+            warped_grid,
+            mode="bilinear",
+            padding_mode="zeros",
+            align_corners=False
+        )
+
+        if input_tensor_H != motion_vectors_H:
+            warped_input_tensor = self.space_to_depth(warped_input_tensor)
+
+        return warped_input_tensor
+
     def left_to_right_warp(
         self,
         left_frame: torch.Tensor,
@@ -159,6 +203,7 @@ class VRNetwork(QualcommNetwork):
         if left_frame_H != right_depth_H:
             # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
             left_frame = self.depth_to_space(left_frame)
+            focal_length *= self.scale_factor
 
         B, _, H, W = left_frame.shape
 
@@ -189,7 +234,7 @@ class VRNetwork(QualcommNetwork):
         )
 
         if left_frame_H != right_depth_H:
-            # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
+            # Space to depth: (B, 3, 132, 132) -> (B, 12, 264, 264)
             warped_left_frame = self.space_to_depth(warped_left_frame)
 
         valid_mask = None
@@ -209,6 +254,7 @@ class VRNetwork(QualcommNetwork):
         if right_frame_H != left_depth_H:
             # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
             right_frame = self.depth_to_space(right_frame)
+            focal_length *= self.scale_factor
 
         B, _, H, W = right_frame.shape
 
@@ -239,7 +285,7 @@ class VRNetwork(QualcommNetwork):
         )
 
         if right_frame_H != left_depth_H:
-            # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
+            # Space to depth: (B, 3, 132, 132) -> (B, 12, 264, 264)
             warped_right_frame = self.space_to_depth(warped_right_frame)
 
         valid_mask = None
@@ -373,15 +419,16 @@ class VRNetwork(QualcommNetwork):
                 )
 
             # (B, C, H, W)
+            # (The channel ordering relative to the left eye is important)
             inputs = torch.cat([
-                curr_warped_left_colour,  # C = 3
                 curr_right_colour,        # C = 3
+                curr_warped_left_colour,  # C = 3
                 curr_depth,               # C = 1
                 curr_jitter,              # C = 2
-                prev_left_colour,         # C = 12
                 prev_right_colour,        # C = 12
-                prev_left_feature,        # C = 12
+                prev_left_colour,         # C = 12
                 prev_right_feature,       # C = 12
+                prev_left_feature,        # C = 12
             ], dim=1)
 
         B, C, H, W = inputs.shape
@@ -414,23 +461,29 @@ class VRNetwork(QualcommNetwork):
             out_blending_mask = self.blending_mask_head(h)
 
         out_colour = self.colour_head_relu(out_colour)
-        # left_out_colour = torch.clamp(left_out_colour, min=0, max=1)
 
         # ------------------------------------------------------------
         # -------------------------- Blend ---------------------------
         # ------------------------------------------------------------
         # (B, 12, H, W) --> (B, 3, 4, H, W)
         out_colour = out_colour.view(B, 3, -1, H, W)
+
         prev_left_colour = prev_left_colour.view(B, 3, -1, H, W)
         prev_right_colour = prev_right_colour.view(B, 3, -1, H, W)
+        if eye == "left":
+            primary_history = prev_left_colour
+            secondary_history = prev_right_colour
+        else:
+            primary_history = prev_right_colour
+            secondary_history = prev_left_colour
 
         # (B, 12, H, W) --> (B, 3, 4, H, W)
         out_blending_mask = out_blending_mask.view(B, 3, -1, H, W)
         out_blending_mask = self.blending_mask_softmax(out_blending_mask)
         blended_colour = (
             out_colour * out_blending_mask[:, 0:1, ...] +
-            prev_left_colour * out_blending_mask[:, 1:2, ...] +
-            prev_right_colour * out_blending_mask[:, 2:3, ...]
+            primary_history * out_blending_mask[:, 1:2, ...] +
+            secondary_history * out_blending_mask[:, 2:3, ...]
         )
         blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
         blended_colour = blended_colour.view(B, -1, H, W)
@@ -467,6 +520,8 @@ class VRNetwork(QualcommNetwork):
 
             if self.num_curr_jitter != 0:
                 jitter_frames = jitter[:, clip]
+            else:
+                jitter_frames = None
 
             c0 = 0
             c1 = c0 + self.num_curr_colour
@@ -492,7 +547,7 @@ class VRNetwork(QualcommNetwork):
                 prev_right_colour = right_clip_frames[:, c0:c1]
             
             c0 = c1
-            c1 = c0 + self.num_prev_colour
+            c1 = c0 + self.num_prev_feature
             if mode == "training":
                 prev_left_feature = prev_pred_left_features if prev_pred_left_features is not None else left_clip_frames[:, c0:c1] 
                 prev_right_feature = prev_pred_right_features if prev_pred_right_features is not None else right_clip_frames[:, c0:c1]

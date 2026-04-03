@@ -6,7 +6,6 @@ import cv2
 import imageio.v3 as iio
 import numpy as np
 from pathlib import Path
-import skimage.io as io
 import sys
 import torch
 import torch.nn.functional as F
@@ -15,56 +14,13 @@ from torchvision.utils import save_image
 from tqdm import tqdm
 
 from metrics.metrics import Metrics
-from utils import gamma_to_linear, linear_to_gamma
+from utils import gamma_to_linear
 from models.vr_network import VRConfig
 
 
-def downsample(
-    input_path: Path,
-    output_path: Path,
-    output_dimensions: tuple[int, int],
-) -> None:
-    def gamma_to_linear(image: np.ndarray) -> np.ndarray:
-        image = image.astype(np.float32) / 255.0
-        return np.where(
-            image <= 0.04045,
-            image / 12.92,
-            ((image + 0.055) / 1.055) ** 2.4
-        )
-
-
-    def linear_to_gamma(image: np.ndarray) -> np.ndarray:
-        image = np.clip(image, 0.0, 1.0)
-        return np.where(
-            image <= 0.0031308,
-            12.92 * image,
-            1.055 * (image ** (1.0 / 2.4)) - 0.055
-        )
-
-    for instance in os.listdir(input_path):
-        input_frames_path = input_path / instance
-        output_frames_path = output_path / instance
-        output_frames_path.mkdir(parents=True, exist_ok=True)
-        for frame in os.listdir(input_frames_path):
-            input_image_path = input_frames_path / frame
-
-            image = io.imread(input_image_path, )[:, :, :3]
-            image = gamma_to_linear(image)
-
-            downsampled_image = cv2.resize(
-                image,
-                output_dimensions,
-                interpolation=cv2.INTER_AREA
-            )
-            downsampled_image = linear_to_gamma(downsampled_image)
-            downsampled_image = (downsampled_image * 255.0).round().astype(np.uint8)
-            downsampled_image = cv2.cvtColor(downsampled_image, cv2.COLOR_RGB2BGR)
-
-            output_image_path = output_frames_path / frame
-            cv2.imwrite(output_image_path, downsampled_image)
-
-        print(f"{instance} done.")
-
+# -------------------------------------------------------------------------
+# ------------------ Reproduce Qualcomm bicubic baseline ------------------
+# -------------------------------------------------------------------------
 
 def evaluate(pred_path: Path, target_path: Path) -> None:
     # Reproduces the bicubic baseline to confirm metrics are calculated correctly
@@ -101,39 +57,6 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
     metrics.report("SeaPort")
 
 
-def rename_files(folder_path: str, extension=".png"):
-    files = os.listdir(folder_path)
-    
-    files.sort()
-
-    print(f"Found {len(files)} files. Starting renaming...")
-
-    for index, filename in enumerate(files):
-        # Create the new name with 4-digit padding (0000, 0001, etc.)
-        new_name = f"{index:04d}{extension}"
-        
-        # Build full file paths
-        old_path = os.path.join(folder_path, filename)
-        new_path = os.path.join(folder_path, new_name)
-
-        # Rename the file
-        os.rename(old_path, new_path)
-        
-    print("Renaming complete.")
-
-
-def display_depth(input_path: Path, output_path: Path) -> None:
-    depth = decode_image(input_path.resolve()).float()
-    depth = torch.unsqueeze((
-        depth[0] / 255 +
-        depth[1] / (255 ** 2) +
-        depth[2] / (255 ** 3) +
-        depth[3] / (255 ** 4)
-    ), 0)
-    save_image(linear_to_gamma(depth), output_path / "depth.png")
-    return depth
-
-
 def filter_exr_png(folder_path: Path) -> None:
     for subdirectory in folder_path.iterdir():
         if not subdirectory.is_dir():
@@ -143,18 +66,19 @@ def filter_exr_png(folder_path: Path) -> None:
             for filename in filenames:
                 file = Path(directory_path) / filename
                 parent_name = file.parent.name
+                grandparent_name = file.parent.parent.name
                 suffix = file.suffix.lower()
 
-                if suffix == ".exr" and parent_name == "Colour":
+                if suffix == ".exr" and (parent_name == "Colour" or grandparent_name == "Colour"):
                     file.unlink()
 
-                if suffix == ".png" and parent_name in {"Depth", "MotionVector"}:
+                if suffix == ".png" and (parent_name in {"Depth", "MotionVector"} or grandparent_name in {"Depth", "MotionVector"}):
                     file.unlink()
 
 
-def subsample_data(folder_path: Path, take: int = 30, skip: int = 60) -> None:
+def subsample_training_data(folder_path: Path, take: int = 30, skip: int = 60) -> None:
     for file_path in folder_path.iterdir():
-        if not file_path.is_dir():
+        if not file_path.is_dir():  
             continue
 
         files = sorted(f for f in file_path.glob("*.*") if f.is_file())
@@ -170,6 +94,20 @@ def subsample_data(folder_path: Path, take: int = 30, skip: int = 60) -> None:
             destination_path.mkdir()
             for local_index, f in enumerate(kept[file_start:file_start + take]):
                 f.rename(destination_path / f"{local_index:04d}{f.suffix}")
+
+
+def instance_evaluation_data(folder_path: Path) -> None:
+    for file_path in folder_path.iterdir():
+        if not file_path.is_dir():
+            continue
+        
+        files = sorted(f for f in file_path.glob("*.*") if f.is_file())
+        
+        if files:
+            destination_path = file_path / "0000"
+            destination_path.mkdir(exist_ok=True)
+            for f in files:
+                f.rename(destination_path / f.name)
 
 
 def prepare_data(folder_path: Path) -> None:
@@ -277,8 +215,6 @@ def generate_zarr(input_folder_path: Path, zarr_output_path: Path, channels: int
         image = cv2.imread(input_folder_path / filename, cv2.IMREAD_UNCHANGED)
         image = np.transpose(image, (2, 0, 1))
 
-        print(f"{image.dtype=}")
-
         if channels == 1:
             # Arbitrarily extracting channel B from BGRA
             image = image[[0]]
@@ -312,76 +248,36 @@ def generate_vr_data_zarr(input_root_path: Path, output_root_path: Path):
 
 
 if __name__ == "__main__":
-    generate_vr_data_zarr(
-        input_root_path=Path("../data/training_data/VR"),
-        output_root_path=Path("../data/training_data/VR_zarr")
-    )
-
-    # warp_frames(
-    #     left_frame_path=Path("0000_stereoscopic_images_visualisation_left"),
-    #     right_frame_path=Path("0000_stereoscopic_images_visualisation_right"),
-    #     depth_path=Path("0000_stereoscopic_images_visualisation_left_depth"),
+    # generate_vr_data_zarr(
+    #     input_root_path=Path("../data/training_data/VR"),
+    #     output_root_path=Path("../data/training_data/VR_zarr")
     # )
 
     # folder_path = Path("../data/training_data/VR/FantasticVillage")
     # prepare_data(folder_path)
-    # subsample_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
-    # subsample_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
-    # subsample_data(folder_path / "1440x1600/Enhanced/Left")
-    # subsample_data(folder_path / "1440x1600/Enhanced/Right")
-    # subsample_data(folder_path / "720x800/MipBiasMinus1Jittered")
+    # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
+    # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
+    # subsample_training_data(folder_path / "1440x1600/Enhanced/Left")
+    # subsample_training_data(folder_path / "1440x1600/Enhanced/Right")
+    # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered")  # CameraData
+    
+    folder_path = Path("../data/validation_data/VR/FantasticVillage")
+    prepare_data(folder_path)
+    instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
+    instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
+    # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Left")
+    # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Right")
+    instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered")  # Subsample CameraData
 
-    # prepare_data(Path("../data/validation_data/VR/FantasticVillage"))
-
-    # prepare_data(Path("../data/test_data/VR/FantasticVillage"))
-
-    # display_depth(
-    #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/DepthMipBiasMinus1Jittered/0000/0000.png"),
-    #     Path("checks")
-    # )
-
-    # rename_files( "../data/test_data/QRISP/TestSet/AbandonedSchoolStationary/540p/MotionVectorsMipBiasMinus1Jittered/0000", extension=".exr")
+    # folder_path = Path("../data/test_data/VR/FantasticVillage")
+    # prepare_data(folder_path)
+    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
+    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
+    # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Left")
+    # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Right")
+    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered")  # Subsample CameraData
 
     # evaluate(
     #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/MipBiasMinus1/0000"),
     #     Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced/0000")
     # )
-
-    # output_dimensions = (960, 540)
-
-    # training_data_scenes = [
-    #     "CBApocalypse",
-    #     "FloodedGrounds",
-    #     "FloodedGroundsBridges",
-    #     "ScifiBase",
-    #     "ScifiBaseNightStartStop",
-    #     "ScifiBaseStartStop",
-    #     "ScifiFacility",
-    #     "SunTemple",
-    #     "SunTempleBush",
-    #     "SunTempleLamps"
-    # ]
-    # training_data_prefix = Path("../data/training_data/QRISP")
-    # training_data_input_suffix = Path("1080p/Enhanced")
-    # training_data_output_suffix = Path("540p/Enhanced")
-    # for training_data_scene in training_data_scenes:
-    #     downsample(
-    #         training_data_prefix / training_data_scene / training_data_input_suffix,
-    #         training_data_prefix / training_data_scene / training_data_output_suffix,
-    #         output_dimensions
-    #     )
-
-    # validation_data_scenes = [
-    #     "AbandonedSchool",
-    #     "SeaPort",
-    #     "SpaceShipDemo"
-    # ]
-    # validation_data_prefix = Path("../data/test_data/QRISP/TestSet")
-    # validation_data_input_suffix = Path("1080p/Enhanced")
-    # validation_data_output_suffix = Path("540p/Enhanced")
-    # for validation_data_scene in validation_data_scenes:
-    #     downsample(
-    #         validation_data_prefix / validation_data_scene / validation_data_input_suffix,
-    #         validation_data_prefix / validation_data_scene / validation_data_output_suffix,
-    #         output_dimensions
-    #     )

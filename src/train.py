@@ -235,7 +235,7 @@ def train_epoch_vr(
 
 def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="vr-train")
+        cfg = hydra.compose(config_name="train")
 
     device = (
         torch.accelerator.current_accelerator().type
@@ -258,8 +258,6 @@ def train() -> None:
 
     # Seeds both the CPU and CUDA
     torch.manual_seed(cfg["setup"]["seed"])
-
-    torch.use_deterministic_algorithms(True)
 
     # Deterministically selecting an algorithm reduces efficiency
     torch.use_deterministic_algorithms(True, warn_only=True)
@@ -304,7 +302,6 @@ def train() -> None:
     # -------------------------------------------------------------------------
     if cfg["dataset"]["is-vr"]:
         training_data = VRDataset(
-            data_root=cfg["paths"]["data-root"],
             input_imgs_path=cfg["dataset"]["training-input-img-path"],
             output_imgs_path=cfg["dataset"]["training-output-img-path"],
             input_frame_height=cfg["dataset"]["input-frame-height"],
@@ -321,6 +318,7 @@ def train() -> None:
             dilation_block_size=cfg["dataset"]["dilation-block-size"],
             transform=gamma_to_linear,
             target_transform=gamma_to_linear,
+            zarr_walk_root=cfg["paths"]["zarr-walk-root"],
             mode="training"
         )
     else:
@@ -598,6 +596,8 @@ def train() -> None:
                 iterations_per_epoch=iterations_per_epoch,
                 primary_validation_interval=cfg["validation"]["primary-validation-interval"],
                 proxy_validation_interval=cfg["validation"]["proxy-validation-interval"],
+                primary_validation_length=cfg["validation"]["primary-validation-length"],
+                proxy_validation_length=cfg["validation"]["proxy-validation-length"],
                 writer=writer,
                 saved_models_path=cfg["paths"]["saved-models-path"]
             )
@@ -628,6 +628,8 @@ def validate_vr(
     iterations_per_epoch: int,
     primary_validation_interval: int,
     proxy_validation_interval: int,
+    primary_validation_length: int,
+    proxy_validation_length: int,
     writer: SummaryWriter,
     saved_models_path: str
 ) -> None:
@@ -637,7 +639,8 @@ def validate_vr(
                 config_name="vr-validation", 
                 overrides=[
                     "dataset=vr-validation-upscale-fantasticvillage",
-                    f"paths.saved-models-path={saved_models_path}"
+                    f"paths.saved-models-path={saved_models_path}",
+                    f"validation.length={primary_validation_length}"
                 ]
             )
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
@@ -646,7 +649,8 @@ def validate_vr(
                 config_name="vr-validation", 
                 overrides=[
                     "dataset=vr-validation-upscale-fantasticvillage",
-                    f"paths.saved-models-path={saved_models_path}"
+                    f"paths.saved-models-path={saved_models_path}",
+                    f"validation.length={proxy_validation_length}"
                 ]
             )
             run(cfg=validation_cfg, writer=writer, iterations=iterations)
@@ -701,7 +705,7 @@ def validate(
             validation_cfg = hydra.compose(
                 config_name="validation", 
                 overrides=[
-                    "dataset=validation-upscale-seaport",
+                    "dataset=vr-left-validation-upscale-fantasticvillage",
                     f"paths.saved-models-path={saved_models_path}"
                 ]
             )

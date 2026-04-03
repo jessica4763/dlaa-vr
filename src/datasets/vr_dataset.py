@@ -16,7 +16,6 @@ from utils import Scene, cumsum
 class VRDataset(QualcommDataset):
     def __init__(
         self,
-        data_root: str,
         input_imgs_path: str,
         output_imgs_path: str,
         input_frame_height: int,
@@ -33,12 +32,14 @@ class VRDataset(QualcommDataset):
         dilation_block_size: int = 8,
         transform=None,
         target_transform=None,
-        mode: str = "training"
+        zarr_walk_root=None,
+        mode: str = "training",
+        validation_length: int = 600
     ) -> None:
         if mode == "training":
             # Open zarr files
             self.data = {}
-            for directory_path, _, _ in os.walk(data_root):
+            for directory_path, _, _ in os.walk(zarr_walk_root):
                 directory_path = Path(directory_path)
                 if directory_path.suffix == ".zarr":
                     key = Path(os.path.relpath(directory_path, Path.cwd()))
@@ -89,10 +90,14 @@ class VRDataset(QualcommDataset):
         self.transform = transform
         self.target_transform = target_transform
         self.mode = mode
+        self.validation_length = validation_length
 
     def __len__(self) -> int:
-        return self.total_frames
-
+        if self.mode == "training":
+            return self.total_frames
+        else:
+            return min(self.total_frames, self.validation_length)
+        
     def get_jitter_offsets(
         self,
         scene: Scene,
@@ -103,8 +108,8 @@ class VRDataset(QualcommDataset):
         json_file_path = scene.scene_input_imgs_path / self.camera_data_path_suffix / instance / frame
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
             camera_data = json.load(json_file)
-            jitter_offset_x = -camera_data["jitter_offset"]["x"]
-            jitter_offset_y = -camera_data["jitter_offset"]["y"]
+            jitter_offset_x = -1 * camera_data["jitter_offset"]["x"]
+            jitter_offset_y = -1 * -camera_data["jitter_offset"]["y"]
             return jitter_offset_x, jitter_offset_y
         
     def get_depth(
@@ -182,22 +187,10 @@ class VRDataset(QualcommDataset):
         motion_vectors = (motion_vectors - 0.5) * 2.0
 
         # The horizontal velocity is stored in the first channel
-        motion_vectors = motion_vectors[0:2, ...]  
+        motion_vectors = motion_vectors[0:2, ...]
 
-        return motion_vectors
-    
-    def apply_jitter_compensation(
-        self,
-        motion_vectors: torch.Tensor,
-        prev_jitter_x: torch.Tensor,
-        prev_jitter_y: torch.Tensor,
-        curr_jitter_x: torch.Tensor,
-        curr_jitter_y: torch.Tensor,
-        height: int,
-        width: int
-    ) -> torch.Tensor:
-        motion_vectors[[0], ...] += (prev_jitter_x - curr_jitter_x) / width
-        motion_vectors[[1], ...] += (prev_jitter_y - curr_jitter_y) / height
+        motion_vectors[1, ...] *= -1
+
         return motion_vectors
         
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
