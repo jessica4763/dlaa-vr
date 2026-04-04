@@ -235,7 +235,7 @@ def train_epoch_vr(
 
 def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="train")
+        cfg = hydra.compose(config_name="vr-train")
 
     device = (
         torch.accelerator.current_accelerator().type
@@ -705,7 +705,7 @@ def validate(
             validation_cfg = hydra.compose(
                 config_name="validation", 
                 overrides=[
-                    "dataset=vr-left-validation-upscale-fantasticvillage",
+                    "dataset=vr-left-validation-upscale-fantasticvillage",  # validation-upscale-seaport, vr-left-validation-upscale-fantasticvillage
                     f"paths.saved-models-path={saved_models_path}"
                 ]
             )

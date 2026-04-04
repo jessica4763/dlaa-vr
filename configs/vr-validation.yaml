@@ -21,7 +21,7 @@ model:
 
 validation:
   padding: 0
-  length: 120
+  length: 600
 
 hydra:
   run:

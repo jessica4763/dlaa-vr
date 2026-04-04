@@ -113,65 +113,41 @@ class QualcommDataset(Dataset):
 
         return jitter_tensor_x, jitter_tensor_y
 
-    def get_depth(
-        self,
-        scene: Scene,
-        instance: str,
-        curr_frame_num: int
-    ) -> torch.Tensor:
-        curr_frame = str(curr_frame_num).zfill(4) + ".png"
-        depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
-        depth = decode_image(depth_path.resolve()).float()
-        depth = torch.unsqueeze((
-            depth[0] / 255 +
-            depth[1] / (255 ** 2) +
-            depth[2] / (255 ** 3) +
-            depth[3] / (255 ** 4)
-        ), 0)
-        return depth
-    
     # def get_depth(
     #     self,
     #     scene: Scene,
     #     instance: str,
     #     curr_frame_num: int
     # ) -> torch.Tensor:
-    #     curr_frame = str(curr_frame_num).zfill(4) + ".exr"
+    #     curr_frame = str(curr_frame_num).zfill(4) + ".png"
     #     depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
-    #     depth = iio.imread(depth_path.resolve())
-
-    #     # (H, W, C) --> (C, H, W)
-    #     depth = torch.permute(torch.from_numpy(depth), (2, 0, 1))
-
-    #     # (C, H, W) --> (1, H, W)
-    #     depth = depth[0:1]
-
+    #     depth = decode_image(depth_path.resolve()).float()
+    #     depth = torch.unsqueeze((
+    #         depth[0] / 255 +
+    #         depth[1] / (255 ** 2) +
+    #         depth[2] / (255 ** 3) +
+    #         depth[3] / (255 ** 4)
+    #     ), 0)
     #     return depth
-
-    def get_motion_vectors(
+    
+    def get_depth(
         self,
         scene: Scene,
         instance: str,
         curr_frame_num: int
     ) -> torch.Tensor:
         curr_frame = str(curr_frame_num).zfill(4) + ".exr"
-        motion_vectors_path = scene.scene_input_imgs_path / self.motion_vector_path_suffix / instance / curr_frame
-        motion_vectors = iio.imread(motion_vectors_path.resolve())
+        depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
+        depth = iio.imread(depth_path.resolve())
 
         # (H, W, C) --> (C, H, W)
-        motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
+        depth = torch.permute(torch.from_numpy(depth), (2, 0, 1))
 
-        # The horizontal velocity is stored in the first channel and the
-        # vertical velocity is stored in the second channel, despite what 
-        # the paper says; could be an artifact of iio.imread
-        motion_vectors = motion_vectors[0:2, ...]
+        # (C, H, W) --> (1, H, W)
+        depth = depth[0:1]
 
-        # Although Unity uses a Y-up coordinate system, this code
-        # assumes a Y-down coordinate system
-        motion_vectors[1, ...] *= -1
+        return depth
 
-        return motion_vectors
-    
     # def get_motion_vectors(
     #     self,
     #     scene: Scene,
@@ -185,17 +161,41 @@ class QualcommDataset(Dataset):
     #     # (H, W, C) --> (C, H, W)
     #     motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
 
-    #     # Unreal Engine motion vectors are normalised to the range [0, 1], 
-    #     # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
-    #     # where (0, 0) represents no motion. 
-    #     motion_vectors = (motion_vectors - 0.5) * 2.0
-
-    #     # The horizontal velocity is stored in the first channel
+    #     # The horizontal velocity is stored in the first channel and the
+    #     # vertical velocity is stored in the second channel, despite what 
+    #     # the paper says; could be an artifact of iio.imread
     #     motion_vectors = motion_vectors[0:2, ...]
 
+    #     # Although Unity uses a Y-up coordinate system, this code
+    #     # assumes a Y-down coordinate system
     #     motion_vectors[1, ...] *= -1
 
     #     return motion_vectors
+    
+    def get_motion_vectors(
+        self,
+        scene: Scene,
+        instance: str,
+        curr_frame_num: int
+    ) -> torch.Tensor:
+        curr_frame = str(curr_frame_num).zfill(4) + ".exr"
+        motion_vectors_path = scene.scene_input_imgs_path / self.motion_vector_path_suffix / instance / curr_frame
+        motion_vectors = iio.imread(motion_vectors_path.resolve())
+
+        # (H, W, C) --> (C, H, W)
+        motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
+
+        # Unreal Engine motion vectors are normalised to the range [0, 1], 
+        # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
+        # where (0, 0) represents no motion. 
+        motion_vectors = (motion_vectors - 0.5) * 2.0
+
+        # The horizontal velocity is stored in the first channel
+        motion_vectors = motion_vectors[0:2, ...]
+
+        motion_vectors[1, ...] *= -1
+
+        return motion_vectors
 
     def apply_jitter_compensation(
         self,
@@ -280,7 +280,10 @@ class QualcommDataset(Dataset):
         return patch.clone()
 
     def __len__(self) -> int:
-        return self.total_frames
+        if self.mode == "training":
+            return self.total_frames
+        else:
+            return min(self.total_frames, 120)
 
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.mode == "training":
@@ -406,22 +409,12 @@ class QualcommDataset(Dataset):
                 curr_input_img.dtype
             )
 
-            prev_jitter_x, prev_jitter_y = self.get_jitter_tensors(
-                1,
-                patch_height,
-                patch_width,
-                prev_jitter_offset_x,
-                prev_jitter_offset_y,
-                curr_input_img.device,
-                curr_input_img.dtype
-            )
-
             motion_vectors = self.apply_jitter_compensation(
                 motion_vectors,
-                prev_jitter_x,
-                prev_jitter_y,
-                curr_jitter_x,
-                curr_jitter_y,
+                prev_jitter_offset_x,
+                prev_jitter_offset_y,
+                curr_jitter_offset_x,
+                curr_jitter_offset_y,
                 self.input_frame_height,  # Still need to scale relative to the dimensions of the frame, not the dimensions of the patch
                 self.input_frame_width
             )

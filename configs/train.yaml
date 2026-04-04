@@ -1,5 +1,5 @@
 defaults:
-  - dataset: train-upscale  # train-upscale, vr-left-train-upscale
+  - dataset: vr-left-train-upscale  # train-upscale, vr-left-train-upscale
   - optimiser: adamw
 
 setup:
@@ -21,8 +21,8 @@ model:
   save-interval: 10000
 
 validation:
-  proxy-validation-interval: 1000
-  primary-validation-interval: 10000
+  proxy-validation-interval: 250
+  primary-validation-interval: 1000000000
 
 hydra:
   run:

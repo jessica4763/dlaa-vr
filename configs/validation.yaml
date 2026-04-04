@@ -1,5 +1,5 @@
 defaults:
-  - dataset: validation-upscale-seaport  # validation-upscale-seaport, vr-left-validation-upscale-fantasticvillage
+  - dataset: vr-left-validation-upscale-fantasticvillage  # validation-upscale-seaport, vr-left-validation-upscale-fantasticvillage
 
 setup:
   seed: 42
