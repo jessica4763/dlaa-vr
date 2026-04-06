@@ -220,11 +220,11 @@ class QualcommNetwork(nn.Module):
             indexing="ij"
         )
         base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
-        warped_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
+        warp_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
 
         warped_input_tensor = F.grid_sample(
             input_tensor,
-            warped_grid,
+            warp_grid,
             mode="bilinear",
             padding_mode="zeros",
             align_corners=False

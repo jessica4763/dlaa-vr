@@ -29,7 +29,6 @@ class Metrics:
         self.writer = writer
         self.is_stationary_segment = is_stationary_segment
 
-        self.norm_rmse_sum = 0
         self.psnr_sum = 0
         self.ssim_sum = 0
 
@@ -44,10 +43,6 @@ class Metrics:
         self.pixel_squared_sum = 0
 
         self.metrics = defaultdict(float)
-
-    def record_rmse(self, pred: np.ndarray, target: np.ndarray) -> None:
-        # Display-encoded values in the range [0, 1]
-        self.norm_rmse_sum += normalized_root_mse(target, pred)
 
     def record_psnr(self, pred: np.ndarray, target: np.ndarray) -> None:
         # Display-encoded values in the range [0, 1]
@@ -89,7 +84,6 @@ class Metrics:
         pred_ndarray =  np.squeeze(pred.cpu().numpy())
         target_ndarray = np.squeeze(target.cpu().numpy())
 
-        self.record_rmse(pred_y, target_y)
         self.record_psnr(pred_y, target_y)
         self.record_ssim(pred_y, target_y)
 
@@ -101,7 +95,6 @@ class Metrics:
             self.record_pixel_wise_std(pred_ndarray)
 
     def report(self, scene_name) -> None:
-        self.metrics["avg_norm_rmse"] = self.norm_rmse_sum.item() / self.dataset_size
         self.metrics["avg_psnr"] = self.psnr_sum.item() / self.dataset_size
         self.metrics["avg_ssim"] = self.ssim_sum.item() / self.dataset_size
         self.metrics["avg_lpips"] = self.lpips_sum / self.dataset_size

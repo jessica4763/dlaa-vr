@@ -1,9 +1,9 @@
 defaults:
-  - dataset: vr-left-validation-upscale-fantasticvillage  # validation-upscale-seaport, vr-left-validation-upscale-fantasticvillage
+  - dataset: vr-mono-validation-upscale-fantasticvillage  # validation-upscale-seaport, vr-mono-validation-upscale-fantasticvillage
 
 setup:
   seed: 42
-  display-name: standard_fhd  # standard_fhd, standard_hmd
+  display-name: standard_hmd  # standard_fhd, standard_hmd
   jitter: true
 
 paths:

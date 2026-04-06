@@ -11,13 +11,13 @@ paths:
   sanity-checks-output-path: run/vr_sanity_checks_output
   evaluation-output-path: run/vr_evaluation_outputs
   tensorboard-path: ../saved/logs/runs
-  saved-models-path: ../saved/models/vr_scale_model.pt  # scale_model.pt, vr_scale_model.pt
+  saved-models-path: ../saved/models/scale_model.pt  # scale_model.pt, vr_scale_model.pt
   zarr-walk-root: ../data/training_data/VR
 
 model:
   hidden-channels: 16
   num-blocks: 1
-  is-vr: true  # true, false
+  is-vr: false  # true, false
 
 validation:
   padding: 0

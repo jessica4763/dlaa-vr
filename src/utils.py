@@ -115,7 +115,7 @@ def linear_to_gamma(image: torch.Tensor) -> torch.Tensor:
 
 def rgb_to_y(frame: torch.Tensor) -> torch.Tensor:
     # Computes luma, Y', from R', G', B'
-    r, g, b = frame[:, 0:1, ...], frame[:, 1:2, ...], frame[:, 2:3, ...]
+    r, g, b = frame[:, 0:1], frame[:, 1:2], frame[:, 2:3]
     y = 16.0 / 255.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0
     return y.repeat(1, 3, 1, 1)
 
@@ -231,7 +231,7 @@ def checkpoint_vr(
     use_jitter: bool,
     mode: str = "training"
 ) -> None:
-    if iterations % 2500 < iterations_per_epoch:
+    if iterations % 250 < iterations_per_epoch:
         model.eval()
         with torch.no_grad():
             index = 0
@@ -324,7 +324,7 @@ def checkpoint_vr(
             right_curr = right_inputs[0:3]
             right_depth = right_inputs[3:4]
 
-            right_warped_curr, right_valid_mask = model.right_to_left_warp(
+            right_warped_curr, right_to_left_warp_grid = model.right_to_left_warp(
                 right_curr.unsqueeze(0), 
                 left_depth.unsqueeze(0), 
                 vr_config.camera_baseline, 
@@ -333,7 +333,7 @@ def checkpoint_vr(
             left_eye_diff = torch.abs(left_curr - right_warped_curr)
             save_image(linear_to_gamma(left_eye_diff), sanity_checks_output_path / "Left" / "right_to_left_diff.png")
 
-            left_warped_curr, left_valid_mask = model.left_to_right_warp(
+            left_warped_curr, left_to_right_warp_grid = model.left_to_right_warp(
                 left_curr.unsqueeze(0),
                 right_depth.unsqueeze(0),
                 vr_config.camera_baseline, 
@@ -341,6 +341,9 @@ def checkpoint_vr(
             )
             right_eye_diff = torch.abs(right_curr - left_warped_curr)
             save_image(linear_to_gamma(right_eye_diff), sanity_checks_output_path / "Right" / "left_to_right_diff.png")
+
+            between_eye_warp_mask = model.get_between_eye_warp_mask(left_to_right_warp_grid, right_to_left_warp_grid)
+            save_image(between_eye_warp_mask.float(), sanity_checks_output_path / "between_eye_warp_mask.png")
 
             right_warped_depth_curr, _ = model.right_to_left_warp(
                 right_depth.unsqueeze(0), 
@@ -361,10 +364,13 @@ def checkpoint_vr(
             save_image(linear_to_gamma(right_eye_depth_diff), sanity_checks_output_path / "Right" / "left_to_right_depth_diff.png")
 
             # -------------------------------------------------------------------------
-            # --------------------- Verify the goal of the network --------------------
+            # ------------------------ Verify the ground truth ------------------------
             # -------------------------------------------------------------------------
             save_image(linear_to_gamma(left_output), sanity_checks_output_path / "Left" / "left_ground_truth.png")
+            save_image(linear_to_gamma(left_output_next), sanity_checks_output_path / "Left" / "left_ground_truth_next.png")
+
             save_image(linear_to_gamma(right_output), sanity_checks_output_path / "Right" / "right_ground_truth.png")
+            save_image(linear_to_gamma(right_output_next), sanity_checks_output_path / "Right" / "right_ground_truth_next.png")
 
             # -------------------------------------------------------------------------
             # ------------- Output of the network when history is invalid -------------
@@ -398,22 +404,22 @@ def checkpoint_vr(
                 "evaluation"
             )
 
-            pred_left_frame = pred_left_frame.squeeze(0).squeeze(0)
-            pred_left_frame = linear_to_gamma(pred_left_frame)
-            save_image(pred_left_frame, checkpoints_path / f"left_colour_invalid_{iterations}.png")
+            # pred_left_frame = pred_left_frame.squeeze(0).squeeze(0)
+            # pred_left_frame = linear_to_gamma(pred_left_frame)
+            # save_image(pred_left_frame, checkpoints_path / f"left_colour_invalid_{iterations}.png")
 
-            pred_right_frame = pred_right_frame.squeeze(0).squeeze(0)
-            pred_right_frame = linear_to_gamma(pred_right_frame)
-            save_image(pred_right_frame, checkpoints_path / f"right_colour_invalid_{iterations}.png")
+            # pred_right_frame = pred_right_frame.squeeze(0).squeeze(0)
+            # pred_right_frame = linear_to_gamma(pred_right_frame)
+            # save_image(pred_right_frame, checkpoints_path / f"right_colour_invalid_{iterations}.png")
             
             # -------------------------------------------------------------------------
             # ----------------- Blending mask when history is invalid -----------------
             # -------------------------------------------------------------------------
             left_out_blending_mask = F.pixel_shuffle(left_out_blending_mask, upscale_factor=scale_factor)
-            save_image(left_out_blending_mask, checkpoints_path / f"left_blending_mask_invalid_{iterations}.png")
+            save_image(left_out_blending_mask.squeeze(0).unsqueeze(1), checkpoints_path / f"left_blending_mask_invalid_{iterations}.png")
 
             right_out_blending_mask = F.pixel_shuffle(right_out_blending_mask, upscale_factor=scale_factor)
-            save_image(right_out_blending_mask, checkpoints_path / f"right_blending_mask_invalid_{iterations}.png")
+            save_image(right_out_blending_mask.squeeze(0).unsqueeze(1), checkpoints_path / f"right_blending_mask_invalid_{iterations}.png")
 
             # -------------------------------------------------------------------------
             # -------------- Output of the network when history is valid --------------
@@ -430,16 +436,17 @@ def checkpoint_vr(
 
             c0 = model.num_curr_colour + model.num_curr_depth + model.num_curr_jitter
             c1 = c0 + model.num_prev_colour
-            left_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(left_output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
-            right_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(right_output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
+            left_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(pred_left_frame.squeeze(0), downscale_factor=scale_factor)
+            right_inputs_next[:, :, c0:c1] = F.pixel_unshuffle(pred_right_frame.squeeze(0), downscale_factor=scale_factor)
+
             c0 = c1
             c1 = c0 + model.num_prev_feature
             left_inputs_next[:, :, c0:c1] = left_features.squeeze(0)
             right_inputs_next[:, :, c0:c1] = right_features.squeeze(0)
 
             (
-                pred_left_frame, 
-                pred_right_frame, 
+                _, 
+                _, 
                 _, 
                 _, 
                 left_out_blending_mask, 
@@ -456,22 +463,23 @@ def checkpoint_vr(
                 "evaluation"
             )
 
-            pred_left_frame = pred_left_frame.squeeze(0).squeeze(0)
-            pred_left_frame = linear_to_gamma(pred_left_frame)
-            save_image(pred_left_frame, checkpoints_path / f"left_colour_valid_{iterations}.png")
+            # pred_left_frame = pred_left_frame.squeeze(0).squeeze(0)
+            # pred_left_frame = linear_to_gamma(pred_left_frame)
+            # save_image(pred_left_frame, checkpoints_path / f"left_colour_valid_{iterations}.png")
 
-            pred_right_frame = pred_right_frame.squeeze(0).squeeze(0)
-            pred_right_frame = linear_to_gamma(pred_right_frame)
-            save_image(pred_right_frame, checkpoints_path / f"right_colour_valid_{iterations}.png")
+            # pred_right_frame = pred_right_frame.squeeze(0).squeeze(0)
+            # pred_right_frame = linear_to_gamma(pred_right_frame)
+            # save_image(pred_right_frame, checkpoints_path / f"right_colour_valid_{iterations}.png")
 
             # -------------------------------------------------------------------------
             # ------------------ Blending mask when history is valid ------------------
             # -------------------------------------------------------------------------
-            left_out_blending_mask = F.pixel_shuffle(left_out_blending_mask.squeeze(0), upscale_factor=scale_factor)
-            save_image(left_out_blending_mask, checkpoints_path / f"left_blending_mask_valid_{iterations}.png")
+            left_out_blending_mask = F.pixel_shuffle(left_out_blending_mask.squeeze(0), upscale_factor=scale_factor).squeeze(0).unsqueeze(1)
+            print(f"{left_out_blending_mask.shape=}")
+            save_image(left_out_blending_mask, checkpoints_path / f"left_blending_mask_valid_{iterations}.png", normalize=True)
 
-            right_out_blending_mask = F.pixel_shuffle(right_out_blending_mask.squeeze(0), upscale_factor=scale_factor)
-            save_image(right_out_blending_mask, checkpoints_path / f"right_blending_mask_valid_{iterations}.png")
+            right_out_blending_mask = F.pixel_shuffle(right_out_blending_mask.squeeze(0), upscale_factor=scale_factor).squeeze(0).unsqueeze(1)
+            save_image(right_out_blending_mask, checkpoints_path / f"right_blending_mask_valid_{iterations}.png", normalize=True)
 
 
 def save_input(
@@ -554,7 +562,7 @@ def checkpoint(
             # index = random.choice(frames)
             # print(f"{index=}")
 
-            index = 1798
+            index = 0
             print(f"{index=}")
             if mode == "training":
                 (inputs, motion_vectors, jitter, output, curr_frame_num) = data[(index, 0, 0, input_frame_width, input_frame_height)]
@@ -576,17 +584,19 @@ def checkpoint(
             diff = torch.abs(output_next - warped_prev)
             save_image(linear_to_gamma(diff), sanity_checks_output_path / "diff.png")
 
-            # Verify the goal of the network
+            # Verify the ground truth
             save_image(linear_to_gamma(output), sanity_checks_output_path / "ground_truth.png")
+            save_image(linear_to_gamma(output_next), sanity_checks_output_path / "ground_truth_next.png")
 
             # Output of the network when history is invalid
             inputs = inputs.to(device).unsqueeze(0).unsqueeze(0)
             motion_vectors = motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
             jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
             anti_aliased_img, prev_pred_features, out_blending_mask = model(inputs, motion_vectors, curr_frame_num, jitter, "evaluation")
-            anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
-            anti_aliased_img = linear_to_gamma(anti_aliased_img)
-            save_image(anti_aliased_img, checkpoints_path / f"colour_invalid_{iterations}.png")
+
+            # anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
+            # anti_aliased_img = linear_to_gamma(anti_aliased_img)
+            # save_image(anti_aliased_img, checkpoints_path / f"colour_invalid_{iterations}.png")
             
             # Blending mask when history is invalid
             out_blending_mask = F.pixel_shuffle(out_blending_mask, upscale_factor=scale_factor)
@@ -599,18 +609,18 @@ def checkpoint(
 
             c0 = model.num_curr_colour + model.num_curr_depth + model.num_curr_jitter
             c1 = c0 + model.num_prev_colour
-            inputs_next[:, :, c0:c1] = F.pixel_unshuffle(output.squeeze(0).squeeze(0), downscale_factor=scale_factor)
+            inputs_next[:, :, c0:c1] = F.pixel_unshuffle(anti_aliased_img.squeeze(0), downscale_factor=scale_factor)
 
             c0 = c1
             c1 = c0 + model.num_prev_feature
             inputs_next[:, :, c0:c1] = prev_pred_features.squeeze(0)
 
-            anti_aliased_img, _, out_blending_mask = model(inputs_next, motion_vectors_next, curr_frame_num_next, jitter_next, "evaluation")
+            _, _, out_blending_mask = model(inputs_next, motion_vectors_next, curr_frame_num_next, jitter_next, "evaluation")
 
-            anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
-            anti_aliased_img = linear_to_gamma(anti_aliased_img)
-            save_image(anti_aliased_img, checkpoints_path / f"colour_valid_{iterations}.png")
+            # anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
+            # anti_aliased_img = linear_to_gamma(anti_aliased_img)
+            # save_image(anti_aliased_img, checkpoints_path / f"colour_valid_{iterations}.png")
 
             # Blending mask when history is valid
-            out_blending_mask = F.pixel_shuffle(out_blending_mask.squeeze(0), upscale_factor=scale_factor)
+            out_blending_mask = F.pixel_shuffle(out_blending_mask, upscale_factor=scale_factor)
             save_image(out_blending_mask, checkpoints_path / f"blending_mask_valid_{iterations}.png")

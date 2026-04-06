@@ -187,9 +187,9 @@ class VRDataset(QualcommDataset):
         motion_vectors = (motion_vectors - 0.5) * 2.0
 
         # The horizontal velocity is stored in the first channel
-        motion_vectors = motion_vectors[0:2, ...]
+        motion_vectors = motion_vectors[0:2]
 
-        motion_vectors[1, ...] *= -1
+        motion_vectors[1] *= -1
 
         return motion_vectors
         
@@ -235,7 +235,7 @@ class VRDataset(QualcommDataset):
             # save_image(saved_image, "sample_output.png")
         else:
             left_input_img_path = scene.scene_input_imgs_path / "Left" / self.colour_path_suffix / instance / curr_frame
-            curr_left_input_img = decode_image(left_input_img_path.resolve())[0:3, ...].float()
+            curr_left_input_img = decode_image(left_input_img_path.resolve())[0:3].float()
             curr_left_input_img = self.get_patch(
                 curr_left_input_img,
                 patch_start_x,
@@ -251,7 +251,7 @@ class VRDataset(QualcommDataset):
             curr_left_output_img = torch.from_numpy(curr_left_output_img)
         else:
             left_output_img_path = scene.scene_output_imgs_path / "Left" / self.colour_path_suffix / instance / curr_frame
-            curr_left_output_img = decode_image(left_output_img_path.resolve())[0:3, ...].float()
+            curr_left_output_img = decode_image(left_output_img_path.resolve())[0:3].float()
             curr_left_output_img = self.get_patch(
                 curr_left_output_img,
                 patch_start_x * self.scale_factor,
@@ -270,7 +270,7 @@ class VRDataset(QualcommDataset):
             curr_right_input_img = torch.from_numpy(curr_right_input_img)
         else:
             right_input_img_path = scene.scene_input_imgs_path / "Right" / self.colour_path_suffix / instance / curr_frame
-            curr_right_input_img = decode_image(right_input_img_path.resolve())[0:3, ...].float()
+            curr_right_input_img = decode_image(right_input_img_path.resolve())[0:3].float()
             curr_right_input_img = self.get_patch(
                 curr_right_input_img,
                 patch_start_x,
@@ -286,7 +286,7 @@ class VRDataset(QualcommDataset):
             curr_right_output_img = torch.from_numpy(curr_right_output_img)
         else:
             right_output_img_path = scene.scene_output_imgs_path / "Right" / self.colour_path_suffix / instance / curr_frame
-            curr_right_output_img = decode_image(right_output_img_path.resolve())[0:3, ...].float()
+            curr_right_output_img = decode_image(right_output_img_path.resolve())[0:3].float()
             curr_right_output_img = self.get_patch(
                 curr_right_output_img,
                 patch_start_x * self.scale_factor,
@@ -470,8 +470,8 @@ class VRDataset(QualcommDataset):
 
         # ---------------------------- Left frame ---------------------------
         # Must scale motion vectors after taking a patch 
-        curr_left_motion_vectors[0, ...] *= self.input_frame_width / patch_width
-        curr_left_motion_vectors[1, ...] *= self.input_frame_height / patch_height
+        curr_left_motion_vectors[0] *= self.input_frame_width / patch_width
+        curr_left_motion_vectors[1] *= self.input_frame_height / patch_height
         curr_left_motion_vectors = self.depth_informed_dilation(
             curr_left_depth,
             curr_left_motion_vectors
@@ -479,8 +479,8 @@ class VRDataset(QualcommDataset):
 
         # --------------------------- Right frame ---------------------------
         # Must scale motion vectors after taking a patch 
-        curr_right_motion_vectors[0, ...] *= self.input_frame_width / patch_width
-        curr_right_motion_vectors[1, ...] *= self.input_frame_height / patch_height
+        curr_right_motion_vectors[0] *= self.input_frame_width / patch_width
+        curr_right_motion_vectors[1] *= self.input_frame_height / patch_height
         curr_right_motion_vectors = self.depth_informed_dilation(
             curr_right_depth,
             curr_right_motion_vectors

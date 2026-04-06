@@ -125,7 +125,7 @@ class VRNetwork(QualcommNetwork):
         # Blending mask head
         if use_jitter:
             self.blending_mask_head = JitterConditionedConv(
-                3 * (scale_factor ** 2),
+                2 * (scale_factor ** 2),
                 hidden_channels,
                 3,
                 3,
@@ -135,15 +135,18 @@ class VRNetwork(QualcommNetwork):
         else:
             self.blending_mask_head = nn.Conv2d(
                 hidden_channels,
-                3 * (scale_factor ** 2),
+                2 * (scale_factor ** 2),
                 kernel_size=3,
                 padding=1,
                 padding_mode="zeros"
             )
 
-        # Softmax in place of sigmoid to blend three inputs together
-        # Compute softmax along the channel dimension 
-        self.blending_mask_softmax = nn.Softmax(dim=1)  # (B, 3, 4, H, W)
+        # # Softmax in place of sigmoid to blend three inputs together
+        # # Compute softmax along the channel dimension 
+        # self.blending_mask_softmax = nn.Softmax(dim=1)  # (B, 3, 4, H, W)
+
+        self.history_blending_mask_sigmoid = nn.Sigmoid()
+        self.warped_eye_blending_mask_sigmoid = nn.Sigmoid()
 
         self.apply(self.kaiming_init_params)
 
@@ -175,11 +178,11 @@ class VRNetwork(QualcommNetwork):
             indexing="ij"
         )
         base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
-        warped_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
+        warp_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
 
         warped_input_tensor = F.grid_sample(
             input_tensor,
-            warped_grid,
+            warp_grid,
             mode="bilinear",
             padding_mode="zeros",
             align_corners=False
@@ -216,18 +219,18 @@ class VRNetwork(QualcommNetwork):
         xs = xs.to(right_depth.device) + 0.5
 
         disparity = (camera_baseline * focal_length) / ((right_depth * 99990.0) + 10.0)
-        warped_xs = xs + disparity  # Note xs is broadcast here
-        warped_xs = torch.permute(warped_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
-        warped_xs = 2.0 * (warped_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
+        warp_xs = xs + disparity  # Note xs is broadcast here - (H, W) --> (B, C, H, W)
+        warp_xs = torch.permute(warp_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
+        warp_xs = 2.0 * (warp_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
         ys = ys.unsqueeze(0).unsqueeze(0).expand(B, -1, -1, -1)
         ys = torch.permute(ys, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
         ys = 2.0 * (ys / H) - 1.0  # Normalise to range [-1, 1]. Divide by H rather than H - 1 because we set align_corners=False
-        warped_grid = torch.cat((warped_xs, ys), dim=-1)
+        warp_grid = torch.cat((warp_xs, ys), dim=-1)
 
         # Warping the left frame on to the right frame
         warped_left_frame = F.grid_sample(
             left_frame,
-            warped_grid,
+            warp_grid,
             mode="bilinear",
             padding_mode="zeros",
             align_corners=False
@@ -237,9 +240,7 @@ class VRNetwork(QualcommNetwork):
             # Space to depth: (B, 3, 132, 132) -> (B, 12, 264, 264)
             warped_left_frame = self.space_to_depth(warped_left_frame)
 
-        valid_mask = None
-
-        return warped_left_frame, valid_mask
+        return warped_left_frame, warp_grid
 
     def right_to_left_warp(
         self,
@@ -267,18 +268,18 @@ class VRNetwork(QualcommNetwork):
         xs = xs.to(left_depth.device) + 0.5
 
         disparity = (camera_baseline * focal_length) / ((left_depth * 99990.0) + 10.0) 
-        warped_xs = xs - disparity  # Note xs is broadcast here
-        warped_xs = torch.permute(warped_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
-        warped_xs = 2.0 * (warped_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
+        warp_xs = xs - disparity  # Note xs is broadcast here - (H, W) --> (B, C, H, W)
+        warp_xs = torch.permute(warp_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
+        warp_xs = 2.0 * (warp_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
         ys = ys.unsqueeze(0).unsqueeze(0).expand(B, -1, -1, -1)
         ys = torch.permute(ys, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
         ys = 2.0 * (ys / H) - 1.0  # Normalise to range [-1, 1]. Divide by H rather than H - 1 because we set align_corners=False
-        warped_grid = torch.cat((warped_xs, ys), dim=-1)
+        warp_grid = torch.cat((warp_xs, ys), dim=-1)
 
         # Warping the right frame on to the left frame
         warped_right_frame = F.grid_sample(
             right_frame,
-            warped_grid,
+            warp_grid,
             mode="bilinear",
             padding_mode="zeros",
             align_corners=False
@@ -288,9 +289,30 @@ class VRNetwork(QualcommNetwork):
             # Space to depth: (B, 3, 132, 132) -> (B, 12, 264, 264)
             warped_right_frame = self.space_to_depth(warped_right_frame)
 
-        valid_mask = None
+        return warped_right_frame, warp_grid
+    
+    def get_between_eye_warp_mask(self, left_to_right_warp_grid: torch.Tensor, right_to_left_warp_grid: torch.Tensor) -> torch.Tensor:
+        warped_warp_grid = F.grid_sample(
+            left_to_right_warp_grid.permute(0, 3, 1, 2),  # (B, H, W, 1) --> (B, 1, H, W) 
+            right_to_left_warp_grid,
+            mode="bilinear",
+            padding_mode="zeros",
+            align_corners=False
+        )
 
-        return warped_right_frame, valid_mask
+        B, _, H, W = warped_warp_grid.shape
+
+        _, xs = torch.meshgrid(
+            torch.arange(H, device=warped_warp_grid.device),
+            torch.arange(W, device=warped_warp_grid.device),
+            indexing="ij"
+        )
+        xs = 2.0 * (xs / (W - 1)) - 1.0
+        base_grid = xs.unsqueeze(0).expand(B, -1, -1)
+
+        threshold_x = 1.0 / (W - 1)
+        between_eye_warp_mask = torch.abs(warped_warp_grid[:, 0] - base_grid) < threshold_x
+        return between_eye_warp_mask  # (B, 1, H, W)
 
     def predict_clip_frames(
         self,
@@ -310,7 +332,7 @@ class VRNetwork(QualcommNetwork):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:        
         if eye == "left":
             # Current right frame warped onto the current left frame
-            curr_warped_right_colour, valid_mask = self.right_to_left_warp(
+            curr_warped_right_colour, _ = self.right_to_left_warp(
                 curr_right_colour, 
                 curr_depth,  # left depth
                 self.vr_config.camera_baseline, 
@@ -332,7 +354,7 @@ class VRNetwork(QualcommNetwork):
                 )
 
             # The previous right frame warped onto the previous left frame, and then warped temporally onto the current left frame
-            prev_right_colour, valid_mask = self.right_to_left_warp(
+            prev_right_colour, _ = self.right_to_left_warp(
                 prev_right_colour, 
                 prev_depth,  # left depth
                 self.vr_config.camera_baseline, 
@@ -345,7 +367,7 @@ class VRNetwork(QualcommNetwork):
                 )
 
             # The previous right feature frame warped onto the previous left feature frame, and then warped temporally onto the current left feature frame
-            prev_right_feature, valid_mask = self.right_to_left_warp(
+            prev_right_feature, _ = self.right_to_left_warp(
                 prev_right_feature, 
                 prev_depth,  # left depth
                 self.vr_config.camera_baseline, 
@@ -354,7 +376,7 @@ class VRNetwork(QualcommNetwork):
             if temporal_warp:
                 prev_right_feature = self.warp(
                     prev_right_feature,
-                    curr_motion_vectors   # left motion vectors
+                    curr_motion_vectors  # left motion vectors
                 )
 
             # (B, C, H, W)
@@ -371,7 +393,7 @@ class VRNetwork(QualcommNetwork):
 
         else:
             # Current left frame warped onto the current right frame
-            curr_warped_left_colour, valid_mask = self.left_to_right_warp(
+            curr_warped_left_colour, _ = self.left_to_right_warp(
                 curr_left_colour,
                 curr_depth,  # right depth
                 self.vr_config.camera_baseline,
@@ -393,7 +415,7 @@ class VRNetwork(QualcommNetwork):
                 )
 
             # The previous left frame warped onto the previous right frame, and then warped temporally onto the current right frame
-            prev_left_colour, valid_mask = self.left_to_right_warp(
+            prev_left_colour, _ = self.left_to_right_warp(
                 prev_left_colour,
                 prev_depth,  # right depth
                 self.vr_config.camera_baseline, 
@@ -406,7 +428,7 @@ class VRNetwork(QualcommNetwork):
                 )
 
             # The previous left feature frame warped onto the previous right feature frame, and then warped temporally onto the current left right feature frame
-            prev_left_feature, valid_mask = self.left_to_right_warp(
+            prev_left_feature, _ = self.left_to_right_warp(
                 prev_left_feature, 
                 prev_depth,  # right depth
                 self.vr_config.camera_baseline, 
@@ -477,18 +499,15 @@ class VRNetwork(QualcommNetwork):
             primary_history = prev_right_colour
             secondary_history = prev_left_colour
 
-        # (B, 12, H, W) --> (B, 3, 4, H, W)
-        out_blending_mask = out_blending_mask.view(B, 3, -1, H, W)
-        out_blending_mask = self.blending_mask_softmax(out_blending_mask)
-        blended_colour = (
-            out_colour * out_blending_mask[:, 0:1, ...] +
-            primary_history * out_blending_mask[:, 1:2, ...] +
-            secondary_history * out_blending_mask[:, 2:3, ...]
-        )
+        # (B, 12, H, W) --> (B, 2, 4, H, W)
+        out_blending_mask = out_blending_mask.view(B, 2, -1, H, W)
+        history_blending_mask = self.history_blending_mask_sigmoid(out_blending_mask[:, 0:1])
+        warped_eye_blending_mask = self.warped_eye_blending_mask_sigmoid(out_blending_mask[:, 1:2])
+        blended_colour = history_blending_mask * out_colour + (1 - history_blending_mask) * primary_history
+        blended_colour = warped_eye_blending_mask * blended_colour + (1 - warped_eye_blending_mask) * secondary_history
         blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
-        blended_colour = blended_colour.view(B, -1, H, W)
 
-        return blended_colour, out_features, out_blending_mask
+        return blended_colour.view(B, -1, H, W), out_features, out_blending_mask.view(B, -1, H, W)
 
     def forward(
         self,
@@ -621,6 +640,6 @@ class VRNetwork(QualcommNetwork):
             torch.stack(right_outputs, dim=1), 
             prev_pred_left_features, 
             prev_pred_right_features,
-            left_out_blending_mask.view(B, -1, H, W),
-            right_out_blending_mask.view(B, -1, H, W),
+            left_out_blending_mask,
+            right_out_blending_mask,
         )

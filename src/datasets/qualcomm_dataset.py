@@ -164,11 +164,11 @@ class QualcommDataset(Dataset):
     #     # The horizontal velocity is stored in the first channel and the
     #     # vertical velocity is stored in the second channel, despite what 
     #     # the paper says; could be an artifact of iio.imread
-    #     motion_vectors = motion_vectors[0:2, ...]
+    #     motion_vectors = motion_vectors[0:2]
 
     #     # Although Unity uses a Y-up coordinate system, this code
     #     # assumes a Y-down coordinate system
-    #     motion_vectors[1, ...] *= -1
+    #     motion_vectors[1] *= -1
 
     #     return motion_vectors
     
@@ -190,10 +190,9 @@ class QualcommDataset(Dataset):
         # where (0, 0) represents no motion. 
         motion_vectors = (motion_vectors - 0.5) * 2.0
 
-        # The horizontal velocity is stored in the first channel
-        motion_vectors = motion_vectors[0:2, ...]
+        motion_vectors = motion_vectors[0:2]
 
-        motion_vectors[1, ...] *= -1
+        motion_vectors[1] *= -1
 
         return motion_vectors
 
@@ -207,8 +206,8 @@ class QualcommDataset(Dataset):
         height: int,
         width: int
     ) -> torch.Tensor:
-        motion_vectors[[0], ...] += (prev_jitter_x - curr_jitter_x) / width
-        motion_vectors[[1], ...] += (prev_jitter_y - curr_jitter_y) / height
+        motion_vectors[[0]] += (prev_jitter_x - curr_jitter_x) / width
+        motion_vectors[[1]] += (prev_jitter_y - curr_jitter_y) / height
         return motion_vectors
 
     def depth_informed_dilation(
@@ -314,7 +313,7 @@ class QualcommDataset(Dataset):
         curr_input_img_path = scene.scene_input_imgs_path / self.colour_path_suffix / instance / curr_frame
         curr_output_img_path = scene.scene_output_imgs_path / instance / curr_frame
 
-        curr_input_img = decode_image(curr_input_img_path.resolve())[0:3, ...].float()
+        curr_input_img = decode_image(curr_input_img_path.resolve())[0:3].float()
         curr_input_img = self.get_patch(
             curr_input_img,
             patch_start_x,
@@ -323,7 +322,7 @@ class QualcommDataset(Dataset):
             patch_end_y
         )
 
-        curr_output_img = decode_image(curr_output_img_path.resolve())[0:3, ...].float()
+        curr_output_img = decode_image(curr_output_img_path.resolve())[0:3].float()
         curr_output_img = self.get_patch(
             curr_output_img,
             patch_start_x * self.scale_factor,
@@ -422,8 +421,8 @@ class QualcommDataset(Dataset):
             jitter = torch.tensor((curr_jitter_offset_x, curr_jitter_offset_y))
 
         # Must scale motion vectors after taking a patch 
-        motion_vectors[0, ...] *= self.input_frame_width / patch_width
-        motion_vectors[1, ...] *= self.input_frame_height / patch_height
+        motion_vectors[0] *= self.input_frame_width / patch_width
+        motion_vectors[1] *= self.input_frame_height / patch_height
         motion_vectors = self.depth_informed_dilation(
             curr_depth,
             motion_vectors

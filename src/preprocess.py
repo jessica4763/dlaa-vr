@@ -3,7 +3,8 @@ os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 
 import zarr
 import cv2
-import imageio.v3 as iio
+import imageio.v3
+from natsort import natsorted
 import numpy as np
 from pathlib import Path
 import sys
@@ -18,6 +19,28 @@ from utils import gamma_to_linear
 from models.vr_network import VRConfig
 
 
+def write_video(
+    input_path: Path,
+    output_path: Path,
+    fps: int = 24
+) -> None:
+    writer = imageio.get_writer(
+        output_path,
+        fps=fps,
+        codec="libx264",
+        quality=10,
+        pixelformat="yuv420p",
+        macro_block_size=8
+    )
+
+    for img_name in natsorted(os.listdir(input_path)):
+        img_path = input_path / img_name
+        img = imageio.v3.imread(img_path)
+        writer.append_data(img)
+
+    writer.close()
+
+    
 # -------------------------------------------------------------------------
 # ------------------ Reproduce Qualcomm bicubic baseline ------------------
 # -------------------------------------------------------------------------
@@ -36,7 +59,7 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
     cuda0 = torch.device("cuda:0")
 
     for frame_num, (pred_name, target_name) in enumerate(pairs):
-        pred = decode_image((pred_path / pred_name).resolve())[0:3, ...]
+        pred = decode_image((pred_path / pred_name).resolve())[0:3]
         pred = pred.to(cuda0).to(torch.float32) / 255.0
         pred = pred.unsqueeze(0)
         pred = F.interpolate(
@@ -47,7 +70,7 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
         )
         pred = torch.clamp(pred, 0.0, 1.0)
 
-        target = decode_image((target_path / target_name).resolve())[0:3, ...]
+        target = decode_image((target_path / target_name).resolve())[0:3]
         target = target.to(cuda0).to(torch.float32) / 255.0
         target = target.unsqueeze(0)
 
@@ -145,18 +168,18 @@ def warp_frames(left_frame_path: Path, right_frame_path: Path, depth_path: Path)
         xs = xs + 0.5
 
         disparity = (camera_baseline * focal_length) / ((left_depth * 99990.0) + 10.0) 
-        warped_xs = xs - disparity  # Note xs is broadcast here
-        warped_xs = torch.permute(warped_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
-        warped_xs = 2.0 * (warped_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
+        warp_xs = xs - disparity  # Note xs is broadcast here
+        warp_xs = torch.permute(warp_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
+        warp_xs = 2.0 * (warp_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
         ys = ys.unsqueeze(0).unsqueeze(0).expand(B, -1, -1, -1)
         ys = torch.permute(ys, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
         ys = 2.0 * (ys / H) - 1.0  # Normalise to range [-1, 1]. Divide by H rather than H - 1 because we set align_corners=False
-        warped_grid = torch.cat((warped_xs, ys), dim=-1)
+        warp_grid = torch.cat((warp_xs, ys), dim=-1)
 
         # Warping the right frame on to the left frame
         warped_left_frame = F.grid_sample(
             right_frame,
-            warped_grid,
+            warp_grid,
             mode="bilinear",
             padding_mode="zeros",
             align_corners=False
@@ -172,8 +195,8 @@ def warp_frames(left_frame_path: Path, right_frame_path: Path, depth_path: Path)
         vertical_resolution=1600
     )
 
-    right_frame = gamma_to_linear(decode_image(right_frame_path.resolve())[0:3, ...].float())
-    depth = iio.imread(depth_path.resolve())
+    right_frame = gamma_to_linear(decode_image(right_frame_path.resolve())[0:3].float())
+    depth = imageio.v3.imread(depth_path.resolve())
     depth = torch.permute(torch.from_numpy(depth), (2, 0, 1))
     depth = depth[0:1]
 
@@ -184,7 +207,7 @@ def warp_frames(left_frame_path: Path, right_frame_path: Path, depth_path: Path)
         vr_config.focal_length
     )
 
-    left_frame = gamma_to_linear(decode_image(left_frame_path.resolve())[0:3, ...].float())
+    left_frame = gamma_to_linear(decode_image(left_frame_path.resolve())[0:3].float())
 
     diff = torch.abs(left_frame - warped_left_frame)
     save_image(diff, "warped_left.png")
@@ -247,7 +270,23 @@ def generate_vr_data_zarr(input_root_path: Path, output_root_path: Path):
             generate_zarr(directory_path, output_path, channels)
 
 
+def rename_subdirectories(path: Path):
+    for i in range(60):
+        old_name = f"{i:04d}"
+        new_name = f"{i + 60:04d}"
+        old_path = path / old_name
+        new_path = path / new_name
+        os.rename(old_path, new_path)
+        print(f"Renamed {old_name} -> {new_name}")
+
+
 if __name__ == "__main__":
+    write_video(
+        input_path=Path("../data/validation_data/VR_mono/FantasticVillage/1440x1600/Enhanced/0000"),
+        output_path=Path("fantastic_village.mp4"),
+        fps=60
+    )
+
     # generate_vr_data_zarr(
     #     input_root_path=Path("../data/training_data/VR"),
     #     output_root_path=Path("../data/training_data/VR_zarr")
@@ -261,13 +300,13 @@ if __name__ == "__main__":
     # subsample_training_data(folder_path / "1440x1600/Enhanced/Right")
     # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered")  # CameraData
     
-    folder_path = Path("../data/validation_data/VR/FantasticVillage")
-    prepare_data(folder_path)
-    instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
-    instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
+    # folder_path = Path("../data/validation_data/VR/FantasticVillage")
+    # prepare_data(folder_path)
+    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
+    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
     # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Left")
     # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Right")
-    instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered")  # Subsample CameraData
+    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered")  # Subsample CameraData
 
     # folder_path = Path("../data/test_data/VR/FantasticVillage")
     # prepare_data(folder_path)

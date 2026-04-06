@@ -235,7 +235,7 @@ def train_epoch_vr(
 
 def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="vr-train")
+        cfg = hydra.compose(config_name="train")
 
     device = (
         torch.accelerator.current_accelerator().type
@@ -588,9 +588,9 @@ def train() -> None:
         # -------------------------------------------------------------------------
         # ------------------------------ Validation -------------------------------
         # -------------------------------------------------------------------------
-
         # Proxy validation happens every 1000 iterations, whereas primary validation happens every 100000 iterations
-        if cfg["dataset"]["is-vr"]:
+        # cfg["dataset"]["is-vr"] tells us if the training dataset is VR, and cfg["validation"]["is-vr"] tells us if the validation dataset is VR
+        if cfg["validation"]["is-vr"]:
             validate_vr(
                 iterations=iterations + iterations_per_epoch,
                 iterations_per_epoch=iterations_per_epoch,
@@ -705,7 +705,7 @@ def validate(
             validation_cfg = hydra.compose(
                 config_name="validation", 
                 overrides=[
-                    "dataset=vr-left-validation-upscale-fantasticvillage",  # validation-upscale-seaport, vr-left-validation-upscale-fantasticvillage
+                    "dataset=validation-upscale-seaport",
                     f"paths.saved-models-path={saved_models_path}"
                 ]
             )

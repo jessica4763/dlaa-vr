@@ -1,5 +1,5 @@
-validation-input-img-path: ../data/validation_data/VR_left/*/720x800
-validation-output-img-path: ../data/validation_data/VR_left/*/1440x1600/Enhanced
+training-input-img-path: ../data/training_data/VR_mono/*/720x800
+training-output-img-path: ../data/training_data/VR_mono/*/1440x1600/Enhanced
 
 input-frame-height: 800
 input-frame-width: 720
@@ -11,8 +11,6 @@ dilation-block-size: 8
 
 scene-names: [FantasticVillage]
 is-vr: false
-is-unreal-engine: true
-is-stationary-segment: false
 
 camera-data-path-suffix: CameraData
 

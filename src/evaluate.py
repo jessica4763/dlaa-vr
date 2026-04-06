@@ -95,7 +95,7 @@ def evaluate_vr(
     evaluation_output_path_target: Path,
     scale_factor: int = 1,
     use_jitter: bool = False,
-    model_is_vr: bool = True
+    model_is_vr: bool = True,
 ) -> None:
     model.eval()
     with torch.no_grad():
@@ -204,8 +204,8 @@ def evaluate_vr(
             current_img = (batch + 1) * len(left_inputs)
             print(f"left_frame_loss: {left_frame_loss:>7f} | right_frame_loss: {right_frame_loss:>7f}  [{current_img:>5d}/{len(evaluation_dataloader.dataset):>5d}]")
 
-            metrics.record(gamma_pred_left_frame, gamma_left_target, "left")
-            metrics.record(gamma_pred_right_frame, gamma_right_target, "right")
+            metrics.record(model, gamma_pred_left_frame, gamma_left_target, "left")
+            metrics.record(model, gamma_pred_right_frame, gamma_right_target, "right")
             write_frames(evaluation_output_path_pred / "left", gamma_pred_left_frame, batch)
             write_frames(evaluation_output_path_target / "left", gamma_left_target, batch)
             write_frames(evaluation_output_path_pred / "right", gamma_pred_right_frame, batch)
@@ -379,7 +379,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             evaluation_output_path_target=evaluation_output_path_target,
             scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"],
-            model_is_vr=cfg["model"]["is-vr"]
+            model_is_vr=cfg["model"]["is-vr"],
         )
     else:
         evaluate(
@@ -397,17 +397,20 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     # -------------------------------------------------------------------------
     # --------------------------------- Output --------------------------------
     # -------------------------------------------------------------------------
-    metrics.report(scene_name=cfg["dataset"]["scene-names"][0])
+    metrics.report(
+        scene_name=cfg["dataset"]["scene-names"][0],
+        evaluation_length=cfg["validation"]["length"]
+    )
 
     if cfg["dataset"]["is-vr"]:
         write_video(
             imgs_path=evaluation_output_path_pred / "left",
-            filename="evaluation_output.mp4",
+            filename="evaluation_output_left.mp4",
             fps=24
         )
         write_video(
             imgs_path=evaluation_output_path_pred / "right",
-            filename="evaluation_output.mp4",
+            filename="evaluation_output_right.mp4",
             fps=24
         )
     else:
@@ -425,7 +428,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
 
 def main() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="vr-validation")
+        cfg = hydra.compose(config_name="validation")
         writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
 
         run(cfg=cfg, writer=writer, iterations=0)

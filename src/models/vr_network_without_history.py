@@ -171,11 +171,11 @@ class VRNetwork(QualcommNetwork):
             indexing="ij"
         )
         base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
-        warped_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
+        warp_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
 
         warped_input_tensor = F.grid_sample(
             input_tensor,
-            warped_grid,
+            warp_grid,
             mode="bilinear",
             padding_mode="zeros",
             align_corners=False
@@ -212,18 +212,18 @@ class VRNetwork(QualcommNetwork):
         xs = xs.to(right_depth.device) + 0.5
 
         disparity = (camera_baseline * focal_length) / ((right_depth * 99990.0) + 10.0)
-        warped_xs = xs + disparity  # Note xs is broadcast here
-        warped_xs = torch.permute(warped_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
-        warped_xs = 2.0 * (warped_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
+        warp_xs = xs + disparity  # Note xs is broadcast here
+        warp_xs = torch.permute(warp_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
+        warp_xs = 2.0 * (warp_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
         ys = ys.unsqueeze(0).unsqueeze(0).expand(B, -1, -1, -1)
         ys = torch.permute(ys, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
         ys = 2.0 * (ys / H) - 1.0  # Normalise to range [-1, 1]. Divide by H rather than H - 1 because we set align_corners=False
-        warped_grid = torch.cat((warped_xs, ys), dim=-1)
+        warp_grid = torch.cat((warp_xs, ys), dim=-1) 
 
         # Warping the left frame on to the right frame
         warped_left_frame = F.grid_sample(
             left_frame,
-            warped_grid,
+            warp_grid,
             mode="bilinear",
             padding_mode="zeros",
             align_corners=False
@@ -233,9 +233,7 @@ class VRNetwork(QualcommNetwork):
             # Space to depth: (B, 3, 132, 132) -> (B, 12, 264, 264)
             warped_left_frame = self.space_to_depth(warped_left_frame)
 
-        valid_mask = None
-
-        return warped_left_frame, valid_mask
+        return warped_left_frame, warp_grid
 
     def right_to_left_warp(
         self,
@@ -263,18 +261,18 @@ class VRNetwork(QualcommNetwork):
         xs = xs.to(left_depth.device) + 0.5
 
         disparity = (camera_baseline * focal_length) / ((left_depth * 99990.0) + 10.0) 
-        warped_xs = xs - disparity  # Note xs is broadcast here
-        warped_xs = torch.permute(warped_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
-        warped_xs = 2.0 * (warped_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
+        warp_xs = xs - disparity  # Note xs is broadcast here
+        warp_xs = torch.permute(warp_xs, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
+        warp_xs = 2.0 * (warp_xs / W) - 1.0  # Normalise to range [-1, 1]. Divide by W rather than W - 1 because we set align_corners=False
         ys = ys.unsqueeze(0).unsqueeze(0).expand(B, -1, -1, -1)
         ys = torch.permute(ys, dims=(0, 2, 3, 1))  # (B, C, H, W) --> (B, H, W, C)
         ys = 2.0 * (ys / H) - 1.0  # Normalise to range [-1, 1]. Divide by H rather than H - 1 because we set align_corners=False
-        warped_grid = torch.cat((warped_xs, ys), dim=-1)
+        warp_grid = torch.cat((warp_xs, ys), dim=-1)
 
         # Warping the right frame on to the left frame
         warped_right_frame = F.grid_sample(
             right_frame,
-            warped_grid,
+            warp_grid,
             mode="bilinear",
             padding_mode="zeros",
             align_corners=False
@@ -284,9 +282,7 @@ class VRNetwork(QualcommNetwork):
             # Space to depth: (B, 3, 132, 132) -> (B, 12, 264, 264)
             warped_right_frame = self.space_to_depth(warped_right_frame)
 
-        valid_mask = None
-
-        return warped_right_frame, valid_mask
+        return warped_right_frame, warp_grid
 
     def predict_clip_frames(
         self,
@@ -306,7 +302,7 @@ class VRNetwork(QualcommNetwork):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:        
         if eye == "left":
             # Current right frame warped onto the current left frame
-            curr_warped_right_colour, valid_mask = self.right_to_left_warp(
+            curr_warped_right_colour, _ = self.right_to_left_warp(
                 curr_right_colour, 
                 curr_depth,  # left depth
                 self.vr_config.camera_baseline, 
@@ -323,7 +319,7 @@ class VRNetwork(QualcommNetwork):
 
         else:
             # Current left frame warped onto the current right frame
-            curr_warped_left_colour, valid_mask = self.left_to_right_warp(
+            curr_warped_left_colour, _ = self.left_to_right_warp(
                 curr_left_colour,
                 curr_depth,  # right depth
                 self.vr_config.camera_baseline,
