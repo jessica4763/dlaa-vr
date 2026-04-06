@@ -7,7 +7,7 @@ virtual-batch-size: 8
 clip-size: 16
 patch-size: 264
 padding: 0
-iterations: 500000
+iterations: 125000  # 500000 for QRISP, 125000 for VR_mono
 lr-scheduler: multi-step  # multi-step, cosine-annealing
 
 # MultiStepLR
@@ -15,7 +15,7 @@ lr-scheduler: multi-step  # multi-step, cosine-annealing
 # cvvdploss: 1e-5 for training
 learning-rate: 1e-4
 learning-rate-gamma: 0.5
-learning-rate-milestones: [200000, 400000]  # [200000, 400000] for training, [] for fine-tuning 
+learning-rate-milestones: [50000, 100000]  # [50000, 100000] for QRISP, [50000, 100000] for VR_mono, [] for fine-tuning 
 
 # CosineAnnealingLR
 learning-rate-eta-min: 2.5e-5
