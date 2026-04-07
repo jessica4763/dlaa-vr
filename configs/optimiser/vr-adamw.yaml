@@ -7,7 +7,7 @@ virtual-batch-size: 8
 clip-size: 16
 patch-size: 264
 padding: 0
-iterations: 125000
+iterations: 60000
 lr-scheduler: multi-step  # multi-step, cosine-annealing
 
 # MultiStepLR
@@ -15,7 +15,7 @@ lr-scheduler: multi-step  # multi-step, cosine-annealing
 # cvvdploss: 1e-5 for training
 learning-rate: 1e-4
 learning-rate-gamma: 0.5
-learning-rate-milestones: [50000, 100000]  # [50000, 100000] for training, [] for fine-tuning 
+learning-rate-milestones: [50000]  # [50000] for training, [] for fine-tuning 
 
 # CosineAnnealingLR
 learning-rate-eta-min: 2.5e-5

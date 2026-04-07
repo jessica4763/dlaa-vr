@@ -1,5 +1,5 @@
 defaults:
-  - dataset: vr-mono-validation-upscale-fantasticvillage  # validation-upscale-seaport, vr-mono-validation-upscale-fantasticvillage
+  - dataset: validation-upscale-seaport
 
 setup:
   seed: 42

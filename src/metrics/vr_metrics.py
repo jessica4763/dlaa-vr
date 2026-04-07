@@ -100,8 +100,8 @@ class VRMetrics:
         )
 
         between_eye_warp_mask = model.get_between_eye_warp_mask(
-            left_to_right_warp_grid=left_to_right_warp_grid, 
-            right_to_left_warp_grid=right_to_left_warp_grid
+            warp_from=left_to_right_warp_grid, 
+            warp_onto=right_to_left_warp_grid
         )
 
         diff = torch.abs(left_warped_curr - left_pred)

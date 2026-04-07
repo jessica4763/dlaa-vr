@@ -12,7 +12,7 @@ paths:
   evaluation-output-path: run/vr_evaluation_outputs
   tensorboard-path: ../saved/logs/runs
   saved-models-path: ../saved/models/scale_model.pt  # scale_model.pt, vr_scale_model.pt
-  zarr-walk-root: ../data/training_data/VR
+  zarr-walk-root: ../data/training_data/VR  # Only needed for training
 
 model:
   hidden-channels: 16
