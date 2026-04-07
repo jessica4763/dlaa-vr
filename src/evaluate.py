@@ -155,7 +155,18 @@ def evaluate_vr(
             # -------------------------------- Predict --------------------------------
             # -------------------------------------------------------------------------
             if model_is_vr:            
-                pred_left_frame, pred_right_frame, left_features, right_features, left_blending_mask, right_blending_mask = model(
+                (
+                    pred_left_frame, 
+                    pred_right_frame, 
+                    left_features, 
+                    right_features, 
+                    left_blending_mask, 
+                    right_blending_mask,
+                    curr_right_to_left_between_eye_warp_mask,
+                    curr_left_to_right_between_eye_warp_mask,
+                    prev_right_to_left_between_eye_warp_mask,
+                    prev_left_to_right_between_eye_warp_mask
+                ) = model(
                     left_inputs,
                     right_inputs,
                     left_motion_vectors, 

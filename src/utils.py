@@ -234,7 +234,9 @@ def checkpoint_vr(
     if iterations % 250 < iterations_per_epoch:
         model.eval()
         with torch.no_grad():
-            index = 0
+            frames = [n for n in range(0, 1798) if (n + 1) % 30 != 0]
+            index = random.choice(frames)
+            # index = 0
             print(f"{index=}")
             if mode == "training":
                 (
@@ -342,11 +344,11 @@ def checkpoint_vr(
             right_eye_diff = torch.abs(right_curr - left_warped_curr)
             save_image(linear_to_gamma(right_eye_diff), sanity_checks_output_path / "Right" / "left_to_right_diff.png")
 
-            between_eye_warp_mask = model.get_between_eye_warp_mask(
-                warp_from=left_to_right_warp_grid, 
-                warp_onto=right_to_left_warp_grid
-            )
-            save_image(between_eye_warp_mask.float(), sanity_checks_output_path / "between_eye_warp_mask.png")
+            # between_eye_warp_mask = model.get_between_eye_warp_mask(
+            #     warp_from=left_to_right_warp_grid, 
+            #     warp_onto=right_to_left_warp_grid
+            # )
+            # save_image(between_eye_warp_mask.float(), sanity_checks_output_path / "between_eye_warp_mask.png")
 
             right_warped_depth_curr, _ = model.right_to_left_warp(
                 right_depth.unsqueeze(0), 
@@ -394,8 +396,12 @@ def checkpoint_vr(
                 left_features, 
                 right_features, 
                 left_out_blending_mask, 
-                right_out_blending_mask
-            ) = model(
+                right_out_blending_mask,
+                curr_right_to_left_between_eye_warp_mask,
+                curr_left_to_right_between_eye_warp_mask,
+                prev_right_to_left_between_eye_warp_mask,
+                prev_left_to_right_between_eye_warp_mask
+                ) = model(
                 left_inputs,
                 right_inputs,
                 left_motion_vectors, 
@@ -407,22 +413,23 @@ def checkpoint_vr(
                 "evaluation"
             )
 
-            # pred_left_frame = pred_left_frame.squeeze(0).squeeze(0)
-            # pred_left_frame = linear_to_gamma(pred_left_frame)
-            # save_image(pred_left_frame, checkpoints_path / f"left_colour_invalid_{iterations}.png")
 
-            # pred_right_frame = pred_right_frame.squeeze(0).squeeze(0)
-            # pred_right_frame = linear_to_gamma(pred_right_frame)
-            # save_image(pred_right_frame, checkpoints_path / f"right_colour_invalid_{iterations}.png")
-            
             # -------------------------------------------------------------------------
-            # ----------------- Blending mask when history is invalid -----------------
+            # ----------------------------- Blending mask -----------------------------
             # -------------------------------------------------------------------------
             left_out_blending_mask = F.pixel_shuffle(left_out_blending_mask, upscale_factor=scale_factor)
             save_image(left_out_blending_mask.squeeze(0).unsqueeze(1), checkpoints_path / f"left_blending_mask_invalid_{iterations}.png")
 
             right_out_blending_mask = F.pixel_shuffle(right_out_blending_mask, upscale_factor=scale_factor)
             save_image(right_out_blending_mask.squeeze(0).unsqueeze(1), checkpoints_path / f"right_blending_mask_invalid_{iterations}.png")
+
+            # -------------------------------------------------------------------------
+            # ------------------------- Between-eye warp mask -------------------------
+            # -------------------------------------------------------------------------
+            save_image(curr_right_to_left_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_right_to_left_between_eye_warp_mask.png")
+            save_image(curr_left_to_right_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_left_to_right_between_eye_warp_mask.png")
+            save_image(prev_right_to_left_between_eye_warp_mask.float(), sanity_checks_output_path / "prev_right_to_left_between_eye_warp_mask.png")
+            save_image(prev_left_to_right_between_eye_warp_mask.float(), sanity_checks_output_path / "prev_left_to_right_between_eye_warp_mask.png")
 
             # -------------------------------------------------------------------------
             # -------------- Output of the network when history is valid --------------
@@ -453,7 +460,11 @@ def checkpoint_vr(
                 _, 
                 _, 
                 left_out_blending_mask, 
-                right_out_blending_mask
+                right_out_blending_mask,
+                _,
+                _,
+                _,
+                _
             ) = model(
                 left_inputs_next, 
                 right_inputs_next,
@@ -466,19 +477,10 @@ def checkpoint_vr(
                 "evaluation"
             )
 
-            # pred_left_frame = pred_left_frame.squeeze(0).squeeze(0)
-            # pred_left_frame = linear_to_gamma(pred_left_frame)
-            # save_image(pred_left_frame, checkpoints_path / f"left_colour_valid_{iterations}.png")
-
-            # pred_right_frame = pred_right_frame.squeeze(0).squeeze(0)
-            # pred_right_frame = linear_to_gamma(pred_right_frame)
-            # save_image(pred_right_frame, checkpoints_path / f"right_colour_valid_{iterations}.png")
-
             # -------------------------------------------------------------------------
-            # ------------------ Blending mask when history is valid ------------------
+            # ----------------------------- Blending mask -----------------------------
             # -------------------------------------------------------------------------
             left_out_blending_mask = F.pixel_shuffle(left_out_blending_mask.squeeze(0), upscale_factor=scale_factor).squeeze(0).unsqueeze(1)
-            print(f"{left_out_blending_mask.shape=}")
             save_image(left_out_blending_mask, checkpoints_path / f"left_blending_mask_valid_{iterations}.png", normalize=True)
 
             right_out_blending_mask = F.pixel_shuffle(right_out_blending_mask.squeeze(0), upscale_factor=scale_factor).squeeze(0).unsqueeze(1)

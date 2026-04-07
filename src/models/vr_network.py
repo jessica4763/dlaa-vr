@@ -308,10 +308,10 @@ class VRNetwork(QualcommNetwork):
             indexing="ij"
         )
         xs = 2.0 * (xs / (W - 1)) - 1.0
-        base_grid = xs.unsqueeze(0).expand(B, -1, -1)
+        base_grid = xs
 
         threshold_x = 1.0 / (W - 1)
-        between_eye_warp_mask = torch.abs(warped_warp_grid[:, 0] - base_grid) < threshold_x
+        between_eye_warp_mask = torch.abs(warped_warp_grid[:, 0:1] - base_grid) < threshold_x
         return between_eye_warp_mask  # (B, 1, H, W)
 
     def prepare_input(
@@ -667,18 +667,19 @@ class VRNetwork(QualcommNetwork):
             prepared_left_inputs[:, c0:c1] = prepared_left_inputs[:, c0:c1] * curr_right_to_left_between_eye_warp_mask
             prepared_right_inputs[:, c0:c1] = prepared_right_inputs[:, c0:c1] * curr_left_to_right_between_eye_warp_mask
 
-            c0 = self.num_curr_colour + self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter + self.num_curr_colour
-            c1 = c0 + self.num_curr_colour
-            prepared_left_inputs[:, c0:c1] = prepared_left_inputs[:, c0:c1] * prev_right_to_left_between_eye_warp_mask
-            prepared_right_inputs[:, c0:c1] = prepared_right_inputs[:, c0:c1] * prev_left_to_right_between_eye_warp_mask
+            c0 = self.num_curr_colour + self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter + self.num_prev_colour
+            c1 = c0 + self.num_prev_colour
+
+            prepared_left_inputs[:, c0:c1] = self.space_to_depth(self.depth_to_space(prepared_left_inputs[:, c0:c1]) * prev_right_to_left_between_eye_warp_mask)
+            prepared_right_inputs[:, c0:c1] = self.space_to_depth(self.depth_to_space(prepared_right_inputs[:, c0:c1]) * prev_left_to_right_between_eye_warp_mask)
 
             c0 = c1 + self.num_prev_feature
             c1 = c0 + self.num_prev_feature
-            prepared_left_inputs[:, c0:c1] = prepared_left_inputs[:, c0:c1] * prev_right_to_left_between_eye_warp_mask
-            prepared_right_inputs[:, c0:c1] = prepared_right_inputs[:, c0:c1] * prev_left_to_right_between_eye_warp_mask
+            prepared_left_inputs[:, c0:c1] = self.space_to_depth(self.depth_to_space(prepared_left_inputs[:, c0:c1]) * prev_right_to_left_between_eye_warp_mask)
+            prepared_right_inputs[:, c0:c1] = self.space_to_depth(self.depth_to_space(prepared_right_inputs[:, c0:c1]) * prev_left_to_right_between_eye_warp_mask)
 
-            prev_right_colour_warped_left *= prev_right_to_left_between_eye_warp_mask
-            prev_left_colour_warped_right *= prev_left_to_right_between_eye_warp_mask
+            prev_right_colour_warped_left = self.space_to_depth(self.depth_to_space(prev_right_colour_warped_left) * prev_right_to_left_between_eye_warp_mask)
+            prev_left_colour_warped_right = self.space_to_depth(self.depth_to_space(prev_left_colour_warped_right) * prev_left_to_right_between_eye_warp_mask)
 
             # ------------------------------------------------------------
             # ------------------------- Left eye -------------------------
@@ -727,4 +728,8 @@ class VRNetwork(QualcommNetwork):
             prev_pred_right_features,
             left_out_blending_mask,
             right_out_blending_mask,
+            curr_right_to_left_between_eye_warp_mask,
+            curr_left_to_right_between_eye_warp_mask,
+            prev_right_to_left_between_eye_warp_mask,
+            prev_left_to_right_between_eye_warp_mask
         )

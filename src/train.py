@@ -178,7 +178,7 @@ def train_epoch_vr(
         right_targets = right_targets.to(device, non_blocking=True)
 
         # Pass in motion vectors as well, for warping
-        pred_left_frames, pred_right_frames, _, _, _, _ = model(
+        pred_left_frames, pred_right_frames, _, _, _, _, _, _, _, _ = model(
             left_inputs,
             right_inputs,
             left_motion_vectors,
@@ -235,7 +235,7 @@ def train_epoch_vr(
 
 def train() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="train")
+        cfg = hydra.compose(config_name="vr-train")
 
     device = (
         torch.accelerator.current_accelerator().type
