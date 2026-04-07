@@ -293,7 +293,7 @@ class VRNetwork(QualcommNetwork):
     
     def get_between_eye_warp_mask(self, warp_from: torch.Tensor, warp_onto: torch.Tensor) -> torch.Tensor:
         warped_warp_grid = F.grid_sample(
-            warp_from.permute(0, 3, 1, 2),  # (B, H, W, 1) --> (B, 1, H, W) 
+            warp_from.permute(0, 3, 1, 2),  # (B, H, W, C) --> (B, C, H, W) 
             warp_onto,
             mode="bilinear",
             padding_mode="zeros",
@@ -307,12 +307,13 @@ class VRNetwork(QualcommNetwork):
             torch.arange(W, device=warped_warp_grid.device),
             indexing="ij"
         )
-        xs = 2.0 * (xs / (W - 1)) - 1.0
+        xs = xs + 0.5
+        xs = 2.0 * (xs / W) - 1.0
         base_grid = xs
 
-        threshold_x = 1.0 / (W - 1)
+        threshold_x = 2.0 / W
         between_eye_warp_mask = torch.abs(warped_warp_grid[:, 0:1] - base_grid) < threshold_x
-        return between_eye_warp_mask  # (B, 1, H, W)
+        return between_eye_warp_mask.float()  # (B, 1, H, W)
 
     def prepare_input(
         self,
@@ -651,14 +652,20 @@ class VRNetwork(QualcommNetwork):
                 warp_onto=curr_left_to_right_warp_grid
             )
 
-            prev_right_to_left_between_eye_warp_mask = self.get_between_eye_warp_mask(
-                warp_from=prev_left_to_right_warp_grid,
-                warp_onto=prev_right_to_left_warp_grid
+            prev_right_to_left_between_eye_warp_mask = self.warp(
+                self.get_between_eye_warp_mask(
+                    warp_from=prev_left_to_right_warp_grid,
+                    warp_onto=prev_right_to_left_warp_grid
+                ), 
+                left_motion_vector_frames
             )
 
-            prev_left_to_right_between_eye_warp_mask = self.get_between_eye_warp_mask(
-                warp_from=prev_right_to_left_warp_grid,
-                warp_onto=prev_left_to_right_warp_grid
+            prev_left_to_right_between_eye_warp_mask = self.warp(
+                self.get_between_eye_warp_mask(
+                    warp_from=prev_right_to_left_warp_grid,
+                    warp_onto=prev_left_to_right_warp_grid
+                ),
+                right_motion_vector_frames
             )
 
             # Applying a boolean mask with shape (B, 1, H, W) to prepared_left_inputs[:, c0:c1], with shape (B, 3, H, W)

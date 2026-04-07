@@ -344,12 +344,6 @@ def checkpoint_vr(
             right_eye_diff = torch.abs(right_curr - left_warped_curr)
             save_image(linear_to_gamma(right_eye_diff), sanity_checks_output_path / "Right" / "left_to_right_diff.png")
 
-            # between_eye_warp_mask = model.get_between_eye_warp_mask(
-            #     warp_from=left_to_right_warp_grid, 
-            #     warp_onto=right_to_left_warp_grid
-            # )
-            # save_image(between_eye_warp_mask.float(), sanity_checks_output_path / "between_eye_warp_mask.png")
-
             right_warped_depth_curr, _ = model.right_to_left_warp(
                 right_depth.unsqueeze(0), 
                 left_depth.unsqueeze(0), 
