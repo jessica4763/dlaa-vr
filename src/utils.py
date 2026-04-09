@@ -244,8 +244,6 @@ def checkpoint_vr(
                     right_inputs, 
                     left_motion_vectors, 
                     right_motion_vectors, 
-                    prev_left_depth,
-                    prev_right_depth,
                     jitter, 
                     left_output, 
                     right_output, 
@@ -257,8 +255,6 @@ def checkpoint_vr(
                     right_inputs_next, 
                     left_motion_vectors_next, 
                     right_motion_vectors_next, 
-                    prev_left_depth_next,
-                    prev_right_depth_next,
                     jitter_next, 
                     left_output_next, 
                     right_output_next, 
@@ -270,8 +266,6 @@ def checkpoint_vr(
                     right_inputs, 
                     left_motion_vectors, 
                     right_motion_vectors, 
-                    prev_left_depth,
-                    prev_right_depth,
                     jitter, 
                     left_output, 
                     right_output, 
@@ -283,8 +277,6 @@ def checkpoint_vr(
                     right_inputs_next, 
                     left_motion_vectors_next, 
                     right_motion_vectors_next, 
-                    prev_left_depth_next,
-                    prev_right_depth_next,
                     jitter_next, 
                     left_output_next, 
                     right_output_next, 
@@ -376,11 +368,9 @@ def checkpoint_vr(
             # -------------------------------------------------------------------------
             left_inputs = left_inputs.to(device).unsqueeze(0).unsqueeze(0)
             left_motion_vectors = left_motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
-            prev_left_depth = prev_left_depth.to(device).unsqueeze(0).unsqueeze(0)
 
             right_inputs = right_inputs.to(device).unsqueeze(0).unsqueeze(0)
             right_motion_vectors = right_motion_vectors.to(device).unsqueeze(0).unsqueeze(0)
-            prev_right_depth = prev_right_depth.to(device).unsqueeze(0).unsqueeze(0)
 
             jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
 
@@ -391,17 +381,13 @@ def checkpoint_vr(
                 right_features, 
                 left_out_blending_mask, 
                 right_out_blending_mask,
-                curr_right_to_left_between_eye_warp_mask,
-                curr_left_to_right_between_eye_warp_mask,
-                prev_right_to_left_between_eye_warp_mask,
-                prev_left_to_right_between_eye_warp_mask
+                right_to_left_between_eye_warp_mask,
+                left_to_right_between_eye_warp_mask
                 ) = model(
                 left_inputs,
                 right_inputs,
                 left_motion_vectors, 
                 right_motion_vectors,
-                prev_left_depth,
-                prev_right_depth,
                 curr_frame_num, 
                 jitter, 
                 "evaluation"
@@ -420,21 +406,17 @@ def checkpoint_vr(
             # -------------------------------------------------------------------------
             # ------------------------- Between-eye warp mask -------------------------
             # -------------------------------------------------------------------------
-            save_image(curr_right_to_left_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_right_to_left_between_eye_warp_mask.png")
-            save_image(curr_left_to_right_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_left_to_right_between_eye_warp_mask.png")
-            save_image(prev_right_to_left_between_eye_warp_mask.float(), sanity_checks_output_path / "prev_right_to_left_between_eye_warp_mask.png")
-            save_image(prev_left_to_right_between_eye_warp_mask.float(), sanity_checks_output_path / "prev_left_to_right_between_eye_warp_mask.png")
+            save_image(right_to_left_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_right_to_left_between_eye_warp_mask.png")
+            save_image(left_to_right_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_left_to_right_between_eye_warp_mask.png")
 
             # -------------------------------------------------------------------------
             # -------------- Output of the network when history is valid --------------
             # -------------------------------------------------------------------------
             left_inputs_next = left_inputs_next.to(device).unsqueeze(0).unsqueeze(0)
             left_motion_vectors_next = left_motion_vectors_next.to(device).unsqueeze(0).unsqueeze(0)
-            prev_left_depth_next = prev_left_depth_next.to(device).unsqueeze(0).unsqueeze(0)
 
             right_inputs_next = right_inputs_next.to(device).unsqueeze(0).unsqueeze(0)
             right_motion_vectors_next = right_motion_vectors_next.to(device).unsqueeze(0).unsqueeze(0)
-            prev_right_depth_next = prev_right_depth_next.to(device).unsqueeze(0).unsqueeze(0)
 
             jitter_next = jitter_next.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
 
@@ -456,16 +438,12 @@ def checkpoint_vr(
                 left_out_blending_mask, 
                 right_out_blending_mask,
                 _,
-                _,
-                _,
                 _
             ) = model(
                 left_inputs_next, 
                 right_inputs_next,
                 left_motion_vectors_next, 
                 right_motion_vectors_next,
-                prev_left_depth_next,
-                prev_right_depth_next,
                 curr_frame_num_next, 
                 jitter,
                 "evaluation"
@@ -474,10 +452,10 @@ def checkpoint_vr(
             # -------------------------------------------------------------------------
             # ----------------------------- Blending mask -----------------------------
             # -------------------------------------------------------------------------
-            left_out_blending_mask = F.pixel_shuffle(left_out_blending_mask.squeeze(0), upscale_factor=scale_factor).squeeze(0).unsqueeze(1)
+            left_out_blending_mask = F.pixel_shuffle(left_out_blending_mask, upscale_factor=scale_factor)
             save_image(left_out_blending_mask, checkpoints_path / f"left_blending_mask_valid_{iterations}.png", normalize=True)
 
-            right_out_blending_mask = F.pixel_shuffle(right_out_blending_mask.squeeze(0), upscale_factor=scale_factor).squeeze(0).unsqueeze(1)
+            right_out_blending_mask = F.pixel_shuffle(right_out_blending_mask, upscale_factor=scale_factor)
             save_image(right_out_blending_mask, checkpoints_path / f"right_blending_mask_valid_{iterations}.png", normalize=True)
 
 
@@ -593,11 +571,7 @@ def checkpoint(
             jitter = jitter.to(device).unsqueeze(0).unsqueeze(0) if use_jitter else None
             anti_aliased_img, prev_pred_features, out_blending_mask = model(inputs, motion_vectors, curr_frame_num, jitter, "evaluation")
 
-            # anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
-            # anti_aliased_img = linear_to_gamma(anti_aliased_img)
-            # save_image(anti_aliased_img, checkpoints_path / f"colour_invalid_{iterations}.png")
-            
-            # Blending mask when history is invalid
+            # Blending mask
             out_blending_mask = F.pixel_shuffle(out_blending_mask, upscale_factor=scale_factor)
             save_image(out_blending_mask, checkpoints_path / f"blending_mask_invalid_{iterations}.png")
 
@@ -616,10 +590,6 @@ def checkpoint(
 
             _, _, out_blending_mask = model(inputs_next, motion_vectors_next, curr_frame_num_next, jitter_next, "evaluation")
 
-            # anti_aliased_img = anti_aliased_img.squeeze(0).squeeze(0)
-            # anti_aliased_img = linear_to_gamma(anti_aliased_img)
-            # save_image(anti_aliased_img, checkpoints_path / f"colour_valid_{iterations}.png")
-
-            # Blending mask when history is valid
+            # Blending mask
             out_blending_mask = F.pixel_shuffle(out_blending_mask, upscale_factor=scale_factor)
             save_image(out_blending_mask, checkpoints_path / f"blending_mask_valid_{iterations}.png")

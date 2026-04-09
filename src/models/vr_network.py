@@ -40,8 +40,6 @@ class VRNetwork(QualcommNetwork):
             self.num_curr_depth +
             self.num_curr_jitter +
             self.num_prev_colour +
-            self.num_prev_colour + 
-            self.num_prev_feature + 
             self.num_prev_feature
         )
 
@@ -125,7 +123,7 @@ class VRNetwork(QualcommNetwork):
         # Blending mask head
         if use_jitter:
             self.blending_mask_head = JitterConditionedConv(
-                2 * (scale_factor ** 2),
+                1 * (scale_factor ** 2),
                 hidden_channels,
                 3,
                 3,
@@ -135,18 +133,13 @@ class VRNetwork(QualcommNetwork):
         else:
             self.blending_mask_head = nn.Conv2d(
                 hidden_channels,
-                2 * (scale_factor ** 2),
+                1 * (scale_factor ** 2),
                 kernel_size=3,
                 padding=1,
                 padding_mode="zeros"
             )
 
-        # # Softmax in place of sigmoid to blend three inputs together
-        # # Compute softmax along the channel dimension 
-        # self.blending_mask_softmax = nn.Softmax(dim=1)  # (B, 3, 4, H, W)
-
         self.history_blending_mask_sigmoid = nn.Sigmoid()
-        self.warped_eye_blending_mask_sigmoid = nn.Sigmoid()
 
         self.apply(self.kaiming_init_params)
 
@@ -200,14 +193,6 @@ class VRNetwork(QualcommNetwork):
         camera_baseline: float,
         focal_length: float
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        _, _, left_frame_H, _ = left_frame.shape
-        _, _, right_depth_H, _ = right_depth.shape
-
-        if left_frame_H != right_depth_H:
-            # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
-            left_frame = self.depth_to_space(left_frame)
-            focal_length *= self.scale_factor
-
         B, _, H, W = left_frame.shape
 
         ys, xs = torch.meshgrid(
@@ -236,10 +221,6 @@ class VRNetwork(QualcommNetwork):
             align_corners=False
         )
 
-        if left_frame_H != right_depth_H:
-            # Space to depth: (B, 3, 132, 132) -> (B, 12, 264, 264)
-            warped_left_frame = self.space_to_depth(warped_left_frame)
-
         return warped_left_frame, warp_grid
 
     def right_to_left_warp(
@@ -249,14 +230,6 @@ class VRNetwork(QualcommNetwork):
         camera_baseline: float,
         focal_length: float
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        _, _, right_frame_H, _ = right_frame.shape
-        _, _, left_depth_H, _ = left_depth.shape
-
-        if right_frame_H != left_depth_H:
-            # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
-            right_frame = self.depth_to_space(right_frame)
-            focal_length *= self.scale_factor
-
         B, _, H, W = right_frame.shape
 
         ys, xs = torch.meshgrid(
@@ -285,10 +258,6 @@ class VRNetwork(QualcommNetwork):
             align_corners=False
         )
 
-        if right_frame_H != left_depth_H:
-            # Space to depth: (B, 3, 132, 132) -> (B, 12, 264, 264)
-            warped_right_frame = self.space_to_depth(warped_right_frame)
-
         return warped_right_frame, warp_grid
     
     def get_between_eye_warp_mask(self, warp_from: torch.Tensor, warp_onto: torch.Tensor) -> torch.Tensor:
@@ -311,7 +280,7 @@ class VRNetwork(QualcommNetwork):
         xs = 2.0 * (xs / W) - 1.0
         base_grid = xs
 
-        threshold_x = 2.0 / W
+        threshold_x = 1.0 / W
         between_eye_warp_mask = torch.abs(warped_warp_grid[:, 0:1] - base_grid) < threshold_x
         return between_eye_warp_mask.float()  # (B, 1, H, W)
 
@@ -326,7 +295,6 @@ class VRNetwork(QualcommNetwork):
         prev_right_colour: torch.Tensor,
         prev_left_feature: torch.Tensor,
         prev_right_feature: torch.Tensor,
-        prev_depth: torch.Tensor,
         temporal_warp: int,
         eye: str
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:        
@@ -353,32 +321,6 @@ class VRNetwork(QualcommNetwork):
                     curr_motion_vectors  # left motion vectors
                 )
 
-            # The previous right frame warped onto the previous left frame, and then warped temporally onto the current left frame
-            prev_right_colour, prev_right_to_left_warp_grid = self.right_to_left_warp(
-                prev_right_colour, 
-                prev_depth,  # left depth
-                self.vr_config.camera_baseline, 
-                self.vr_config.focal_length
-            )
-            if temporal_warp:
-                prev_right_colour = self.warp(
-                    prev_right_colour,
-                    curr_motion_vectors  # left motion vectors
-                )
-
-            # The previous right feature frame warped onto the previous left feature frame, and then warped temporally onto the current left feature frame
-            prev_right_feature, _ = self.right_to_left_warp(
-                prev_right_feature, 
-                prev_depth,  # left depth
-                self.vr_config.camera_baseline, 
-                self.vr_config.focal_length
-            )
-            if temporal_warp:
-                prev_right_feature = self.warp(
-                    prev_right_feature,
-                    curr_motion_vectors  # left motion vectors
-                )
-
             # (B, C, H, W)
             inputs = torch.cat([
                 curr_left_colour,          # C = 3
@@ -386,12 +328,10 @@ class VRNetwork(QualcommNetwork):
                 curr_depth,                # C = 1
                 curr_jitter,               # C = 2
                 prev_left_colour,          # C = 12
-                prev_right_colour,         # C = 12
-                prev_left_feature,         # C = 12
-                prev_right_feature         # C = 12
+                prev_left_feature          # C = 12
             ], dim=1)
 
-            return inputs, prev_left_colour, prev_right_colour, curr_right_to_left_warp_grid, prev_right_to_left_warp_grid
+            return inputs, prev_left_colour, curr_right_to_left_warp_grid
         else:
             # Current left frame warped onto the current right frame
             curr_warped_left_colour, curr_left_to_right_warp_grid = self.left_to_right_warp(
@@ -415,32 +355,6 @@ class VRNetwork(QualcommNetwork):
                     curr_motion_vectors  # right motion vectors
                 )
 
-            # The previous left frame warped onto the previous right frame, and then warped temporally onto the current right frame
-            prev_left_colour, prev_left_to_right_warp_grid = self.left_to_right_warp(
-                prev_left_colour,
-                prev_depth,  # right depth
-                self.vr_config.camera_baseline, 
-                self.vr_config.focal_length
-            )
-            if temporal_warp:
-                prev_left_colour = self.warp(
-                    prev_left_colour,
-                    curr_motion_vectors  # right motion vectors
-                )
-
-            # The previous left feature frame warped onto the previous right feature frame, and then warped temporally onto the current left right feature frame
-            prev_left_feature, _ = self.left_to_right_warp(
-                prev_left_feature, 
-                prev_depth,  # right depth
-                self.vr_config.camera_baseline, 
-                self.vr_config.focal_length
-            )
-            if temporal_warp:
-                prev_left_feature = self.warp(
-                    prev_left_feature,
-                    curr_motion_vectors  # right motion vectors
-                )
-
             # (B, C, H, W)
             # (The channel ordering relative to the left eye is important)
             inputs = torch.cat([
@@ -449,22 +363,18 @@ class VRNetwork(QualcommNetwork):
                 curr_depth,               # C = 1
                 curr_jitter,              # C = 2
                 prev_right_colour,        # C = 12
-                prev_left_colour,         # C = 12
-                prev_right_feature,       # C = 12
-                prev_left_feature,        # C = 12
+                prev_right_feature        # C = 12
             ], dim=1)
 
-            return inputs, prev_left_colour, prev_right_colour, curr_left_to_right_warp_grid, prev_left_to_right_warp_grid
+            return inputs, prev_right_colour, curr_left_to_right_warp_grid
 
     def network_pass(
         self,
         inputs: torch.Tensor,
         jitter_frames: torch.Tensor,
-        prev_left_colour: torch.Tensor,
-        prev_right_colour: torch.Tensor,
-        eye: str
+        prev_colour: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        B, C, H, W = inputs.shape
+        B, _, H, W = inputs.shape
 
         # ------------------------------------------------------------
         # ---------------- Input convolution and ReLU ----------------
@@ -500,25 +410,15 @@ class VRNetwork(QualcommNetwork):
         # ------------------------------------------------------------
         # (B, 12, H, W) --> (B, 3, 4, H, W)
         out_colour = out_colour.view(B, 3, -1, H, W)
+        prev_colour = prev_colour.view(B, 3, -1, H, W)
 
-        prev_left_colour = prev_left_colour.view(B, 3, -1, H, W)
-        prev_right_colour = prev_right_colour.view(B, 3, -1, H, W)
-        if eye == "left":
-            primary_history = prev_left_colour
-            secondary_history = prev_right_colour
-        else:
-            primary_history = prev_right_colour
-            secondary_history = prev_left_colour
-
-        # (B, 12, H, W) --> (B, 2, 4, H, W)
-        out_blending_mask = out_blending_mask.view(B, 2, -1, H, W)
-        history_blending_mask = self.history_blending_mask_sigmoid(out_blending_mask[:, 0:1])
-        warped_eye_blending_mask = self.warped_eye_blending_mask_sigmoid(out_blending_mask[:, 1:2])
-        blended_colour = history_blending_mask * out_colour + (1 - history_blending_mask) * primary_history
-        blended_colour = warped_eye_blending_mask * blended_colour + (1 - warped_eye_blending_mask) * secondary_history
+        # (B, 4, H, W) --> (B, 1, 4, H, W)
+        out_blending_mask = out_blending_mask.view(B, 1, -1, H, W)
+        history_blending_mask = self.history_blending_mask_sigmoid(out_blending_mask)
+        blended_colour = history_blending_mask * out_colour + (1 - history_blending_mask) * prev_colour
         blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
 
-        return blended_colour.view(B, -1, H, W), out_features, out_blending_mask.view(B, -1, H, W)
+        return blended_colour.view(B, -1, H, W), out_features, history_blending_mask.view(B, -1, H, W)
 
     def forward(
         self,
@@ -526,8 +426,6 @@ class VRNetwork(QualcommNetwork):
         right_inputs: torch.Tensor,
         left_motion_vectors: torch.Tensor,
         right_motion_vectors: torch.Tensor,
-        prev_left_depth: torch.Tensor,
-        prev_right_depth: torch.Tensor,
         curr_frame_num: int,
         jitter: torch.Tensor = None,
         mode: str = "training"
@@ -542,11 +440,9 @@ class VRNetwork(QualcommNetwork):
         for clip in range(clip_size):
             left_clip_frames = left_inputs[:, clip].clone()
             left_motion_vector_frames = left_motion_vectors[:, clip]
-            prev_left_depth_frames = prev_left_depth[:, clip]
 
             right_clip_frames = right_inputs[:, clip].clone()
             right_motion_vector_frames = right_motion_vectors[:, clip]
-            prev_right_depth_frames = prev_right_depth[:, clip]
 
             if self.num_curr_jitter != 0:
                 jitter_frames = jitter[:, clip]
@@ -595,10 +491,8 @@ class VRNetwork(QualcommNetwork):
             # ------------------------------------------------------------
             (
                 prepared_left_inputs, 
-                prev_left_colour_warped_left, 
-                prev_right_colour_warped_left,
-                curr_right_to_left_warp_grid,
-                prev_right_to_left_warp_grid
+                prev_warped_left, 
+                right_to_left_warp_grid
             ) = self.prepare_input(
                 curr_left_colour=curr_left_colour,
                 curr_right_colour=curr_right_colour,
@@ -609,7 +503,6 @@ class VRNetwork(QualcommNetwork):
                 prev_right_colour=prev_right_colour,
                 prev_left_feature=prev_left_feature,
                 prev_right_feature=prev_right_feature,
-                prev_depth=prev_left_depth_frames,
                 temporal_warp=temporal_warp,
                 eye="left"
             )
@@ -619,10 +512,8 @@ class VRNetwork(QualcommNetwork):
             # ------------------------------------------------------------
             (
                 prepared_right_inputs,
-                prev_left_colour_warped_right,
-                prev_right_colour_warped_right,
-                curr_left_to_right_warp_grid,
-                prev_left_to_right_warp_grid
+                prev_warped_right,
+                left_to_right_warp_grid,
             ) = self.prepare_input(
                 curr_left_colour=curr_left_colour,
                 curr_right_colour=curr_right_colour,
@@ -633,7 +524,6 @@ class VRNetwork(QualcommNetwork):
                 prev_right_colour=prev_right_colour,
                 prev_left_feature=prev_left_feature,
                 prev_right_feature=prev_right_feature,
-                prev_depth=prev_right_depth_frames,
                 temporal_warp=temporal_warp,
                 eye="right"
             )
@@ -642,51 +532,21 @@ class VRNetwork(QualcommNetwork):
             # ----------------- Between-eye warp masking -----------------
             # ------------------------------------------------------------
             # (B, 1, H, W)
-            curr_right_to_left_between_eye_warp_mask = self.get_between_eye_warp_mask(  
-                warp_from=curr_left_to_right_warp_grid,
-                warp_onto=curr_right_to_left_warp_grid
+            right_to_left_between_eye_warp_mask = self.get_between_eye_warp_mask(  
+                warp_from=left_to_right_warp_grid,
+                warp_onto=right_to_left_warp_grid
             )  
 
-            curr_left_to_right_between_eye_warp_mask = self.get_between_eye_warp_mask(
-                warp_from=curr_right_to_left_warp_grid,
-                warp_onto=curr_left_to_right_warp_grid
-            )
-
-            prev_right_to_left_between_eye_warp_mask = self.warp(
-                self.get_between_eye_warp_mask(
-                    warp_from=prev_left_to_right_warp_grid,
-                    warp_onto=prev_right_to_left_warp_grid
-                ), 
-                left_motion_vector_frames
-            )
-
-            prev_left_to_right_between_eye_warp_mask = self.warp(
-                self.get_between_eye_warp_mask(
-                    warp_from=prev_right_to_left_warp_grid,
-                    warp_onto=prev_left_to_right_warp_grid
-                ),
-                right_motion_vector_frames
+            left_to_right_between_eye_warp_mask = self.get_between_eye_warp_mask(
+                warp_from=right_to_left_warp_grid,
+                warp_onto=left_to_right_warp_grid
             )
 
             # Applying a boolean mask with shape (B, 1, H, W) to prepared_left_inputs[:, c0:c1], with shape (B, 3, H, W)
             c0 = self.num_curr_colour
             c1 = c0 + self.num_curr_colour
-            prepared_left_inputs[:, c0:c1] = prepared_left_inputs[:, c0:c1] * curr_right_to_left_between_eye_warp_mask
-            prepared_right_inputs[:, c0:c1] = prepared_right_inputs[:, c0:c1] * curr_left_to_right_between_eye_warp_mask
-
-            c0 = self.num_curr_colour + self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter + self.num_prev_colour
-            c1 = c0 + self.num_prev_colour
-
-            prepared_left_inputs[:, c0:c1] = self.space_to_depth(self.depth_to_space(prepared_left_inputs[:, c0:c1]) * prev_right_to_left_between_eye_warp_mask)
-            prepared_right_inputs[:, c0:c1] = self.space_to_depth(self.depth_to_space(prepared_right_inputs[:, c0:c1]) * prev_left_to_right_between_eye_warp_mask)
-
-            c0 = c1 + self.num_prev_feature
-            c1 = c0 + self.num_prev_feature
-            prepared_left_inputs[:, c0:c1] = self.space_to_depth(self.depth_to_space(prepared_left_inputs[:, c0:c1]) * prev_right_to_left_between_eye_warp_mask)
-            prepared_right_inputs[:, c0:c1] = self.space_to_depth(self.depth_to_space(prepared_right_inputs[:, c0:c1]) * prev_left_to_right_between_eye_warp_mask)
-
-            prev_right_colour_warped_left = self.space_to_depth(self.depth_to_space(prev_right_colour_warped_left) * prev_right_to_left_between_eye_warp_mask)
-            prev_left_colour_warped_right = self.space_to_depth(self.depth_to_space(prev_left_colour_warped_right) * prev_left_to_right_between_eye_warp_mask)
+            prepared_left_inputs[:, c0:c1] = prepared_left_inputs[:, c0:c1] * right_to_left_between_eye_warp_mask
+            prepared_right_inputs[:, c0:c1] = prepared_right_inputs[:, c0:c1] * left_to_right_between_eye_warp_mask
 
             # ------------------------------------------------------------
             # ------------------------- Left eye -------------------------
@@ -694,9 +554,7 @@ class VRNetwork(QualcommNetwork):
             left_blended_colour, left_out_features, left_out_blending_mask = self.network_pass(
                 inputs=prepared_left_inputs,
                 jitter_frames=jitter_frames,
-                prev_left_colour=prev_left_colour_warped_left,
-                prev_right_colour=prev_right_colour_warped_left,
-                eye="left"
+                prev_colour=prev_warped_left
             )
 
             # ------------------------------------------------------------
@@ -705,9 +563,7 @@ class VRNetwork(QualcommNetwork):
             right_blended_colour, right_out_features, right_out_blending_mask = self.network_pass(
                 inputs=prepared_right_inputs,
                 jitter_frames=jitter_frames,
-                prev_left_colour=prev_left_colour_warped_right,
-                prev_right_colour=prev_right_colour_warped_right,
-                eye="right"
+                prev_colour=prev_warped_right
             )
 
             # ------------------------------------------------------------
@@ -735,8 +591,6 @@ class VRNetwork(QualcommNetwork):
             prev_pred_right_features,
             left_out_blending_mask,
             right_out_blending_mask,
-            curr_right_to_left_between_eye_warp_mask,
-            curr_left_to_right_between_eye_warp_mask,
-            prev_right_to_left_between_eye_warp_mask,
-            prev_left_to_right_between_eye_warp_mask
+            right_to_left_between_eye_warp_mask,
+            left_to_right_between_eye_warp_mask
         )

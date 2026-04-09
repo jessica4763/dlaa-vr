@@ -109,8 +109,6 @@ def evaluate_vr(
                 right_inputs, 
                 left_motion_vectors, 
                 right_motion_vectors, 
-                prev_left_depth,
-                prev_right_depth,
                 jitter,
                 left_target, 
                 right_target, 
@@ -121,11 +119,6 @@ def evaluate_vr(
             left_inputs = left_inputs.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
             right_inputs = right_inputs.to(device, non_blocking=True)
             right_inputs = right_inputs.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
-
-            prev_left_depth = prev_left_depth.to(device, non_blocking=True)
-            prev_left_depth = prev_left_depth.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
-            prev_right_depth = prev_right_depth.to(device, non_blocking=True)
-            prev_right_depth = prev_right_depth.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
 
             left_motion_vectors = left_motion_vectors.to(device, non_blocking=True)
             left_motion_vectors = left_motion_vectors.unsqueeze(0)  # N = batch_size * clip_size = 1 * 1
@@ -162,17 +155,13 @@ def evaluate_vr(
                     right_features, 
                     left_blending_mask, 
                     right_blending_mask,
-                    curr_right_to_left_between_eye_warp_mask,
-                    curr_left_to_right_between_eye_warp_mask,
-                    prev_right_to_left_between_eye_warp_mask,
-                    prev_left_to_right_between_eye_warp_mask
+                    right_to_left_between_eye_warp_mask,
+                    left_to_right_between_eye_warp_mask
                 ) = model(
                     left_inputs,
                     right_inputs,
                     left_motion_vectors, 
                     right_motion_vectors,
-                    prev_left_depth,
-                    prev_right_depth,
                     curr_frame_num, 
                     jitter,
                     "evaluation"

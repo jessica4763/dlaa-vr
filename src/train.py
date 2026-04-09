@@ -136,8 +136,6 @@ def train_epoch_vr(
             right_inputs, 
             left_motion_vectors, 
             right_motion_vectors, 
-            prev_left_depth,
-            prev_right_depth,
             jitter, 
             left_targets, 
             right_targets, 
@@ -151,14 +149,6 @@ def train_epoch_vr(
 
         right_inputs = right_inputs.to(device, non_blocking=True)  # non_blocking=True requires pin_memory=True
         right_inputs = right_inputs.view(-1, clip_size, input_C, input_H, input_W)
-
-        # input_N = num_batches * clip_size
-        input_N, input_C, input_H, input_W = prev_left_depth.shape
-        prev_left_depth = prev_left_depth.to(device, non_blocking=True)
-        prev_left_depth = prev_left_depth.view(-1, clip_size, input_C, input_H, input_W)
-
-        prev_right_depth = prev_right_depth.to(device, non_blocking=True)
-        prev_right_depth = prev_right_depth.view(-1, clip_size, input_C, input_H, input_W)
 
         # output_N = num_batches * clip_size. output_H == input_H and output_W == input_W with no upscaling
         input_N, input_C, input_H, input_W = left_motion_vectors.shape
@@ -178,13 +168,11 @@ def train_epoch_vr(
         right_targets = right_targets.to(device, non_blocking=True)
 
         # Pass in motion vectors as well, for warping
-        pred_left_frames, pred_right_frames, _, _, _, _, _, _, _, _ = model(
+        pred_left_frames, pred_right_frames, _, _, _, _, _, _ = model(
             left_inputs,
             right_inputs,
             left_motion_vectors,
             right_motion_vectors,
-            prev_left_depth,
-            prev_right_depth,
             curr_frame_num,
             jitter,
             "training"

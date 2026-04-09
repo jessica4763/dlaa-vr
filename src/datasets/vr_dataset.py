@@ -358,18 +358,6 @@ class VRDataset(QualcommDataset):
             "Left"
         )
 
-        prev_left_depth = self.get_depth(
-            scene,
-            instance,
-            prev_frame_num,
-            patch_start_x,
-            patch_start_y,
-            patch_end_x,
-            patch_end_y,
-            "Left"
-        )
-        prev_left_depth = self.upscale_buffer(prev_left_depth)
-
         # --------------------------- Right frame ---------------------------
         curr_right_depth = self.get_depth(
             scene,
@@ -382,18 +370,6 @@ class VRDataset(QualcommDataset):
             "Right"
         )
 
-        prev_right_depth = self.get_depth(
-            scene,
-            instance,
-            prev_frame_num,
-            patch_start_x,
-            patch_start_y,
-            patch_end_x,
-            patch_end_y,
-            "Right"
-        )
-        prev_right_depth = self.upscale_buffer(prev_right_depth)
-        
         # ---------------------------- Left frame ---------------------------
         curr_left_motion_vectors = self.get_motion_vectors(
             scene,
@@ -545,8 +521,6 @@ class VRDataset(QualcommDataset):
             right_input_imgs, 
             curr_left_motion_vectors,
             curr_right_motion_vectors,
-            prev_left_depth,
-            prev_right_depth,
             jitter, 
             curr_left_output_img, 
             curr_right_output_img, 
