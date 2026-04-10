@@ -286,6 +286,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             dilation_block_size=cfg["dataset"]["dilation-block-size"],
             transform=gamma_to_linear,
             target_transform=gamma_to_linear,
+            dataset_from=cfg["dataset"]["dataset-from"],
             mode="evaluation",
             validation_length=cfg["validation"]["length"]
         )
@@ -308,6 +309,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             dilation_block_size=cfg["dataset"]["dilation-block-size"],
             transform=gamma_to_linear,
             target_transform=gamma_to_linear,
+            dataset_from=cfg["dataset"]["dataset-from"],
             mode="evaluation"
         )
 

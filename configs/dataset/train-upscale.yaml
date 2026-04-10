@@ -11,6 +11,7 @@ dilation-block-size: 8
 
 scene-names: [CBApocalypse, FloodedGrounds, FloodedGroundsBridges, ScifiBase, ScifiBaseNightStartStop, ScifiBaseStartStop, ScifiFacility, SunTemple, SunTempleBush, SunTempleLamps]
 is-vr: false
+dataset-from: unity
 
 camera-data-path-suffix: CameraData
 

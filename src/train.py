@@ -307,6 +307,7 @@ def train() -> None:
             transform=gamma_to_linear,
             target_transform=gamma_to_linear,
             zarr_walk_root=cfg["paths"]["zarr-walk-root"],
+            dataset_from=cfg["dataset"]["dataset-from"],
             mode="training"
         )
     else:
@@ -328,6 +329,7 @@ def train() -> None:
             dilation_block_size=cfg["dataset"]["dilation-block-size"],
             transform=gamma_to_linear,
             target_transform=gamma_to_linear,
+            dataset_from=cfg["dataset"]["dataset-from"],
             mode="training"
         )
 

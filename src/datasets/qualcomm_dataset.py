@@ -31,6 +31,7 @@ class QualcommDataset(Dataset):
         dilation_block_size: int = 8,
         transform=None,
         target_transform=None,
+        dataset_from: str = "unreal_engine",
         mode: str = "training"
     ) -> None:
         self.input_imgs_path = input_imgs_path
@@ -69,6 +70,7 @@ class QualcommDataset(Dataset):
         self.dilation_block_size = dilation_block_size
         self.transform = transform
         self.target_transform = target_transform
+        self.dataset_from = dataset_from
         self.mode = mode
 
     def get_jitter_offsets(
@@ -113,65 +115,36 @@ class QualcommDataset(Dataset):
 
         return jitter_tensor_x, jitter_tensor_y
 
-    # def get_depth(
-    #     self,
-    #     scene: Scene,
-    #     instance: str,
-    #     curr_frame_num: int
-    # ) -> torch.Tensor:
-    #     curr_frame = str(curr_frame_num).zfill(4) + ".png"
-    #     depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
-    #     depth = decode_image(depth_path.resolve()).float()
-    #     depth = torch.unsqueeze((
-    #         depth[0] / 255 +
-    #         depth[1] / (255 ** 2) +
-    #         depth[2] / (255 ** 3) +
-    #         depth[3] / (255 ** 4)
-    #     ), 0)
-    #     return depth
-    
     def get_depth(
         self,
         scene: Scene,
         instance: str,
         curr_frame_num: int
     ) -> torch.Tensor:
-        curr_frame = str(curr_frame_num).zfill(4) + ".exr"
-        depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
-        depth = iio.imread(depth_path.resolve())
+        if self.dataset_from == "unreal_engine":
+            curr_frame = str(curr_frame_num).zfill(4) + ".exr"
+            depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
+            depth = iio.imread(depth_path.resolve())
 
-        # (H, W, C) --> (C, H, W)
-        depth = torch.permute(torch.from_numpy(depth), (2, 0, 1))
+            # (H, W, C) --> (C, H, W)
+            depth = torch.permute(torch.from_numpy(depth), (2, 0, 1))
 
-        # (C, H, W) --> (1, H, W)
-        depth = depth[0:1]
+            # (C, H, W) --> (1, H, W)
+            depth = depth[0:1]
 
-        return depth
+            return depth
+        else:
+            curr_frame = str(curr_frame_num).zfill(4) + ".png"
+            depth_path = scene.scene_input_imgs_path / self.depth_path_suffix / instance / curr_frame
+            depth = decode_image(depth_path.resolve()).float()
+            depth = torch.unsqueeze((
+                depth[0] / 255 +
+                depth[1] / (255 ** 2) +
+                depth[2] / (255 ** 3) +
+                depth[3] / (255 ** 4)
+            ), 0)
+            return depth
 
-    # def get_motion_vectors(
-    #     self,
-    #     scene: Scene,
-    #     instance: str,
-    #     curr_frame_num: int
-    # ) -> torch.Tensor:
-    #     curr_frame = str(curr_frame_num).zfill(4) + ".exr"
-    #     motion_vectors_path = scene.scene_input_imgs_path / self.motion_vector_path_suffix / instance / curr_frame
-    #     motion_vectors = iio.imread(motion_vectors_path.resolve())
-
-    #     # (H, W, C) --> (C, H, W)
-    #     motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
-
-    #     # The horizontal velocity is stored in the first channel and the
-    #     # vertical velocity is stored in the second channel, despite what 
-    #     # the paper says; could be an artifact of iio.imread
-    #     motion_vectors = motion_vectors[0:2]
-
-    #     # Although Unity uses a Y-up coordinate system, this code
-    #     # assumes a Y-down coordinate system
-    #     motion_vectors[1] *= -1
-
-    #     return motion_vectors
-    
     def get_motion_vectors(
         self,
         scene: Scene,
@@ -185,13 +158,18 @@ class QualcommDataset(Dataset):
         # (H, W, C) --> (C, H, W)
         motion_vectors = torch.permute(torch.from_numpy(motion_vectors), (2, 0, 1))
 
-        # Unreal Engine motion vectors are normalised to the range [0, 1], 
-        # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
-        # where (0, 0) represents no motion. 
-        motion_vectors = (motion_vectors - 0.5) * 2.0
+        if self.dataset_from == "unreal_engine":
+            # Unreal Engine motion vectors are normalised to the range [0, 1], 
+            # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
+            # where (0, 0) represents no motion. 
+            motion_vectors = (motion_vectors - 0.5) * 2.0
 
+        # The horizontal velocity is stored in the first channel and the
+        # vertical velocity is stored in the second channel for the Qualcomm dataset, despite what 
+        # the paper says; could be an artifact of iio.imread
         motion_vectors = motion_vectors[0:2]
 
+        # The code assumes a Y-down coordinate system
         motion_vectors[1] *= -1
 
         return motion_vectors

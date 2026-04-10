@@ -12,6 +12,7 @@ dilation-block-size: 8
 scene-names: [SeaPortStationary]
 is-vr: false
 is-stationary-segment: true
+dataset-from: unity
 
 camera-data-path-suffix: CameraData
 

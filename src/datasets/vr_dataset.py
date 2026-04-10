@@ -33,6 +33,7 @@ class VRDataset(QualcommDataset):
         transform=None,
         target_transform=None,
         zarr_walk_root=None,
+        dataset_from: str = "unreal_engine",
         mode: str = "training",
         validation_length: int = 600
     ) -> None:
@@ -89,6 +90,7 @@ class VRDataset(QualcommDataset):
         self.dilation_block_size = dilation_block_size
         self.transform = transform
         self.target_transform = target_transform
+        self.dataset_from = dataset_from
         self.mode = mode
         self.validation_length = validation_length
 
@@ -181,12 +183,12 @@ class VRDataset(QualcommDataset):
                 patch_end_y
             )
 
-        # Unreal Engine motion vectors are normalised to the range [0, 1], 
-        # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
-        # where (0, 0) represents no motion. 
-        motion_vectors = (motion_vectors - 0.5) * 2.0
+        # if self.dataset_from == "unreal_engine":
+        #     # Unreal Engine motion vectors are normalised to the range [0, 1], 
+        #     # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
+        #     # where (0, 0) represents no motion. 
+        #     motion_vectors = (motion_vectors - 0.5) * 2.0
 
-        # The horizontal velocity is stored in the first channel
         motion_vectors = motion_vectors[0:2]
 
         motion_vectors[1] *= -1

@@ -12,6 +12,7 @@ dilation-block-size: 8
 scene-names: [SpaceShipDemo]
 is-vr: false
 is-stationary-segment: false
+dataset-from: unity
 
 camera-data-path-suffix: CameraData
 
