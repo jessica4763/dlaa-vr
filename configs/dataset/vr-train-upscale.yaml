@@ -23,4 +23,4 @@ jittered-input-path-suffix: MipBiasMinus1Jittered
 
 colour-path-suffix: Colour
 depth-path-suffix: Depth
-motion-vector-path-suffix: MotionVector
+motion-vector-path-suffix: MotionVectorRAFT  # MotionVector, MotionVectorRAFT
