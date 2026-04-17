@@ -183,11 +183,11 @@ class VRDataset(QualcommDataset):
                 patch_end_y
             )
 
-        # if self.dataset_from == "unreal_engine":
-        #     # Unreal Engine motion vectors are normalised to the range [0, 1], 
-        #     # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
-        #     # where (0, 0) represents no motion. 
-        #     motion_vectors = (motion_vectors - 0.5) * 2.0
+        if self.dataset_from == "unreal_engine" and not self.motion_vector_path_suffix == "MotionVectorRAFT":
+            # Unreal Engine motion vectors are normalised to the range [0, 1], 
+            # where (0.5, 0.5) represents no motion. Convert to the range [-1, 1],
+            # where (0, 0) represents no motion. 
+            motion_vectors = (motion_vectors - 0.5) * 2.0
 
         motion_vectors = motion_vectors[0:2]
 

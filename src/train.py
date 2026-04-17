@@ -168,7 +168,16 @@ def train_epoch_vr(
         right_targets = right_targets.to(device, non_blocking=True)
 
         # Pass in motion vectors as well, for warping
-        pred_left_frames, pred_right_frames, _, _, _, _, _, _ = model(
+        (
+            pred_left_frames, 
+            pred_right_frames, 
+            _,
+            _, 
+            _, 
+            _, 
+            _, 
+            _
+        ) = model(
             left_inputs,
             right_inputs,
             left_motion_vectors,
@@ -370,7 +379,8 @@ def train() -> None:
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
             scale_factor=scale_factor,
-            use_jitter=cfg["setup"]["jitter"]
+            use_jitter=cfg["setup"]["jitter"],
+            use_cross_eye_warping=cfg["setup"]["cross-eye-warping"]
         ).to(device)
     else:
         model = QualcommNetwork(

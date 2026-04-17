@@ -6,6 +6,7 @@ setup:
   seed: 42
   display-name: standard_hmd  # standard_fhd, standard_hmd
   jitter: true
+  cross-eye-warping: true
 
 paths:
   checkpoints-path: run/vr_checkpoints

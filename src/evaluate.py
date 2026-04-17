@@ -324,7 +324,8 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             hidden_channels=cfg["model"]["hidden-channels"],
             num_blocks=cfg["model"]["num-blocks"],
             scale_factor=scale_factor,
-            use_jitter=cfg["setup"]["jitter"]
+            use_jitter=cfg["setup"]["jitter"],
+            use_cross_eye_warping=cfg["setup"]["cross-eye-warping"]
         ).to(device)
     else:
         model = QualcommNetwork(

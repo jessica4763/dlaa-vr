@@ -360,6 +360,9 @@ if __name__ == "__main__":
 
     # folder_path = Path("../data/training_data/VR/FantasticVillage")
     # prepare_data(folder_path)
+    # subsample_training_data(folder_path / "360x400/MipBiasMinus2Jittered/Left")
+    # subsample_training_data(folder_path / "360x400/MipBiasMinus2Jittered/Right")
+    # subsample_training_data(folder_path / "360x400/MipBiasMinus2Jittered")  # CameraData
     # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
     # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
     # subsample_training_data(folder_path / "1440x1600/Enhanced/Left")
@@ -368,6 +371,9 @@ if __name__ == "__main__":
     
     # folder_path = Path("../data/validation_data/VR/FantasticVillage")
     # prepare_data(folder_path)
+    # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered/Left")
+    # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered/Right")
+    # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered")  # Subsample CameraData
     # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
     # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
     # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Left")

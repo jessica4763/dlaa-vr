@@ -13,14 +13,17 @@ class VRNetwork(QualcommNetwork):
         hidden_channels: int,
         num_blocks: int,
         scale_factor: int = 1,
-        use_jitter: bool = False
+        use_jitter: bool = False,
+        use_cross_eye_warping: bool = True,
     ) -> None:
         nn.Module.__init__(self)
         
         self.vr_config = vr_config
         self.scale_factor = scale_factor
+        self.use_cross_eye_warping = use_cross_eye_warping
 
         self.num_curr_colour = 3
+        self.num_cross_eye_colour = 3 if use_cross_eye_warping else 0
         self.num_curr_depth = 1
         self.num_curr_jitter = 2 if use_jitter else 0  # 2 for displacement in both x and y
         self.num_prev_colour = 3 * (scale_factor ** 2)
@@ -36,7 +39,7 @@ class VRNetwork(QualcommNetwork):
 
         self.total_channels = (
             self.num_curr_colour +
-            self.num_curr_colour +
+            self.num_cross_eye_colour +
             self.num_curr_depth +
             self.num_curr_jitter +
             self.num_prev_colour +
@@ -299,14 +302,6 @@ class VRNetwork(QualcommNetwork):
         eye: str
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:        
         if eye == "left":
-            # Current right frame warped onto the current left frame
-            curr_warped_right_colour, curr_right_to_left_warp_grid = self.right_to_left_warp(
-                curr_right_colour, 
-                curr_depth,  # left depth
-                self.vr_config.camera_baseline, 
-                self.vr_config.focal_length
-            )
-
             # The previous left frame warped temporally onto the current left frame
             if temporal_warp:
                 prev_left_colour = self.warp(
@@ -321,6 +316,17 @@ class VRNetwork(QualcommNetwork):
                     curr_motion_vectors  # left motion vectors
                 )
 
+            if self.use_cross_eye_warping:
+                # Current right frame warped onto the current left frame
+                curr_warped_right_colour, curr_right_to_left_warp_grid = self.right_to_left_warp(
+                    curr_right_colour, 
+                    curr_depth,  # left depth
+                    self.vr_config.camera_baseline, 
+                    self.vr_config.focal_length
+                )
+            else:
+                curr_warped_right_colour = curr_right_to_left_warp_grid = None
+
             # (B, C, H, W)
             inputs = torch.cat([
                 curr_left_colour,          # C = 3
@@ -333,14 +339,6 @@ class VRNetwork(QualcommNetwork):
 
             return inputs, prev_left_colour, curr_right_to_left_warp_grid
         else:
-            # Current left frame warped onto the current right frame
-            curr_warped_left_colour, curr_left_to_right_warp_grid = self.left_to_right_warp(
-                curr_left_colour,
-                curr_depth,  # right depth
-                self.vr_config.camera_baseline,
-                self.vr_config.focal_length
-            )
-
             # The previous right frame warped temporally onto the current right frame
             if temporal_warp:
                 prev_right_colour = self.warp(
@@ -354,6 +352,17 @@ class VRNetwork(QualcommNetwork):
                     prev_right_feature,
                     curr_motion_vectors  # right motion vectors
                 )
+
+            if self.use_cross_eye_warping:
+                # Current left frame warped onto the current right frame
+                curr_warped_left_colour, curr_left_to_right_warp_grid = self.left_to_right_warp(
+                    curr_left_colour,
+                    curr_depth,  # right depth
+                    self.vr_config.camera_baseline,
+                    self.vr_config.focal_length
+                )
+            else:
+                curr_warped_left_colour = curr_left_to_right_warp_grid = None
 
             # (B, C, H, W)
             # (The channel ordering relative to the left eye is important)
@@ -531,22 +540,25 @@ class VRNetwork(QualcommNetwork):
             # ------------------------------------------------------------
             # ----------------- Between-eye warp masking -----------------
             # ------------------------------------------------------------
-            # (B, 1, H, W)
-            right_to_left_between_eye_warp_mask = self.get_between_eye_warp_mask(  
-                warp_from=left_to_right_warp_grid,
-                warp_onto=right_to_left_warp_grid
-            )  
+            if self.use_cross_eye_warping:
+                # (B, 1, H, W)
+                right_to_left_between_eye_warp_mask = self.get_between_eye_warp_mask(  
+                    warp_from=left_to_right_warp_grid,
+                    warp_onto=right_to_left_warp_grid
+                )  
 
-            left_to_right_between_eye_warp_mask = self.get_between_eye_warp_mask(
-                warp_from=right_to_left_warp_grid,
-                warp_onto=left_to_right_warp_grid
-            )
+                left_to_right_between_eye_warp_mask = self.get_between_eye_warp_mask(
+                    warp_from=right_to_left_warp_grid,
+                    warp_onto=left_to_right_warp_grid
+                )
 
-            # Applying a boolean mask with shape (B, 1, H, W) to prepared_left_inputs[:, c0:c1], with shape (B, 3, H, W)
-            c0 = self.num_curr_colour
-            c1 = c0 + self.num_curr_colour
-            prepared_left_inputs[:, c0:c1] = prepared_left_inputs[:, c0:c1] * right_to_left_between_eye_warp_mask
-            prepared_right_inputs[:, c0:c1] = prepared_right_inputs[:, c0:c1] * left_to_right_between_eye_warp_mask
+                # Applying a boolean mask with shape (B, 1, H, W) to prepared_left_inputs[:, c0:c1], with shape (B, 3, H, W)
+                c0 = self.num_curr_colour
+                c1 = c0 + self.num_curr_colour
+                prepared_left_inputs[:, c0:c1] = prepared_left_inputs[:, c0:c1] * right_to_left_between_eye_warp_mask
+                prepared_right_inputs[:, c0:c1] = prepared_right_inputs[:, c0:c1] * left_to_right_between_eye_warp_mask
+            else:
+                right_to_left_between_eye_warp_mask = left_to_right_between_eye_warp_mask = None
 
             # ------------------------------------------------------------
             # ------------------------- Left eye -------------------------

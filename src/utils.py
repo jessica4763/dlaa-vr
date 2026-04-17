@@ -336,7 +336,7 @@ def checkpoint_vr(
             right_eye_diff = torch.abs(right_curr - left_warped_curr)
             save_image(linear_to_gamma(right_eye_diff), sanity_checks_output_path / "Right" / "left_to_right_diff.png")
 
-            right_warped_depth_curr, _ = model.right_to_left_warp(
+            right_warped_depth_curr, right_to_left_warp_grid = model.right_to_left_warp(
                 right_depth.unsqueeze(0), 
                 left_depth.unsqueeze(0), 
                 vr_config.camera_baseline, 
@@ -345,7 +345,7 @@ def checkpoint_vr(
             left_eye_depth_diff = torch.abs(left_depth - right_warped_depth_curr)
             save_image(linear_to_gamma(left_eye_depth_diff), sanity_checks_output_path / "Left" / "right_to_left_depth_diff.png")
 
-            left_warped_depth_curr, _ = model.right_to_left_warp(
+            left_warped_depth_curr, left_to_right_warp_grid = model.right_to_left_warp(
                 left_depth.unsqueeze(0), 
                 right_depth.unsqueeze(0), 
                 vr_config.camera_baseline, 
@@ -383,7 +383,7 @@ def checkpoint_vr(
                 right_out_blending_mask,
                 right_to_left_between_eye_warp_mask,
                 left_to_right_between_eye_warp_mask
-                ) = model(
+            ) = model(
                 left_inputs,
                 right_inputs,
                 left_motion_vectors, 
@@ -406,8 +406,9 @@ def checkpoint_vr(
             # -------------------------------------------------------------------------
             # ------------------------- Between-eye warp mask -------------------------
             # -------------------------------------------------------------------------
-            save_image(right_to_left_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_right_to_left_between_eye_warp_mask.png")
-            save_image(left_to_right_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_left_to_right_between_eye_warp_mask.png")
+            if model.use_cross_eye_warping:
+                save_image(right_to_left_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_right_to_left_between_eye_warp_mask.png")
+                save_image(left_to_right_between_eye_warp_mask.float(), sanity_checks_output_path / "curr_left_to_right_between_eye_warp_mask.png")
 
             # -------------------------------------------------------------------------
             # -------------- Output of the network when history is valid --------------
