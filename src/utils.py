@@ -296,19 +296,19 @@ def checkpoint_vr(
                 left_output.unsqueeze(0),
                 left_motion_vectors_next.unsqueeze(0)
             ).squeeze(0)
-            save_image(linear_to_gamma(left_warped_prev), sanity_checks_output_path / "Left" / "left_warped_prev.png")
 
-            left_diff = torch.abs(left_output_next - left_warped_prev)
-            save_image(linear_to_gamma(left_diff), sanity_checks_output_path / "Left" / "left_diff.png")
+            save_image(linear_to_gamma(left_warped_prev), sanity_checks_output_path / "Left" / "left_warped_prev.png")
+            left_diff = torch.abs(linear_to_gamma(left_output_next) - linear_to_gamma(left_warped_prev))
+            save_image(left_diff, sanity_checks_output_path / "Left" / "left_diff.png")
 
             right_warped_prev = model.warp(
                 right_output.unsqueeze(0),
                 right_motion_vectors_next.unsqueeze(0)
             ).squeeze(0)
-            save_image(linear_to_gamma(right_warped_prev), sanity_checks_output_path / "Right" / "right_warped_prev.png")
 
-            right_diff = torch.abs(right_output_next - right_warped_prev)
-            save_image(linear_to_gamma(right_diff), sanity_checks_output_path / "Right" / "right_diff.png")
+            save_image(linear_to_gamma(right_warped_prev), sanity_checks_output_path / "Right" / "right_warped_prev.png")
+            right_diff = torch.abs(linear_to_gamma(right_output_next) - linear_to_gamma(right_warped_prev))
+            save_image(right_diff, sanity_checks_output_path / "Right" / "right_diff.png")
 
             # -------------------------------------------------------------------------
             # ----------------------- Verify between-eye warping ----------------------
@@ -324,8 +324,9 @@ def checkpoint_vr(
                 vr_config.camera_baseline, 
                 vr_config.focal_length
             )
-            left_eye_diff = torch.abs(left_curr - right_warped_curr)
-            save_image(linear_to_gamma(left_eye_diff), sanity_checks_output_path / "Left" / "right_to_left_diff.png")
+
+            left_eye_diff = torch.abs(linear_to_gamma(left_curr) - linear_to_gamma(right_warped_curr))
+            save_image(left_eye_diff, sanity_checks_output_path / "Left" / "right_to_left_diff.png")
 
             left_warped_curr, left_to_right_warp_grid = model.left_to_right_warp(
                 left_curr.unsqueeze(0),
@@ -333,8 +334,9 @@ def checkpoint_vr(
                 vr_config.camera_baseline, 
                 vr_config.focal_length
             )
-            right_eye_diff = torch.abs(right_curr - left_warped_curr)
-            save_image(linear_to_gamma(right_eye_diff), sanity_checks_output_path / "Right" / "left_to_right_diff.png")
+
+            right_eye_diff = torch.abs(linear_to_gamma(right_curr) - linear_to_gamma(left_warped_curr))
+            save_image(right_eye_diff, sanity_checks_output_path / "Right" / "left_to_right_diff.png")
 
             right_warped_depth_curr, right_to_left_warp_grid = model.right_to_left_warp(
                 right_depth.unsqueeze(0), 
@@ -342,6 +344,7 @@ def checkpoint_vr(
                 vr_config.camera_baseline, 
                 vr_config.focal_length
             )
+
             left_eye_depth_diff = torch.abs(left_depth - right_warped_depth_curr)
             save_image(linear_to_gamma(left_eye_depth_diff), sanity_checks_output_path / "Left" / "right_to_left_depth_diff.png")
 
@@ -351,6 +354,7 @@ def checkpoint_vr(
                 vr_config.camera_baseline, 
                 vr_config.focal_length
             )
+
             right_eye_depth_diff = torch.abs(right_depth - left_warped_depth_curr)
             save_image(linear_to_gamma(right_eye_depth_diff), sanity_checks_output_path / "Right" / "left_to_right_depth_diff.png")
 
@@ -392,7 +396,6 @@ def checkpoint_vr(
                 jitter, 
                 "evaluation"
             )
-
 
             # -------------------------------------------------------------------------
             # ----------------------------- Blending mask -----------------------------
@@ -538,12 +541,10 @@ def checkpoint(
         with torch.no_grad():
             # frames = [n for n in range(0, 7258) if (n + 1) % 30 != 0]
             # index = random.choice(frames)
-            # print(f"{index=}")
-
             index = 0
             print(f"{index=}")
             if mode == "training":
-                (inputs, motion_vectors, jitter, output, curr_frame_num) = data[(index, 0, 0, input_frame_width, input_frame_height)]
+                inputs, motion_vectors, jitter, output, curr_frame_num = data[(index, 0, 0, input_frame_width, input_frame_height)]
                 inputs_next, motion_vectors_next, jitter_next, output_next, curr_frame_num_next = data[(index + 1, 0, 0, input_frame_width, input_frame_height)]
             else:
                 inputs, motion_vectors, jitter, output, curr_frame_num = data[index]
@@ -559,8 +560,8 @@ def checkpoint(
             ).squeeze(0)
             save_image(linear_to_gamma(warped_prev), sanity_checks_output_path / "warped_prev.png")
 
-            diff = torch.abs(output_next - warped_prev)
-            save_image(linear_to_gamma(diff), sanity_checks_output_path / "diff.png")
+            diff = torch.abs(linear_to_gamma(output_next) - linear_to_gamma(warped_prev))
+            save_image(diff, sanity_checks_output_path / "diff.png")
 
             # Verify the ground truth
             save_image(linear_to_gamma(output), sanity_checks_output_path / "ground_truth.png")

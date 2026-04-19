@@ -153,10 +153,10 @@ def evaluate_vr(
                     pred_right_frame, 
                     left_features, 
                     right_features, 
-                    left_blending_mask, 
-                    right_blending_mask,
-                    right_to_left_between_eye_warp_mask,
-                    left_to_right_between_eye_warp_mask
+                    _, 
+                    _,
+                    _,
+                    _
                 ) = model(
                     left_inputs,
                     right_inputs,
@@ -167,7 +167,7 @@ def evaluate_vr(
                     "evaluation"
                 )
             else:
-                pred_left_frame, left_features, left_blending_mask = model(
+                pred_left_frame, left_features, _ = model(
                     left_inputs,
                     left_motion_vectors,
                     curr_frame_num,
@@ -175,7 +175,7 @@ def evaluate_vr(
                     "evaluation"
                 )
 
-                pred_right_frame, right_features, right_blending_mask = model(
+                pred_right_frame, right_features, _ = model(
                     right_inputs,
                     right_motion_vectors,
                     curr_frame_num,
@@ -204,8 +204,8 @@ def evaluate_vr(
             current_img = (batch + 1) * len(left_inputs)
             print(f"left_frame_loss: {left_frame_loss:>7f} | right_frame_loss: {right_frame_loss:>7f}  [{current_img:>5d}/{len(evaluation_dataloader.dataset):>5d}]")
 
-            metrics.record(model, gamma_pred_left_frame, gamma_left_target, "left")
-            metrics.record(model, gamma_pred_right_frame, gamma_right_target, "right")
+            metrics.record(gamma_pred_left_frame, gamma_left_target, "left")
+            metrics.record(gamma_pred_right_frame, gamma_right_target, "right")
             write_frames(evaluation_output_path_pred / "left", gamma_pred_left_frame, batch)
             write_frames(evaluation_output_path_target / "left", gamma_left_target, batch)
             write_frames(evaluation_output_path_pred / "right", gamma_pred_right_frame, batch)
@@ -431,7 +431,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
 
 def main() -> None:
     with hydra.initialize(version_base=None, config_path="../configs"):
-        cfg = hydra.compose(config_name="validation")
+        cfg = hydra.compose(config_name="vr-validation")
         writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
 
         run(cfg=cfg, writer=writer, iterations=0)

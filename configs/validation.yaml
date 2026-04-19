@@ -3,7 +3,7 @@ defaults:
 
 setup:
   seed: 42
-  display-name: standard_hmd  # standard_fhd, standard_hmd
+  display-name: standard_fhd  # standard_fhd, standard_hmd
   jitter: true
 
 paths:

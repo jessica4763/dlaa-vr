@@ -108,7 +108,7 @@ class VRMetrics:
         diff = diff[between_eye_warp_mask]
         return 
 
-    def record(self, model: VRNetwork, pred: torch.Tensor, target: torch.Tensor, eye: str) -> None:
+    def record(self, pred: torch.Tensor, target: torch.Tensor, eye: str, model: VRNetwork = None) -> None:
         pred = torch.round(pred * 255.0) / 255.0
         target = torch.round(target * 255.0) / 255.0
 

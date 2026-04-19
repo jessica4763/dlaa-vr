@@ -1,10 +1,10 @@
 defaults:
-  - dataset: vr-mono-train-upscale  # train-upscale, vr-mono-train-upscale
+  - dataset: train-upscale  # train-upscale, vr-mono-train-upscale
   - optimiser: adamw
 
 setup:
   seed: 42
-  display-name: standard_hmd  # standard_fhd, standard_hmd
+  display-name: standard_fhd  # standard_fhd, standard_hmd
   jitter: true
 
 paths:
@@ -21,7 +21,7 @@ model:
   save-interval: 10000
 
 validation:
-  is-vr: true  # true, false
+  is-vr: false  # true, false
   proxy-validation-interval: 1000
   primary-validation-interval: 10000
   proxy-validation-length: 150    # Only applies to a VR validation dataset

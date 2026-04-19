@@ -16,6 +16,7 @@ from torchvision.utils import save_image
 from tqdm import tqdm
 
 from metrics.metrics import Metrics
+from metrics.vr_metrics import VRMetrics
 from utils import gamma_to_linear
 from models.vr_network import VRConfig
 
@@ -79,6 +80,85 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
         print(f"{frame_num=}")
 
     metrics.report("SeaPort")
+
+
+# -------------------------------------------------------------------------
+# -------------------------- VR bicubic baseline --------------------------
+# -------------------------------------------------------------------------
+
+def evaluate_vr(pred_path: Path, target_path: Path) -> None:
+    pairs = list(zip(sorted(os.listdir(pred_path / "Left")), sorted(os.listdir(target_path / "Left"))))
+
+    vr_config = VRConfig(
+        camera_baseline=6.4, 
+        horizontal_fov=100.0,
+        vertical_fov=105.8809,
+        horizontal_resolution=1440,
+        vertical_resolution=1600
+    )
+
+    metrics = VRMetrics(
+        dataset_size=len(pairs),
+        padding=0,
+        iterations=0,
+        vr_config=vr_config,
+        display_name="standard_hmd"
+    )
+
+    cuda0 = torch.device("cuda:0")
+
+    for frame_num, (pred_name, target_name) in enumerate(pairs):
+        # Left eye
+        left_pred = decode_image((pred_path / "Left" / pred_name).resolve())[0:3]
+        left_pred = left_pred.to(cuda0).to(torch.float32) / 255.0
+        left_pred = left_pred.unsqueeze(0)
+        left_pred = F.interpolate(
+            left_pred,
+            scale_factor=4, 
+            mode="bicubic",
+            align_corners=False
+        )
+        left_pred = torch.clamp(left_pred, 0.0, 1.0)
+
+        left_target = decode_image((target_path / "Left" / target_name).resolve())[0:3]
+        left_target = left_target.to(cuda0).to(torch.float32) / 255.0
+        left_target = left_target.unsqueeze(0)
+
+        # Right eye
+        right_pred = decode_image((pred_path / "Right" / pred_name).resolve())[0:3]
+        right_pred = right_pred.to(cuda0).to(torch.float32) / 255.0
+        right_pred = right_pred.unsqueeze(0)
+        right_pred = F.interpolate(
+            right_pred,
+            scale_factor=4, 
+            mode="bicubic",
+            align_corners=False
+        )
+        right_pred = torch.clamp(right_pred, 0.0, 1.0)
+
+        right_target = decode_image((target_path / "Right" / target_name).resolve())[0:3]
+        right_target = right_target.to(cuda0).to(torch.float32) / 255.0
+        right_target = right_target.unsqueeze(0)
+
+        metrics.record(left_pred, left_target, "left")
+        metrics.record(right_pred, right_target, "right")
+        print(f"{frame_num=}")
+
+    metrics.report("FantasticVillage", len(pairs))
+
+
+def evaluate_filter_exr_png(folder_path: Path) -> None:
+    for subdirectory in folder_path.iterdir():
+        if not subdirectory.is_dir():
+            continue
+
+        for directory_path, _, filenames in os.walk(subdirectory):
+            for filename in filenames:
+                file = Path(directory_path) / filename
+                suffix = file.suffix.lower()
+
+                if suffix == ".exr":
+                    file.unlink()
 
 
 def filter_exr_png(folder_path: Path) -> None:
@@ -343,10 +423,10 @@ def generate_raft_motion_vectors_zarr(input_root_path: Path, output_root_path: P
 
 
 if __name__ == "__main__":
-    generate_raft_motion_vectors_zarr(
-        input_root_path=Path("../data/training_data/VR"),
-        output_root_path=Path("../data/training_data/VR_zarr")
-    )
+    # generate_raft_motion_vectors_zarr(
+    #     input_root_path=Path("../data/training_data/VR"),
+    #     output_root_path=Path("../data/training_data/VR_zarr")
+    # )
 
     # generate_raft_motion_vectors(parent_path=Path("../data/training_data/VR/FantasticVillage/720x800/MipBiasMinus1Jittered/Left"))
     # generate_raft_motion_vectors(parent_path=Path("../data/training_data/VR/FantasticVillage/720x800/MipBiasMinus1Jittered/Right"))
@@ -354,11 +434,11 @@ if __name__ == "__main__":
     # generate_raft_motion_vectors(parent_path=Path("../data/validation_data/VR/FantasticVillage/720x800/MipBiasMinus1Jittered/Right"))
 
     # generate_vr_data_zarr(
-    #     input_root_path=Path("../data/training_data/VR"),
-    #     output_root_path=Path("../data/training_data/VR_zarr")
+    #     input_root_path=Path("../data/fovcheck_data/VR"),
+    #     output_root_path=Path("../data/fovcheck_data/VR_zarr")
     # )
 
-    # folder_path = Path("../data/training_data/VR/FantasticVillage")
+    # folder_path = Path("../data/fovcheck_data/VR/FantasticVillage")
     # prepare_data(folder_path)
     # subsample_training_data(folder_path / "360x400/MipBiasMinus2Jittered/Left")
     # subsample_training_data(folder_path / "360x400/MipBiasMinus2Jittered/Right")
@@ -369,7 +449,7 @@ if __name__ == "__main__":
     # subsample_training_data(folder_path / "1440x1600/Enhanced/Right")
     # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered")  # CameraData
     
-    # folder_path = Path("../data/validation_data/VR/FantasticVillage")
+    # folder_path = Path("../data/fovcheck_data/VR/FantasticVillage")
     # prepare_data(folder_path)
     # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered/Left")
     # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered/Right")
@@ -398,3 +478,12 @@ if __name__ == "__main__":
     #     Path("../data/test_data/QRISP/TestSet/SeaPort/540p/MipBiasMinus1/0000"),
     #     Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced/0000")
     # )
+
+    # evaluate_filter_exr_png(
+    #     Path("../saved/comparison-videos/VR/FantasticVillage-360x400-MipBiasMinus2")
+    # )
+
+    evaluate_vr(
+        Path("../saved/comparison-videos/VR/FantasticVillage-360x400-MipBiasMinus2"),
+        Path("../saved/comparison-videos/VR/FantasticVillage-Enhanced")
+    )
