@@ -1,0 +1,28 @@
+validation-input-img-path:  ../data/test_data/VR/*/1440x1600
+validation-output-img-path:  ../data/test_data/VR/*/1440x1600/EnhancedForward
+
+input-frame-height: 1600
+input-frame-width: 1440
+
+output-frame-height: 1600
+output-frame-width: 1440
+
+dilation-block-size: 8
+
+scene-names: [FantasticVillage]
+is-vr: true
+is-stationary-segment: false
+dataset-from: unreal_engine
+
+camera-baseline: 6.4  # cm
+horizontal-fov: 100.0  # degrees
+vertical-fov: 105.8809
+
+camera-data-path-suffix: CameraData
+
+input-path-suffix: Native
+jittered-input-path-suffix: Native
+
+colour-path-suffix: Colour
+depth-path-suffix: Depth
+motion-vector-path-suffix: MotionVector

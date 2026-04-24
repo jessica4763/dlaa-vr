@@ -1,0 +1,9 @@
+name: dlaa-vr
+channels:
+  - defaults
+dependencies:
+  - python=3.11.9
+  - freeimage
+  - ffmpeg
+  - cuda-toolkit=13.0.0
+prefix: C:\Users\Jessica\anaconda3\envs\dlaa-vr

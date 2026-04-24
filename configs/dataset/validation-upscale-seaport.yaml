@@ -1,5 +1,5 @@
-training-input-img-path: ../data/training_data/QRISP/*/540p
-training-output-img-path: ../data/training_data/QRISP/*/1080p
+validation-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
+validation-output-img-path: ../data/test_data/QRISP/TestSet/*/1080p/Enhanced
 
 input-frame-height: 540
 input-frame-width: 960
@@ -9,11 +9,12 @@ output-frame-width: 1920
 
 dilation-block-size: 8
 
-scene-names: [ScifiBaseStartStop]
+scene-names: [SeaPort]
 is-vr: false
+is-stationary-segment: false
+dataset-from: unity
 
 camera-data-path-suffix: CameraData
-ground-truth-path-suffix: Enhanced
 
 colour-path-suffix: MipBiasMinus1
 depth-path-suffix: DepthMipBiasMinus1

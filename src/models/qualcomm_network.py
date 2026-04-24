@@ -6,8 +6,8 @@ import torch.nn.functional as F
 class JitterConditionedConv(nn.Module):
     def __init__(
         self,
-        out_channels: int,
-        in_channels: int,
+        output_channels: int,
+        input_channels: int,
         kernel_height: int,
         kernel_width: int,
         num_hidden_features: int = 2048,
@@ -15,11 +15,11 @@ class JitterConditionedConv(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.out_channels = out_channels
-        self.in_channels = in_channels
+        self.output_channels = output_channels
+        self.input_channels = input_channels
         self.kernel_height = kernel_height
         self.kernel_width = kernel_width
-        num_outputs = out_channels * in_channels * kernel_height * kernel_width
+        num_outputs = output_channels * input_channels * kernel_height * kernel_width
 
         self.input_layer = nn.Sequential(
             nn.Linear(2, num_hidden_features),
@@ -38,7 +38,7 @@ class JitterConditionedConv(nn.Module):
             nn.Linear(num_hidden_features, num_outputs),
         )
 
-    def forward(self, x: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
+    def forward(self, inputs: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
         batch_size, _ = jitter.shape
 
         h = self.input_layer(jitter)
@@ -46,8 +46,8 @@ class JitterConditionedConv(nn.Module):
         kernel = self.output_layer(h)
         kernel = kernel.view(
             batch_size,
-            self.out_channels,
-            self.in_channels,
+            self.output_channels,
+            self.input_channels,
             self.kernel_height,
             self.kernel_width
         )
@@ -59,7 +59,7 @@ class JitterConditionedConv(nn.Module):
         #    Although for loops are generally slow, I use them here for readability. 
         outputs = []
         for batch in range(batch_size):
-            outputs.append(F.conv2d(x[batch:batch + 1], kernel[batch], padding=1))
+            outputs.append(F.conv2d(inputs[batch:batch + 1], kernel[batch], padding=1))
         return torch.cat(outputs, dim=0)
 
 
@@ -79,7 +79,7 @@ class QualcommNetwork(nn.Module):
         self.num_prev_colour = self.num_curr_colour * (scale_factor ** 2)
         self.num_prev_feature = 1 * (scale_factor ** 2)
 
-        self.in_channels = (
+        self.input_channels = (
             self.num_curr_colour +
             self.num_curr_depth +
             self.num_curr_jitter +
@@ -92,8 +92,8 @@ class QualcommNetwork(nn.Module):
 
         if use_jitter:
             self.input_conv = JitterConditionedConv(
-                out_channels=hidden_channels,
-                in_channels=self.in_channels,
+                output_channels=hidden_channels,
+                input_channels=self.input_channels,
                 kernel_height=3,
                 kernel_width=3,
                 num_hidden_features=2048,
@@ -102,7 +102,7 @@ class QualcommNetwork(nn.Module):
         else:
             # Initial 3 × 3 Conv + ReLU block
             self.input_conv = nn.Conv2d(
-                self.in_channels,
+                self.input_channels,
                 hidden_channels,
                 kernel_size=3,
                 padding=1,
@@ -145,36 +145,60 @@ class QualcommNetwork(nn.Module):
             )
 
         # Colour head
-        self.colour_head = nn.Sequential(
-            nn.Conv2d(
+        if use_jitter:
+            self.colour_head = JitterConditionedConv(
+                self.num_prev_colour,
+                hidden_channels,
+                3,
+                3,
+                num_hidden_features=2048,
+                num_blocks=7
+            )
+        else:
+            self.colour_head = nn.Conv2d(
                 hidden_channels,
                 self.num_prev_colour,
                 kernel_size=3,
                 padding=1,
                 padding_mode="zeros"
-            ),
-            nn.ReLU()
-        )
+            )
+        self.colour_head_relu = nn.ReLU()
 
         # Blending mask head
-        self.blending_mask_head = nn.Sequential(
-            nn.Conv2d(
+        if use_jitter:
+            self.blending_mask_head = JitterConditionedConv(
+                scale_factor ** 2,
                 hidden_channels,
-                1,
+                3,
+                3,
+                num_hidden_features=2048,
+                num_blocks=7
+            )
+        else:
+            self.blending_mask_head = nn.Conv2d(
+                hidden_channels,
+                scale_factor ** 2,
                 kernel_size=3,
                 padding=1,
                 padding_mode="zeros"
-            ),
-            nn.Sigmoid()
-        )
+            )
+        self.blending_mask_sigmoid = nn.Sigmoid()
+
+        self.apply(self.kaiming_init_params)
+
+    def kaiming_init_params(self, model):
+        if isinstance(model, (nn.Linear, nn.Conv2d)):
+            nn.init.kaiming_normal_(model.weight, mode="fan_out", nonlinearity="relu")
+            if model.bias is not None:
+                nn.init.constant_(model.bias, 0)
 
     def warp(
         self,
         input_tensor: torch.Tensor,
         motion_vectors: torch.Tensor
     ) -> torch.Tensor:
-        input_tensor_B, input_tensor_C, input_tensor_H, input_tensor_W = input_tensor.shape
-        motion_vectors_B, motion_vectors_C, motion_vectors_H, motion_vectors_W = motion_vectors.shape
+        _, _, input_tensor_H, _ = input_tensor.shape
+        _, _, motion_vectors_H, _ = motion_vectors.shape
 
         if input_tensor_H != motion_vectors_H:
             # Depth to space: (B, 12, 132, 132) -> (B, 3, 264, 264)
@@ -193,16 +217,16 @@ class QualcommNetwork(nn.Module):
         y, x = torch.meshgrid(
             torch.linspace(-1 + (1 / H), 1 - (1 / H), H),
             torch.linspace(-1 + (1 / W), 1 - (1 / W), W),
-            indexing='ij'
+            indexing="ij"
         )
         base_grid = torch.stack((x, y), dim=-1).unsqueeze(0).to(motion_vectors.device)
-        warped_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
+        warp_grid = base_grid - motion_vectors * 2.0  # base_grid is broadcasted
 
         warped_input_tensor = F.grid_sample(
             input_tensor,
-            warped_grid,
-            mode='bilinear',
-            padding_mode='zeros',
+            warp_grid,
+            mode="bilinear",
+            padding_mode="zeros",
             align_corners=False
         )
 
@@ -213,39 +237,40 @@ class QualcommNetwork(nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
+        inputs: torch.Tensor,
         motion_vectors: torch.Tensor,
+        curr_frame_num: int,
         jitter: torch.Tensor = None,
         mode: str = "training"
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        batch_size, clip_size, C, H, W = x.shape
+        B, clip_size, C, H, W = inputs.shape
 
         # To hold the recurrent colour frame and features
-        prev_pred_colour = prev_pred_features = None
+        prev_pred_frame = prev_pred_features = None
 
         outputs = []
         for clip in range(clip_size):
-            clip_frames = x[:, clip].clone()
-            motion_vector_frames = motion_vectors[:, clip].clone()
+            clip_frames = inputs[:, clip].clone()
+            motion_vector_frames = motion_vectors[:, clip]
             if self.num_curr_jitter != 0:
-                assert jitter is not None
-                jitter_frames = jitter[:, clip].clone()
+                jitter_frames = jitter[:, clip]
 
             # Use recurrent colour frame
             c0 = self.num_curr_colour + self.num_curr_depth + self.num_curr_jitter
             c1 = c0 + self.num_prev_colour
             if mode == "training":
-                if prev_pred_colour is not None:
+                if prev_pred_frame is not None:
                     # Warp recurrent colour frame
                     clip_frames[:, c0:c1] = self.warp(
-                        prev_pred_colour,
+                        prev_pred_frame,
                         motion_vector_frames
                     )
             else:
-                clip_frames[:, c0:c1] = self.warp(
-                    clip_frames[:, c0:c1],
-                    motion_vector_frames
-                )
+                if curr_frame_num > 0:
+                    clip_frames[:, c0:c1] = self.warp(
+                        clip_frames[:, c0:c1],
+                        motion_vector_frames
+                    )
 
             prev_colour = clip_frames[:, c0:c1]  # Save for the blend step
 
@@ -260,16 +285,16 @@ class QualcommNetwork(nn.Module):
                         motion_vector_frames
                     )
             else:
-                clip_frames[:, c0:c1] = self.warp(
-                    clip_frames[:, c0:c1],
-                    motion_vector_frames
-                )
+                if curr_frame_num > 0:
+                    clip_frames[:, c0:c1] = self.warp(
+                        clip_frames[:, c0:c1],
+                        motion_vector_frames
+                    )
 
             # ------------------------------------------------------------
             # ---------------- Input convolution and ReLU ----------------
             # ------------------------------------------------------------
             if self.num_curr_jitter != 0:
-                assert jitter is not None
                 h = self.input_conv(clip_frames, jitter_frames)
             else:
                 h = self.input_conv(clip_frames)
@@ -282,25 +307,33 @@ class QualcommNetwork(nn.Module):
             h = self.body(h)
 
             # ------------------------------------------------------------
-            # ---------------------- Feature branch ----------------------
+            # -------- Feature, colour, and blending mask branches -------
             # ------------------------------------------------------------
             if self.num_curr_jitter != 0:
-                assert jitter is not None
                 out_features = self.feature_head(h, jitter_frames)
+                out_colour = self.colour_head(h, jitter_frames)
+                out_blending_mask = self.blending_mask_head(h, jitter_frames)
             else:
                 out_features = self.feature_head(h)
+                out_colour = self.colour_head(h)
+                out_blending_mask = self.blending_mask_head(h)
 
-            # ------------------------------------------------------------
-            # ------------ Colour and blending mask branches -------------
-            # ------------------------------------------------------------
-            out_colour = self.colour_head(h)
-            out_blending_mask = self.blending_mask_head(h)
+            out_colour = self.colour_head_relu(out_colour)
+            out_blending_mask = self.blending_mask_sigmoid(out_blending_mask)
 
             # ------------------------------------------------------------
             # -------------------------- Blend ---------------------------
             # ------------------------------------------------------------
+            # (B, 12, H, W) --> (B, 3, 4, H, W)
+            out_colour = out_colour.view(B, 3, -1, H, W)
+            prev_colour = prev_colour.view(B, 3, -1, H, W)
+
+            # (B, 4, H, W) --> (B, 1, 4, H, W)
+            out_blending_mask = out_blending_mask.view(B, 1, -1, H, W)
+
             blended_colour = out_blending_mask * out_colour + (1.0 - out_blending_mask) * prev_colour
             blended_colour = torch.clamp(blended_colour, min=0.0, max=1.0)
+            blended_colour = blended_colour.view(B, -1, H, W)
 
             # ------------------------------------------------------------
             # ---------------------- Depth to space ----------------------
@@ -309,16 +342,9 @@ class QualcommNetwork(nn.Module):
             outputs.append(full_res_colour)
 
             # Save recurrent colour frame and features
-            prev_pred_colour = blended_colour
+            prev_pred_frame = blended_colour
             prev_pred_features = out_features
 
         # prev_pred_features is only used by evaluation
-        return torch.stack(outputs, dim=1), prev_pred_features
-
-
-class VRSpatialNetwork(nn.Module):
-    pass
-
-
-class VRSpatialTemporalNetwork(nn.Module):
-    pass
+        # out_blending_mask is only used during evaluation for inspection
+        return torch.stack(outputs, dim=1), prev_pred_features, out_blending_mask.view(B, -1, H, W)

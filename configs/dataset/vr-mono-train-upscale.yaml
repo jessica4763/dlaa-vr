@@ -1,19 +1,19 @@
-training-input-img-path: ../data/training_data/QRISP/*/540p
-training-output-img-path: ../data/training_data/QRISP/*/540p
+training-input-img-path: ../data/training_data/VR_mono/*/720x800
+training-output-img-path: ../data/training_data/VR_mono/*/1440x1600/Enhanced
 
-input-frame-height: 540
-input-frame-width: 960
+input-frame-height: 800
+input-frame-width: 720
 
-output-frame-height: 540
-output-frame-width: 960
+output-frame-height: 1600
+output-frame-width: 1440
 
 dilation-block-size: 8
 
-scene-names: [CBApocalypse, FloodedGrounds, ScifiBase, ScifiFacility, SunTemple]
+scene-names: [FantasticVillage]
 is-vr: false
+dataset-from: unreal_engine
 
 camera-data-path-suffix: CameraData
-ground-truth-path-suffix: Enhanced
 
 colour-path-suffix: MipBiasMinus1
 depth-path-suffix: DepthMipBiasMinus1
@@ -22,4 +22,3 @@ motion-vector-path-suffix: MotionVectorsMipBiasMinus1
 colour-jittered-path-suffix: MipBiasMinus1Jittered
 depth-jittered-path-suffix: DepthMipBiasMinus1Jittered
 motion-vector-jittered-path-suffix: MotionVectorsMipBiasMinus1Jittered
-

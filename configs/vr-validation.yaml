@@ -1,0 +1,29 @@
+defaults:
+  - dataset: vr-validation-upscale-fantasticvillage
+
+setup:
+  seed: 42
+  display-name: standard_hmd  # standard_fhd, standard_hmd
+  jitter: true
+  cross-eye-warping: true
+
+paths: 
+  checkpoints-path: run/vr_checkpoints
+  sanity-checks-output-path: run/vr_sanity_checks_output
+  evaluation-output-path: run/vr_evaluation_outputs
+  tensorboard-path: ../saved/logs/runs
+  saved-models-path: ../saved/models/vr_scale_model.pt  # scale_model.pt, vr_scale_model.pt
+  zarr-walk-root: ../data/training_data/VR  # Only needed for training
+
+model:
+  hidden-channels: 16
+  num-blocks: 1
+  is-vr: true  # true, false
+
+validation:
+  padding: 0
+  length: 600
+
+hydra:
+  run:
+    dir: hydra_outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

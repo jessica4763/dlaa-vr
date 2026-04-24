@@ -1,22 +1,20 @@
-validation-input-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
-validation-output-img-path:  ../data/test_data/VRDataset/TestSet/*/540p
+validation-input-img-path: ../data/test_data/QRISP/TestSet/*/540p
+validation-output-img-path: ../data/test_data/QRISP/TestSet/*/1080p/Enhanced
 
-input-frame-height: 1440
-input-frame-width: 1600
+input-frame-height: 540
+input-frame-width: 960
 
-output-frame-height: 1440
-output-frame-width: 1600
+output-frame-height: 1080
+output-frame-width: 1920
 
 dilation-block-size: 8
 
-scene-names: [SeaPortVR]
-is-vr: true
-camera-baseline: 0.065  # metres
-diagonal-fov: 110.0  # degrees
+scene-names: [AbandonedSchool]
+is-vr: false
 is-stationary-segment: false
+dataset-from: unity
 
 camera-data-path-suffix: CameraData
-ground-truth-path-suffix: Enhanced
 
 colour-path-suffix: MipBiasMinus1
 depth-path-suffix: DepthMipBiasMinus1

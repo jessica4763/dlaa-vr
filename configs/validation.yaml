@@ -1,25 +1,24 @@
 defaults:
-  - dataset: validation-upscale
+  - dataset: validation-upscale-seaport
 
 setup:
   seed: 42
   display-name: standard_fhd  # standard_fhd, standard_hmd
   jitter: true
 
-paths: 
-  checkpoints-path: checkpoints
-  sanity-checks-output-path: sanity_checks_output
-  evaluation-output-path: evaluation_outputs
+paths:
+  checkpoints-path: run/checkpoints
+  sanity-checks-output-path: run/sanity_checks_output
+  evaluation-output-path: run/evaluation_outputs
   tensorboard-path: ../saved/logs/runs
   saved-models-path: ../saved/models/scale_model.pt
 
 model:
   hidden-channels: 16
   num-blocks: 1
+  is-vr: false
 
 validation:
-  proxy-validation-interval: 1000
-  primary-validation-interval: 100000
   padding: 0
 
 hydra:
