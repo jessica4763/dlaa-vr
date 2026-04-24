@@ -363,7 +363,7 @@ def train() -> None:
     training_dataloader = DataLoader(
         training_data,
         batch_sampler=training_sampler,
-        num_workers=os.cpu_count() - 4,
+        num_workers=4,
         pin_memory=True,
         persistent_workers=True,
         worker_init_fn=seed_worker,

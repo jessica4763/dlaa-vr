@@ -1,8 +1,8 @@
-validation-input-img-path:  ../data/test_data/VR/*/720x800
-validation-output-img-path:  ../data/test_data/VR/*/1440x1600/Enhanced
+validation-input-img-path:  ../data/test_data/VR/*/1440x1600
+validation-output-img-path:  ../data/test_data/VR/*/1440x1600/EnhancedForward
 
-input-frame-height: 800
-input-frame-width: 720
+input-frame-height: 1600
+input-frame-width: 1440
 
 output-frame-height: 1600
 output-frame-width: 1440
@@ -20,8 +20,8 @@ vertical-fov: 105.8809
 
 camera-data-path-suffix: CameraData
 
-input-path-suffix: MipBiasMinus1
-jittered-input-path-suffix: MipBiasMinus1Jittered
+input-path-suffix: Native
+jittered-input-path-suffix: Native
 
 colour-path-suffix: Colour
 depth-path-suffix: Depth

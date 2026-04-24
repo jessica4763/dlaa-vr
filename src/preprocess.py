@@ -87,7 +87,7 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
 # -------------------------------------------------------------------------
 
 def evaluate_vr(pred_path: Path, target_path: Path) -> None:
-    pairs = list(zip(sorted(os.listdir(pred_path / "Left")), sorted(os.listdir(target_path / "Left"))))
+    pairs = list(zip(sorted(os.listdir(pred_path / "Left")), sorted(os.listdir(target_path / "Left"))))[:600]
 
     vr_config = VRConfig(
         camera_baseline=6.4, 
@@ -112,12 +112,12 @@ def evaluate_vr(pred_path: Path, target_path: Path) -> None:
         left_pred = decode_image((pred_path / "Left" / pred_name).resolve())[0:3]
         left_pred = left_pred.to(cuda0).to(torch.float32) / 255.0
         left_pred = left_pred.unsqueeze(0)
-        left_pred = F.interpolate(
-            left_pred,
-            scale_factor=4, 
-            mode="bicubic",
-            align_corners=False
-        )
+        # left_pred = F.interpolate(
+        #     left_pred,
+        #     scale_factor=4, 
+        #     mode="bicubic",
+        #     align_corners=False
+        # )
         left_pred = torch.clamp(left_pred, 0.0, 1.0)
 
         left_target = decode_image((target_path / "Left" / target_name).resolve())[0:3]
@@ -128,12 +128,12 @@ def evaluate_vr(pred_path: Path, target_path: Path) -> None:
         right_pred = decode_image((pred_path / "Right" / pred_name).resolve())[0:3]
         right_pred = right_pred.to(cuda0).to(torch.float32) / 255.0
         right_pred = right_pred.unsqueeze(0)
-        right_pred = F.interpolate(
-            right_pred,
-            scale_factor=4, 
-            mode="bicubic",
-            align_corners=False
-        )
+        # right_pred = F.interpolate(
+        #     right_pred,
+        #     scale_factor=4, 
+        #     mode="bicubic",
+        #     align_corners=False
+        # )
         right_pred = torch.clamp(right_pred, 0.0, 1.0)
 
         right_target = decode_image((target_path / "Right" / target_name).resolve())[0:3]
@@ -182,7 +182,7 @@ def filter_exr_png(folder_path: Path) -> None:
 
 def subsample_training_data(folder_path: Path, take: int = 30, skip: int = 60) -> None:
     for file_path in folder_path.iterdir():
-        if not file_path.is_dir():  
+        if not file_path.is_dir() or (file_path.name not in ("FinalImage, FinalImageDepth, FinalImageMotionVectors")):  
             continue
 
         files = sorted(f for f in file_path.glob("*.*") if f.is_file())
@@ -338,17 +338,18 @@ def generate_vr_data_zarr(input_root_path: Path, output_root_path: Path) -> None
         if any(filename.endswith((".png", ".exr")) for filename in filenames):
             relative_path = os.path.relpath(directory_path, input_root_path)
 
-            if "Depth" in relative_path:
-                channels = 1
-            elif "MotionVector" in relative_path:
-                channels = 2
-            elif "Colour" in relative_path:
-                channels = 3
-            else:
-                sys.exit("Unexpected directory path.")
+            if "EnhancedForward" in relative_path:
+                if "Depth" in relative_path:
+                    channels = 1
+                elif "MotionVector" in relative_path:
+                    channels = 2
+                elif "Colour" in relative_path:
+                    channels = 3
+                else:
+                    sys.exit("Unexpected directory path.")
 
-            output_path = output_root_path / f"{relative_path}.zarr"
-            generate_zarr(directory_path, output_path, channels)
+                output_path = output_root_path / f"{relative_path}.zarr"
+                generate_zarr(directory_path, output_path, channels)
 
 
 def generate_raft_motion_vectors(parent_path: Path) -> None:
@@ -434,39 +435,57 @@ if __name__ == "__main__":
     # generate_raft_motion_vectors(parent_path=Path("../data/validation_data/VR/FantasticVillage/720x800/MipBiasMinus1Jittered/Right"))
 
     # generate_vr_data_zarr(
-    #     input_root_path=Path("../data/fovcheck_data/VR"),
-    #     output_root_path=Path("../data/fovcheck_data/VR_zarr")
+    #     input_root_path=Path("../data/training_data/VR"),
+    #     output_root_path=Path("../data/training_data/VR_zarr")
     # )
 
-    # folder_path = Path("../data/fovcheck_data/VR/FantasticVillage")
+    # folder_path = Path("../data/training_data/VR/FantasticVillage")
     # prepare_data(folder_path)
     # subsample_training_data(folder_path / "360x400/MipBiasMinus2Jittered/Left")
     # subsample_training_data(folder_path / "360x400/MipBiasMinus2Jittered/Right")
     # subsample_training_data(folder_path / "360x400/MipBiasMinus2Jittered")  # CameraData
     # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
     # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
+    # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered")  # CameraData
     # subsample_training_data(folder_path / "1440x1600/Enhanced/Left")
     # subsample_training_data(folder_path / "1440x1600/Enhanced/Right")
-    # subsample_training_data(folder_path / "720x800/MipBiasMinus1Jittered")  # CameraData
+    # subsample_training_data(folder_path / "1440x1600/EnhancedForward/Left")
+    # subsample_training_data(folder_path / "1440x1600/EnhancedForward/Right")
+    # subsample_training_data(folder_path / "1440x1600/Native/Left")
+    # subsample_training_data(folder_path / "1440x1600/Native/Right")
+    # subsample_training_data(folder_path / "1440x1600/Native")  # CameraData
     
-    # folder_path = Path("../data/fovcheck_data/VR/FantasticVillage")
+    # folder_path = Path("../data/validation_data/VR/FantasticVillage")
     # prepare_data(folder_path)
     # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered/Left")
     # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered/Right")
     # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered")  # Subsample CameraData
     # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
     # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
+    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered")  # Subsample CameraData
     # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Left")
     # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Right")
-    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered")  # Subsample CameraData
+    # instance_evaluation_data(folder_path / "1440x1600/EnhancedForward/Left")
+    # instance_evaluation_data(folder_path / "1440x1600/EnhancedForward/Right")
+    # instance_evaluation_data(folder_path / "1440x1600/Native/Left")
+    # instance_evaluation_data(folder_path / "1440x1600/Native/Right")
+    # instance_evaluation_data(folder_path / "1440x1600/Native")  # Subsample CameraData
 
     # folder_path = Path("../data/test_data/VR/FantasticVillage")
     # prepare_data(folder_path)
+    # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered/Left")
+    # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered/Right")
+    # instance_evaluation_data(folder_path / "360x400/MipBiasMinus2Jittered")  # Subsample CameraData
     # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Left")
     # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered/Right")
+    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered")  # Subsample CameraData
     # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Left")
     # instance_evaluation_data(folder_path / "1440x1600/Enhanced/Right")
-    # instance_evaluation_data(folder_path / "720x800/MipBiasMinus1Jittered")  # Subsample CameraData
+    # instance_evaluation_data(folder_path / "1440x1600/EnhancedForward/Left")
+    # instance_evaluation_data(folder_path / "1440x1600/EnhancedForward/Right")
+    # instance_evaluation_data(folder_path / "1440x1600/Native/Left")
+    # instance_evaluation_data(folder_path / "1440x1600/Native/Right")
+    # instance_evaluation_data(folder_path / "1440x1600/Native")  # Subsample CameraData
 
     # write_video(
     #     input_path=Path("../data/validation_data/VR_mono/FantasticVillage/1440x1600/Enhanced/0000"),
@@ -480,10 +499,10 @@ if __name__ == "__main__":
     # )
 
     # evaluate_filter_exr_png(
-    #     Path("../saved/comparison-videos/VR/FantasticVillage-360x400-MipBiasMinus2")
+    #     Path("../saved/comparison-videos/VR/EnhancedForward")
     # )
 
     evaluate_vr(
-        Path("../saved/comparison-videos/VR/FantasticVillage-360x400-MipBiasMinus2"),
-        Path("../saved/comparison-videos/VR/FantasticVillage-Enhanced")
+        Path("../saved/comparison-videos/VR/MSAA"),
+        Path("../saved/comparison-videos/VR/EnhancedForward")
     )

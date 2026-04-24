@@ -324,18 +324,27 @@ class VRNetwork(QualcommNetwork):
                     self.vr_config.camera_baseline, 
                     self.vr_config.focal_length
                 )
+
+                # (B, C, H, W)
+                inputs = torch.cat([
+                    curr_left_colour,          # C = 3
+                    curr_warped_right_colour,  # C = 3
+                    curr_depth,                # C = 1
+                    curr_jitter,               # C = 2
+                    prev_left_colour,          # C = 12
+                    prev_left_feature          # C = 12
+                ], dim=1)
             else:
                 curr_warped_right_colour = curr_right_to_left_warp_grid = None
 
-            # (B, C, H, W)
-            inputs = torch.cat([
-                curr_left_colour,          # C = 3
-                curr_warped_right_colour,  # C = 3
-                curr_depth,                # C = 1
-                curr_jitter,               # C = 2
-                prev_left_colour,          # C = 12
-                prev_left_feature          # C = 12
-            ], dim=1)
+                # (B, C, H, W)
+                inputs = torch.cat([
+                    curr_left_colour,          # C = 3
+                    curr_depth,                # C = 1
+                    curr_jitter,               # C = 2
+                    prev_left_colour,          # C = 12
+                    prev_left_feature          # C = 12
+                ], dim=1)
 
             return inputs, prev_left_colour, curr_right_to_left_warp_grid
         else:
@@ -361,19 +370,28 @@ class VRNetwork(QualcommNetwork):
                     self.vr_config.camera_baseline,
                     self.vr_config.focal_length
                 )
+
+                # (B, C, H, W)
+                # (The channel ordering relative to the left eye is important)
+                inputs = torch.cat([
+                    curr_right_colour,        # C = 3
+                    curr_warped_left_colour,  # C = 3
+                    curr_depth,               # C = 1
+                    curr_jitter,              # C = 2
+                    prev_right_colour,        # C = 12
+                    prev_right_feature        # C = 12
+                ], dim=1)
             else:
                 curr_warped_left_colour = curr_left_to_right_warp_grid = None
 
-            # (B, C, H, W)
-            # (The channel ordering relative to the left eye is important)
-            inputs = torch.cat([
-                curr_right_colour,        # C = 3
-                curr_warped_left_colour,  # C = 3
-                curr_depth,               # C = 1
-                curr_jitter,              # C = 2
-                prev_right_colour,        # C = 12
-                prev_right_feature        # C = 12
-            ], dim=1)
+                # (B, C, H, W)
+                inputs = torch.cat([
+                    curr_right_colour,        # C = 3
+                    curr_depth,               # C = 1
+                    curr_jitter,              # C = 2
+                    prev_right_colour,        # C = 12
+                    prev_right_feature        # C = 12
+                ], dim=1)
 
             return inputs, prev_right_colour, curr_left_to_right_warp_grid
 
