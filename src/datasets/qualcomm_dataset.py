@@ -257,10 +257,7 @@ class QualcommDataset(Dataset):
         return patch.clone()
 
     def __len__(self) -> int:
-        if self.mode == "training":
-            return self.total_frames
-        else:
-            return min(self.total_frames, 120)
+        return self.total_frames
 
     def __getitem__(self, item: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.mode == "training":

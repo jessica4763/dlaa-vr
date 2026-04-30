@@ -1,5 +1,5 @@
 defaults:
-  - dataset: validation-upscale-seaport
+  - dataset: validation-upscale-spaceshipdemo
 
 setup:
   seed: 42
@@ -20,6 +20,7 @@ model:
 
 validation:
   padding: 0
+  length: 600
 
 hydra:
   run:

@@ -400,10 +400,15 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
     # -------------------------------------------------------------------------
     # --------------------------------- Output --------------------------------
     # -------------------------------------------------------------------------
-    metrics.report(
-        scene_name=cfg["dataset"]["scene-names"][0],
-        evaluation_length=cfg["validation"]["length"]
-    )
+    if cfg["dataset"]["is-vr"]:
+        metrics.report(
+            scene_name=cfg["dataset"]["scene-names"][0],
+            evaluation_length=cfg["validation"]["length"]
+        )
+    else:
+        metrics.report(
+            scene_name=cfg["dataset"]["scene-names"][0]
+        )
 
     if cfg["dataset"]["is-vr"]:
         write_video(

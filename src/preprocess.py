@@ -102,6 +102,7 @@ def evaluate_vr(pred_path: Path, target_path: Path) -> None:
         padding=0,
         iterations=0,
         vr_config=vr_config,
+        is_stationary_segment=True,
         display_name="standard_hmd"
     )
 
@@ -112,12 +113,12 @@ def evaluate_vr(pred_path: Path, target_path: Path) -> None:
         left_pred = decode_image((pred_path / "Left" / pred_name).resolve())[0:3]
         left_pred = left_pred.to(cuda0).to(torch.float32) / 255.0
         left_pred = left_pred.unsqueeze(0)
-        # left_pred = F.interpolate(
-        #     left_pred,
-        #     scale_factor=4, 
-        #     mode="bicubic",
-        #     align_corners=False
-        # )
+        left_pred = F.interpolate(
+            left_pred,
+            scale_factor=4, 
+            mode="bicubic",
+            align_corners=False
+        )
         left_pred = torch.clamp(left_pred, 0.0, 1.0)
 
         left_target = decode_image((target_path / "Left" / target_name).resolve())[0:3]
@@ -128,12 +129,12 @@ def evaluate_vr(pred_path: Path, target_path: Path) -> None:
         right_pred = decode_image((pred_path / "Right" / pred_name).resolve())[0:3]
         right_pred = right_pred.to(cuda0).to(torch.float32) / 255.0
         right_pred = right_pred.unsqueeze(0)
-        # right_pred = F.interpolate(
-        #     right_pred,
-        #     scale_factor=4, 
-        #     mode="bicubic",
-        #     align_corners=False
-        # )
+        right_pred = F.interpolate(
+            right_pred,
+            scale_factor=4, 
+            mode="bicubic",
+            align_corners=False
+        )
         right_pred = torch.clamp(right_pred, 0.0, 1.0)
 
         right_target = decode_image((target_path / "Right" / target_name).resolve())[0:3]
@@ -338,18 +339,17 @@ def generate_vr_data_zarr(input_root_path: Path, output_root_path: Path) -> None
         if any(filename.endswith((".png", ".exr")) for filename in filenames):
             relative_path = os.path.relpath(directory_path, input_root_path)
 
-            if "EnhancedForward" in relative_path:
-                if "Depth" in relative_path:
-                    channels = 1
-                elif "MotionVector" in relative_path:
-                    channels = 2
-                elif "Colour" in relative_path:
-                    channels = 3
-                else:
-                    sys.exit("Unexpected directory path.")
+            if "Depth" in relative_path:
+                channels = 1
+            elif "MotionVector" in relative_path:
+                channels = 2
+            elif "Colour" in relative_path:
+                channels = 3
+            else:
+                sys.exit("Unexpected directory path.")
 
-                output_path = output_root_path / f"{relative_path}.zarr"
-                generate_zarr(directory_path, output_path, channels)
+            output_path = output_root_path / f"{relative_path}.zarr"
+            generate_zarr(directory_path, output_path, channels)
 
 
 def generate_raft_motion_vectors(parent_path: Path) -> None:
@@ -421,6 +421,18 @@ def generate_raft_motion_vectors_zarr(input_root_path: Path, output_root_path: P
             channels = 2
             output_path = output_root_path / f"{relative_path}.zarr"
             generate_zarr(directory_path, output_path, channels)
+
+
+def rename_files_sequentially(root_dir):
+    for root, dirs, files in os.walk(root_dir):
+        if files:
+            files.sort()
+            for index, filename in enumerate(files):
+                _, ext = os.path.splitext(filename)
+                new_name = f"{index:04d}{ext}"
+                old_path = os.path.join(root, filename)
+                new_path = os.path.join(root, new_name)
+                os.rename(old_path, new_path)
 
 
 if __name__ == "__main__":
@@ -503,6 +515,9 @@ if __name__ == "__main__":
     # )
 
     evaluate_vr(
-        Path("../saved/comparison-videos/VR/MSAA"),
-        Path("../saved/comparison-videos/VR/EnhancedForward")
+        Path("../saved/comparison-videos/VR/360x400Stationary"),
+        Path("../saved/comparison-videos/VR/EnhancedStationary")
     )
+
+    # rename_files_sequentially(root_dir="C:/Workspace/part_2_project/dlaa-vr/saved/comparison-videos/VR/360x400Stationary/Left")
+    # rename_files_sequentially(root_dir="C:/Workspace/part_2_project/dlaa-vr/saved/comparison-videos/VR/360x400Stationary/Right")

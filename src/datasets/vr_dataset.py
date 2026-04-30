@@ -110,8 +110,8 @@ class VRDataset(QualcommDataset):
         json_file_path = scene.scene_input_imgs_path / self.camera_data_path_suffix / instance / frame
         with open(json_file_path, mode="r", encoding="utf-8") as json_file:
             camera_data = json.load(json_file)
-            jitter_offset_x = -1 * camera_data["jitter_offset"]["x"]
-            jitter_offset_y = -1 * -camera_data["jitter_offset"]["y"]
+            jitter_offset_x = -1 * camera_data["jitter_offset"]["x"] / 2
+            jitter_offset_y = -1 * -camera_data["jitter_offset"]["y"] / 2
             return jitter_offset_x, jitter_offset_y
         
     def get_depth(
