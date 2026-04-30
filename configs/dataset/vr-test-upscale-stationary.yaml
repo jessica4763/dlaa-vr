@@ -9,9 +9,9 @@ output-frame-width: 1440
 
 dilation-block-size: 8
 
-scene-names: [FantasticVillage]
+scene-names: [FantasticVillageStationary]
 is-vr: true
-is-stationary-segment: false
+is-stationary-segment: true
 dataset-from: unreal_engine
 
 camera-baseline: 6.4  # cm

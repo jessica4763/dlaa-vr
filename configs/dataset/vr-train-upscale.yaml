@@ -1,8 +1,8 @@
-training-input-img-path: ../data/training_data/VR_zarr/*/1440x1600
-training-output-img-path: ../data/training_data/VR_zarr/*/1440x1600/EnhancedForward
+training-input-img-path: ../data/training_data/VR_zarr/*/360x400
+training-output-img-path: ../data/training_data/VR_zarr/*/1440x1600/Enhanced
 
-input-frame-height: 1600
-input-frame-width: 1440
+input-frame-height: 400
+input-frame-width: 360
 
 output-frame-height: 1600
 output-frame-width: 1440
@@ -19,8 +19,8 @@ vertical-fov: 105.8809
 
 camera-data-path-suffix: CameraData
 
-input-path-suffix: Native
-jittered-input-path-suffix: Native
+input-path-suffix: MipBiasMinus2
+jittered-input-path-suffix: MipBiasMinus2Jittered
 
 colour-path-suffix: Colour
 depth-path-suffix: Depth

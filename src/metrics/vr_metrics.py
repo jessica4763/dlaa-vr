@@ -157,16 +157,18 @@ class VRMetrics:
 
         reported_metrics_strings = []
         for metric_name in self.metrics:
-            for eye in self.metrics[metric_name]: 
-                metric_id = f"{scene_name}/{'Fast' if evaluation_length <= 300 else 'Slow'}/{metric_name}/{eye}"
-                reported_metrics_strings.append(f"{metric_id}: {self.metrics[metric_name][eye]}")
+            if metric_name not in ("pixel_mean", "pixel_squared_mean"):
+                for eye in self.metrics[metric_name]: 
+                    metric_id = f"{scene_name}/{'Fast' if evaluation_length <= 300 else 'Slow'}/{metric_name}/{eye}"
+                    reported_metrics_strings.append(f"{metric_id}: {self.metrics[metric_name][eye]}")
 
-                if self.writer is not None:
-                    self.writer.add_scalar(
-                        metric_id,
-                        self.metrics[metric_name][eye],
-                        self.iterations
-                    )
+                    if self.writer is not None:
+                        print(f"{metric_name=}")
+                        self.writer.add_scalar(
+                            metric_id,
+                            self.metrics[metric_name][eye],
+                            self.iterations
+                        )
 
         reported_metrics = "\n".join(reported_metrics_strings)
         print(reported_metrics)
