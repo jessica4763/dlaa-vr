@@ -31,18 +31,10 @@ class VRMetrics:
         self.vr_config = vr_config
         self.is_stationary_segment = is_stationary_segment
 
-        self.psnr_sum = 0
-        self.ssim_sum = 0
-
-        self.lpips_sum = 0
         cuda0 = torch.device("cuda:0")
         self.loss_function_lpips = lpips.LPIPS(net="vgg").to(cuda0)
 
         self.cvvdp = pycvvdp.cvvdp(display_name=display_name)
-        self.cvvdp_jod_sum = 0
-
-        self.pixel_sum = 0
-        self.pixel_squared_sum = 0
 
         self.metrics = defaultdict(lambda: defaultdict(float))
 
@@ -76,36 +68,47 @@ class VRMetrics:
         self.metrics["pixel_mean"][eye] += pred
         self.metrics["pixel_squared_mean"][eye] += np.square(pred)
     
-    def record_photometric_residual(
+    def record_reprojection_error(
         self, 
         model: VRNetwork, 
         left_pred: np.ndarray, 
         left_depth: np.ndarray, 
         right_pred: np.ndarray,
         right_depth: np.ndarray
-    ) -> float:
-        _, right_to_left_warp_grid = model.right_to_left_warp(
+    ) -> None:
+        right_to_left_warped_curr, right_to_left_warp_grid = model.right_to_left_warp(
             right_pred,
             left_depth,
             self.vr_config.camera_baseline,
             self.vr_config.focal_length
         )
 
-        left_warped_curr, left_to_right_warp_grid = model.left_to_right_warp(
+        left_to_right_warped_curr, left_to_right_warp_grid = model.left_to_right_warp(
             left_pred,
             right_depth,
             self.vr_config.camera_baseline,
             self.vr_config.focal_length
         )
 
-        between_eye_warp_mask = model.get_between_eye_warp_mask(
+        right_to_left_between_eye_warp_mask = model.get_between_eye_warp_mask(
             warp_from=left_to_right_warp_grid, 
             warp_onto=right_to_left_warp_grid
-        )
+        )  # (B, 1, H, W)
 
-        diff = torch.abs(left_warped_curr - left_pred)
-        diff = diff[between_eye_warp_mask]
-        return 
+        left_to_right_between_eye_warp_mask = model.get_between_eye_warp_mask(
+            warp_from=right_to_left_warp_grid, 
+            warp_onto=left_to_right_warp_grid
+        )  # (B, 1, H, W)
+
+        left_squared_diff = (left_pred - right_to_left_warped_curr) ** 2
+        masked_left_squared_diff = left_squared_diff * right_to_left_between_eye_warp_mask
+        mean_masked_left_squared_diff = torch.sum(masked_left_squared_diff) / (torch.sum(right_to_left_between_eye_warp_mask) + 1e-8)
+        self.right_to_left_reprojection_error += torch.sum(mean_masked_left_squared_diff) / (torch.sum(right_to_left_between_eye_warp_mask) + 1e-8)
+
+        right_squared_diff = (right_pred - left_to_right_warped_curr) ** 2
+        masked_right_squared_diff = right_squared_diff * left_to_right_between_eye_warp_mask
+        mean_masked_right_squared_diff = torch.sum(masked_right_squared_diff) / (torch.sum(left_to_right_between_eye_warp_mask) + 1e-8)
+        self.left_to_right_reprojection_error += torch.sum(mean_masked_right_squared_diff) / (torch.sum(left_to_right_between_eye_warp_mask) + 1e-8)
 
     def record(self, pred: torch.Tensor, target: torch.Tensor, eye: str, model: VRNetwork = None) -> None:
         pred = torch.round(pred * 255.0) / 255.0
@@ -177,3 +180,10 @@ class VRMetrics:
                 reported_metrics,
                 self.iterations
             )
+
+
+        self.right_to_left_reprojection_error /= self.dataset_size
+        self.left_to_right_reprojection_error /= self.dataset_size
+        print(f"{self.right_to_left_reprojection_error=}")
+        print(f"{self.left_to_right_reprojection_error=}")
+

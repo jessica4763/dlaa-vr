@@ -206,6 +206,17 @@ def evaluate_vr(
 
             metrics.record(gamma_pred_left_frame, gamma_left_target, "left")
             metrics.record(gamma_pred_right_frame, gamma_right_target, "right")
+
+            c0 = model.num_curr_colour
+            c1 = c0 + model.num_curr_depth
+            metrics.record_reprojection_error(
+                model=model,
+                left_pred=gamma_pred_left_frame,
+                right_pred=gamma_pred_right_frame,
+                left_depth=left_inputs[c0:c1],
+                right_depth=right_inputs[c0:c1]
+            )
+            
             write_frames(evaluation_output_path_pred / "left", gamma_pred_left_frame, batch)
             write_frames(evaluation_output_path_target / "left", gamma_left_target, batch)
             write_frames(evaluation_output_path_pred / "right", gamma_pred_right_frame, batch)
