@@ -8,10 +8,10 @@ from torch.utils.tensorboard import SummaryWriter
 import hydra
 from omegaconf import DictConfig
 
-from datasets.qualcomm_dataset import QualcommDataset
-from datasets.vr_dataset import VRDataset
-from models.qualcomm_network import QualcommNetwork
-from models.vr_network import VRNetwork
+from dataset.qualcomm_dataset import QualcommDataset
+from dataset.vr_dataset import VRDataset
+from network.qualcomm_network import QualcommNetwork
+from network.vr_network import VRNetwork
 from metrics.metrics import Metrics
 from metrics.vr_metrics import VRMetrics
 from utils import (

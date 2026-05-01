@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torchvision.io import decode_image
 import zarr
 
-from datasets.qualcomm_dataset import QualcommDataset
+from dataset.qualcomm_dataset import QualcommDataset
 from utils import Scene, cumsum
 
 

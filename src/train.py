@@ -13,13 +13,13 @@ from torch.utils.tensorboard import SummaryWriter
 import hydra
 from omegaconf import OmegaConf
 
-from datasets.qualcomm_dataset import QualcommDataset
-from datasets.vr_dataset import VRDataset
+from dataset.qualcomm_dataset import QualcommDataset
+from dataset.vr_dataset import VRDataset
 from evaluate import run
 from loss import CVVDPLoss, L1LossWithCVVDP
-from models.qualcomm_network import QualcommNetwork
-from models.vr_network import VRNetwork
-from samplers.qualcomm_dataset_sampler import QualcommDatasetSampler
+from network.qualcomm_network import QualcommNetwork
+from network.vr_network import VRNetwork
+from qualcomm_dataset_sampler import QualcommDatasetSampler
 from utils import VRConfig, checkpoint, checkpoint_vr, gamma_to_linear, linear_to_gamma
 
 

@@ -3,14 +3,13 @@ import lpips
 import pycvvdp
 import numpy as np
 from skimage.metrics import (
-    normalized_root_mse,
     peak_signal_noise_ratio,
-    structural_similarity,
+    structural_similarity
 )
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from models.vr_network import VRNetwork
+from network.vr_network import VRNetwork
 from utils import VRConfig, rgb_to_y
 
 

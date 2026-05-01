@@ -18,7 +18,7 @@ from tqdm import tqdm
 from metrics.metrics import Metrics
 from metrics.vr_metrics import VRMetrics
 from utils import gamma_to_linear
-from models.vr_network import VRConfig
+from network.vr_network import VRConfig
 
 
 def write_video(
