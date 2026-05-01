@@ -7,16 +7,19 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from torchvision.io import decode_image
+from torchvision.utils import save_image
 
 from metrics.metrics import Metrics
 from metrics.vr_metrics import VRMetrics
 from network.vr_network import VRConfig
 
+import pycvvdp
+
 
 def write_video(
     input_path: Path,
     output_path: Path,
-    fps: int = 24
+    fps: int = 60
 ) -> None:
     writer = imageio.get_writer(
         output_path,
@@ -78,7 +81,7 @@ def evaluate(pred_path: Path, target_path: Path) -> None:
 # -------------------------- VR bicubic baseline --------------------------
 # -------------------------------------------------------------------------
 
-def evaluate_vr(pred_path: Path, target_path: Path) -> None:
+def evaluate_vr(pred_path: Path, target_path: Path, output_path_left: Path, output_path_right: Path) -> None:
     pairs = list(zip(sorted(os.listdir(pred_path / "Left")), sorted(os.listdir(target_path / "Left"))))[:600]
 
     vr_config = VRConfig(
@@ -135,12 +138,33 @@ def evaluate_vr(pred_path: Path, target_path: Path) -> None:
 
         metrics.record(left_pred, left_target, "left")
         metrics.record(right_pred, right_target, "right")
+
+        save_image(left_pred, output_path_left / f"{frame_num}.png")
+        save_image(right_pred, output_path_right / f"{frame_num}.png")
+
         print(f"{frame_num=}")
 
     metrics.report("FantasticVillage", len(pairs))
 
+    write_video(input_path=output_path_left, output_path=Path("baselines/left.mp4"))
+    write_video(input_path=output_path_right, output_path=Path("baselines/right.mp4"))
+
+
+def video_cvvdp(pred_path: Path, target_path: Path, display_name="standard_hmd") -> None:
+    metric = pycvvdp.cvvdp(display_name=display_name, heatmap=None)
+
+    vs = pycvvdp.video_source_file(str(pred_path), str(target_path), display_photometry=display_name)
+    Q_JOD_static, _ = metric.predict_video_source(vs)
+    print(f"Quality for {pred_path}: {Q_JOD_static:.3f} JOD")
+
 
 if __name__ == "__main__":
+    output_path_left = Path("baselines/left")
+    output_path_right = Path("baselines/right")
+
+    output_path_left.mkdir(parents=True, exist_ok=True)
+    output_path_right.mkdir(parents=True, exist_ok=True)
+    
     # write_video(
     #     input_path=Path("../data/validation_data/VR_mono/FantasticVillage/1440x1600/Enhanced/0000"),
     #     output_path=Path("fantastic_village.mp4"),
@@ -157,6 +181,8 @@ if __name__ == "__main__":
     # )
 
     evaluate_vr(
-        Path("../saved/comparison-videos/VR/360x400Stationary"),
-        Path("../saved/comparison-videos/VR/EnhancedStationary")
+        pred_path=Path("../saved/comparison-videos/VR/360x400Stationary"),
+        target_path=Path("../saved/comparison-videos/VR/EnhancedStationary"),
+        output_path_left=output_path_left,
+        output_path_right=output_path_right
     )
