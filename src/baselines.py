@@ -155,15 +155,15 @@ def video_cvvdp(pred_path: Path, target_path: Path, display_name="standard_hmd")
 
     vs = pycvvdp.video_source_file(str(pred_path), str(target_path), display_photometry=display_name)
     Q_JOD_static, _ = metric.predict_video_source(vs)
-    print(f"Quality for {pred_path}: {Q_JOD_static:.3f} JOD")
+    print(f"Quality for {pred_path}: {Q_JOD_static} JOD")
 
 
 if __name__ == "__main__":
-    output_path_left = Path("baselines/left")
-    output_path_right = Path("baselines/right")
+    # output_path_left = Path("baselines_stationary_90_frames/left")
+    # output_path_right = Path("baselines_stationary_90_frames/right")
 
-    output_path_left.mkdir(parents=True, exist_ok=True)
-    output_path_right.mkdir(parents=True, exist_ok=True)
+    # output_path_left.mkdir(parents=True, exist_ok=True)
+    # output_path_right.mkdir(parents=True, exist_ok=True)
     
     # write_video(
     #     input_path=Path("../data/validation_data/VR_mono/FantasticVillage/1440x1600/Enhanced/0000"),
@@ -180,9 +180,17 @@ if __name__ == "__main__":
     #     Path("../data/test_data/QRISP/TestSet/SeaPort/1080p/Enhanced/0000")
     # )
 
-    evaluate_vr(
-        pred_path=Path("../saved/comparison-videos/VR/360x400Stationary"),
-        target_path=Path("../saved/comparison-videos/VR/EnhancedStationary"),
-        output_path_left=output_path_left,
-        output_path_right=output_path_right
-    )
+    # evaluate_vr(
+    #     pred_path=Path("../saved/comparison-videos/VR/360x400Stationary"),
+    #     target_path=Path("../saved/comparison-videos/VR/EnhancedStationary"),
+    #     output_path_left=output_path_left,
+    #     output_path_right=output_path_right
+    # )
+
+    # write_video(input_path=Path(r"C:\Workspace\part_2_project\dlaa-vr\src\baselines_stationary_90_frames\left"), output_path=Path(r"C:\Workspace\part_2_project\dlaa-vr\src\baselines_stationary_90_frames\left.mp4"))
+    # write_video(input_path=Path(r"C:\Workspace\part_2_project\dlaa-vr\src\baselines_stationary_90_frames\right"), output_path=Path(r"C:\Workspace\part_2_project\dlaa-vr\src\baselines_stationary_90_frames\right.mp4"))
+
+    # video_cvvdp(pred_path=Path(r"C:\Workspace\part_2_project\dlaa-vr\saved\comparison-videos\VR\360x400Stationary\run-cross-eye-warping-90-frames\vr_evaluation_outputs\pred\evaluation_output_left.mp4"), target_path=Path("baselines_stationary_90_frames/left_target.mp4"))
+    # video_cvvdp(pred_path=Path(r"C:\Workspace\part_2_project\dlaa-vr\saved\comparison-videos\VR\360x400Stationary\run-cross-eye-warping-90-frames\vr_evaluation_outputs\pred\evaluation_output_right.mp4"), target_path=Path("baselines_stationary_90_frames/right_target.mp4"))
+
+    pass

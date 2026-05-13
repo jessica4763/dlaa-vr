@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.profiler import record_function
 import torch.nn.functional as F
 
 from .qualcomm_network import JitterConditionedConv, QualcommNetwork
@@ -20,6 +21,7 @@ class VRNetwork(QualcommNetwork):
         
         self.vr_config = vr_config
         self.scale_factor = scale_factor
+        self.use_jitter = use_jitter
         self.use_cross_eye_warping = use_cross_eye_warping
 
         self.num_curr_colour = 3
@@ -145,6 +147,13 @@ class VRNetwork(QualcommNetwork):
         self.history_blending_mask_sigmoid = nn.Sigmoid()
 
         self.apply(self.kaiming_init_params)
+
+    def precompute_kernels(self) -> None:
+        if self.use_jitter:
+            self.input_conv.precompute_kernels()
+            self.colour_head.precompute_kernels()
+            self.feature_head.precompute_kernels()
+            self.blending_mask_head.precompute_kernels()
 
     def warp(
         self,
@@ -302,15 +311,14 @@ class VRNetwork(QualcommNetwork):
         eye: str
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:        
         if eye == "left":
-            # The previous left frame warped temporally onto the current left frame
             if temporal_warp:
+                # The previous left frame warped temporally onto the current left frame
                 prev_left_colour = self.warp(
                     prev_left_colour,
                     curr_motion_vectors  # left motion vectors
                 )
 
-            # The previous left feature frame warped temporally onto the current left feature frame
-            if temporal_warp:
+                # The previous left feature frame warped temporally onto the current left feature frame
                 prev_left_feature = self.warp(
                     prev_left_feature,
                     curr_motion_vectors  # left motion vectors
@@ -348,15 +356,14 @@ class VRNetwork(QualcommNetwork):
 
             return inputs, prev_left_colour, curr_right_to_left_warp_grid
         else:
-            # The previous right frame warped temporally onto the current right frame
             if temporal_warp:
+                # The previous right frame warped temporally onto the current right frame
                 prev_right_colour = self.warp(
                     prev_right_colour,
                     curr_motion_vectors  # right motion vectors
                 )
 
-            # The previous right feature frame warped temporally onto the current right feature frame
-            if temporal_warp:
+                # The previous right feature frame warped temporally onto the current right feature frame
                 prev_right_feature = self.warp(
                     prev_right_feature,
                     curr_motion_vectors  # right motion vectors
@@ -399,7 +406,8 @@ class VRNetwork(QualcommNetwork):
         self,
         inputs: torch.Tensor,
         jitter_frames: torch.Tensor,
-        prev_colour: torch.Tensor
+        prev_colour: torch.Tensor,
+        curr_frame_num: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         B, _, H, W = inputs.shape
 
@@ -407,7 +415,7 @@ class VRNetwork(QualcommNetwork):
         # ---------------- Input convolution and ReLU ----------------
         # ------------------------------------------------------------
         if self.num_curr_jitter != 0:
-            h = self.input_conv(inputs, jitter_frames)
+            h = self.input_conv(inputs, jitter_frames, curr_frame_num)
         else:
             h = self.input_conv(inputs)
 
@@ -422,9 +430,9 @@ class VRNetwork(QualcommNetwork):
         # -------- Feature, colour, and blending mask branches -------
         # ------------------------------------------------------------
         if self.num_curr_jitter != 0:
-            out_features = self.feature_head(h, jitter_frames)
-            out_colour = self.colour_head(h, jitter_frames)
-            out_blending_mask = self.blending_mask_head(h, jitter_frames)
+            out_features = self.feature_head(h, jitter_frames, curr_frame_num)
+            out_colour = self.colour_head(h, jitter_frames, curr_frame_num)
+            out_blending_mask = self.blending_mask_head(h, jitter_frames, curr_frame_num)
         else:
             out_features = self.feature_head(h)
             out_colour = self.colour_head(h)
@@ -453,7 +461,7 @@ class VRNetwork(QualcommNetwork):
         right_inputs: torch.Tensor,
         left_motion_vectors: torch.Tensor,
         right_motion_vectors: torch.Tensor,
-        curr_frame_num: int,
+        curr_frame_num: torch.Tensor,
         jitter: torch.Tensor = None,
         mode: str = "training"
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -563,7 +571,7 @@ class VRNetwork(QualcommNetwork):
                 right_to_left_between_eye_warp_mask = self.get_between_eye_warp_mask(  
                     warp_from=left_to_right_warp_grid,
                     warp_onto=right_to_left_warp_grid
-                )  
+                )
 
                 left_to_right_between_eye_warp_mask = self.get_between_eye_warp_mask(
                     warp_from=right_to_left_warp_grid,
@@ -584,7 +592,8 @@ class VRNetwork(QualcommNetwork):
             left_blended_colour, left_out_features, left_out_blending_mask = self.network_pass(
                 inputs=prepared_left_inputs,
                 jitter_frames=jitter_frames,
-                prev_colour=prev_warped_left
+                prev_colour=prev_warped_left,
+                curr_frame_num=curr_frame_num
             )
 
             # ------------------------------------------------------------
@@ -593,7 +602,8 @@ class VRNetwork(QualcommNetwork):
             right_blended_colour, right_out_features, right_out_blending_mask = self.network_pass(
                 inputs=prepared_right_inputs,
                 jitter_frames=jitter_frames,
-                prev_colour=prev_warped_right
+                prev_colour=prev_warped_right,
+                curr_frame_num=curr_frame_num
             )
 
             # ------------------------------------------------------------

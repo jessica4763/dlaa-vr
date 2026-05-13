@@ -2,6 +2,7 @@ from pathlib import Path
 import torch
 from torch import nn
 import torch.nn.functional as F
+import torch_tensorrt
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -96,6 +97,8 @@ def evaluate_vr(
     scale_factor: int = 1,
     use_jitter: bool = False,
     model_is_vr: bool = True,
+    start_timer: torch.cuda.Event = None,
+    end_timer: torch.cuda.Event = None,
 ) -> None:
     model.eval()
     with torch.no_grad():
@@ -134,6 +137,8 @@ def evaluate_vr(
             left_target = left_target.to(device, non_blocking=True)
             right_target = right_target.to(device, non_blocking=True)
 
+            curr_frame_num = curr_frame_num.to(device, non_blocking=True)
+
             # Use the previously predicted frame and features during evaluation
             if None not in (prev_pred_left_frame, prev_pred_right_frame, prev_left_features, prev_right_features) and curr_frame_num > 0:
                 c0 = model.input_channels - (model.num_prev_colour + model.num_prev_feature)
@@ -147,7 +152,10 @@ def evaluate_vr(
             # -------------------------------------------------------------------------
             # -------------------------------- Predict --------------------------------
             # -------------------------------------------------------------------------
-            if model_is_vr:            
+            if model_is_vr:
+                if start_timer is not None:
+                    start_timer.record()
+
                 (
                     pred_left_frame, 
                     pred_right_frame, 
@@ -166,6 +174,12 @@ def evaluate_vr(
                     jitter,
                     "evaluation"
                 )
+
+                if end_timer is not None:
+                    end_timer.record()
+                    torch.cuda.synchronize()
+                    elapsed_time = start_timer.elapsed_time(end_timer)
+                    metrics.profile("total", elapsed_time, curr_frame_num)
             else:
                 pred_left_frame, left_features, _ = model(
                     left_inputs,
@@ -209,12 +223,13 @@ def evaluate_vr(
 
             c0 = model.num_curr_colour
             c1 = c0 + model.num_curr_depth
-            metrics.record_reprojection_error(
+            metrics.record_photometric_error(
                 model=model,
                 left_pred=gamma_pred_left_frame,
                 right_pred=gamma_pred_right_frame,
-                left_depth=left_inputs[c0:c1],
-                right_depth=right_inputs[c0:c1]
+                left_depth=left_inputs.squeeze(0)[:, c0:c1],
+                right_depth=right_inputs.squeeze(0)[:, c0:c1],
+                curr_frame_num=curr_frame_num
             )
             
             write_frames(evaluation_output_path_pred / "left", gamma_pred_left_frame, batch)
@@ -223,7 +238,7 @@ def evaluate_vr(
             write_frames(evaluation_output_path_target / "right", gamma_right_target, batch)
 
 
-def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
+def run(cfg: DictConfig, writer: SummaryWriter, iterations: int, profiling: bool = False) -> None:
     device = (
         torch.accelerator.current_accelerator().type
         if torch.accelerator.is_available()
@@ -251,6 +266,15 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
 
     sanity_checks_output_path = Path(cfg["paths"]["sanity-checks-output-path"])
     sanity_checks_output_path.mkdir(parents=True, exist_ok=True)
+
+    # -------------------------------------------------------------------------
+    # ------------------------------- Profiling -------------------------------
+    # -------------------------------------------------------------------------
+    if profiling:
+        start_timer = torch.cuda.Event(enable_timing=True)
+        end_timer = torch.cuda.Event(enable_timing=True)
+    else:
+        start_timer = end_timer = None
 
     # -------------------------------------------------------------------------
     # ------------------------------ Efficiency -------------------------------
@@ -353,6 +377,19 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             map_location=device
         )
     )
+    model.precompute_kernels()
+
+    if profiling:
+        model.eval()
+        model = torch.compile(
+            model, 
+            backend="tensorrt",
+            options={
+                "enabled_precisions": {torch.float32},
+                "truncate_long_and_double": False,
+                "torch_executed_ops": {"torch.ops.aten.pixel_shuffle.default"}
+            }
+        )
 
     # -------------------------------------------------------------------------
     # -------------------------------- Metrics --------------------------------
@@ -368,6 +405,7 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             vr_config=vr_config,
             is_stationary_segment=cfg["dataset"]["is-stationary-segment"],
             display_name=cfg["setup"]["display-name"],
+            evaluation_output_path=Path(cfg["paths"]["evaluation-output-path"])
         )
     else:
         metrics = Metrics(
@@ -394,6 +432,8 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
             scale_factor=scale_factor,
             use_jitter=cfg["setup"]["jitter"],
             model_is_vr=cfg["model"]["is-vr"],
+            start_timer=start_timer,
+            end_timer=end_timer
         )
     else:
         evaluate(
@@ -425,18 +465,18 @@ def run(cfg: DictConfig, writer: SummaryWriter, iterations: int) -> None:
         write_video(
             imgs_path=evaluation_output_path_pred / "left",
             filename="evaluation_output_left.mp4",
-            fps=24
+            fps=60
         )
         write_video(
             imgs_path=evaluation_output_path_pred / "right",
             filename="evaluation_output_right.mp4",
-            fps=24
+            fps=60
         )
     else:
         write_video(
             imgs_path=evaluation_output_path_pred,
             filename="evaluation_output.mp4",
-            fps=24
+            fps=60
         )
 
     print_parameters(
@@ -450,7 +490,7 @@ def main() -> None:
         cfg = hydra.compose(config_name="vr-validation")
         writer = SummaryWriter(log_dir=cfg["paths"]["tensorboard-path"])
 
-        run(cfg=cfg, writer=writer, iterations=0)
+        run(cfg=cfg, writer=writer, iterations=0, profiling=True)
 
 
 if __name__ == "__main__":

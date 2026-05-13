@@ -19,7 +19,7 @@ from evaluate import run
 from loss import CVVDPLoss, L1LossWithCVVDP
 from network.qualcomm_network import QualcommNetwork
 from network.vr_network import VRNetwork
-from qualcomm_dataset_sampler import QualcommDatasetSampler
+from dataset_sampler import QualcommDatasetSampler
 from utils import VRConfig, checkpoint, checkpoint_vr, gamma_to_linear, linear_to_gamma
 
 

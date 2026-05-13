@@ -301,6 +301,6 @@ if __name__ == "__main__":
     # instance_evaluation_data(folder_path / "1440x1600/Native/Right")
     # instance_evaluation_data(folder_path / "1440x1600/Native")  # Subsample CameraData
 
-    # rename_files_sequentially(root_dir="C:/Workspace/part_2_project/dlaa-vr/saved/comparison-videos/VR/360x400Stationary/Left")
-    # rename_files_sequentially(root_dir="C:/Workspace/part_2_project/dlaa-vr/saved/comparison-videos/VR/360x400Stationary/Right")
+    rename_files_sequentially(root_dir=r"C:\Workspace\part_2_project\dlaa-vr\saved\comparison-videos\VR\360x400Stationary\Left")
+    rename_files_sequentially(root_dir=r"C:\Workspace\part_2_project\dlaa-vr\saved\comparison-videos\VR\360x400Stationary\Right")
     pass

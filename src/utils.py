@@ -137,7 +137,7 @@ def write_frames(
 def write_video(
     imgs_path: Path,
     filename: str,
-    fps: int = 24
+    fps: int = 60
 ) -> None:
     writer = imageio.get_writer(
         imgs_path.parent / filename,

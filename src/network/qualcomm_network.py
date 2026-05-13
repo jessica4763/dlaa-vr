@@ -1,3 +1,6 @@
+import json
+import os
+from pathlib import Path
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -37,8 +40,39 @@ class JitterConditionedConv(nn.Module):
         self.output_layer = nn.Sequential(
             nn.Linear(num_hidden_features, num_outputs),
         )
+        
+    def precompute_kernels(self) -> None:
+        kernels = []
 
-    def forward(self, inputs: torch.Tensor, jitter: torch.Tensor) -> torch.Tensor:
+        jitter_path = Path("network/jitter")
+        files = os.listdir(jitter_path)
+        
+        with torch.no_grad():
+            for file in files:
+                with open(jitter_path / file, mode="r", encoding="utf-8") as json_file:
+                    camera_data = json.load(json_file)
+                    jitter_offset_x = -1 * camera_data["jitter_offset"]["x"]
+                    jitter_offset_y = -1 * -camera_data["jitter_offset"]["y"]
+                    jitter = torch.tensor([[jitter_offset_x, jitter_offset_y]], device=next(self.parameters()).device)
+
+                    h = self.input_layer(jitter)
+                    h = self.body(h)
+                    kernel = self.output_layer(h)
+                    kernel = kernel.view(
+                        self.output_channels,
+                        self.input_channels,
+                        self.kernel_height,
+                        self.kernel_width
+                    )
+                    kernels.append(kernel)
+            
+        self.kernels = torch.stack(kernels)
+
+    # def forward(self, inputs: torch.Tensor, jitter: torch.Tensor, curr_frame_num: torch.Tensor):
+    #     kernel = self.kernels[curr_frame_num % 16].squeeze(0).to(inputs.device, non_blocking=True)
+    #     return F.conv2d(inputs, kernel, padding=1)
+
+    def forward(self, inputs: torch.Tensor, jitter: torch.Tensor, curr_frame_num: int) -> torch.Tensor:
         batch_size, _ = jitter.shape
 
         h = self.input_layer(jitter)
