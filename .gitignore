@@ -4,6 +4,8 @@ learning/
 .vscode/
 saved/*
 src/run/
+temp/
+video-comparisons/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

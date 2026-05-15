@@ -11,8 +11,8 @@ dilation-block-size: 8
 
 scene-names: [AbandonedSchool]
 is-vr: false
-is-stationary-segment: false
 dataset-from: unity
+is-stationary-segment: false
 
 camera-data-path-suffix: CameraData
 

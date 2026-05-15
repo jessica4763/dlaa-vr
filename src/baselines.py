@@ -26,7 +26,7 @@ def write_video(
         fps=fps,
         codec="libx264",
         quality=10,
-        pixelformat="yuv420p",
+        pixelformat="yuv444p",
         macro_block_size=8
     )
 

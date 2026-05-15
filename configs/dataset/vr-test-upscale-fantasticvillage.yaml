@@ -11,8 +11,8 @@ dilation-block-size: 8
 
 scene-names: [FantasticVillage]
 is-vr: true
-is-stationary-segment: false
 dataset-from: unreal_engine
+is-stationary-segment: false
 
 camera-baseline: 6.4  # cm
 horizontal-fov: 100.0  # degrees

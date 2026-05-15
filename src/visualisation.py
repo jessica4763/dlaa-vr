@@ -75,7 +75,3 @@ def warp_frames(left_frame_path: Path, right_frame_path: Path, depth_path: Path)
 
     diff = torch.abs(left_frame - warped_left_frame)
     save_image(diff, "warped_left.png")
-
-
-if __name__ == "__main__":
-    pass
